@@ -408,49 +408,58 @@ def tarama():
 
     if request.method == "POST":
         barkod = request.form.get("barkod","").strip()
-        if barkod:
-            c = get_db()
-            urun = c.execute("SELECT * FROM urunler WHERE barkod=?", (barkod,)).fetchone()
-            c.close()
+    elif request.args.get("barkod"):
+        barkod = request.args.get("barkod","").strip()
+        if request.args.get("skt_ok"):
+            alert_html = '<div class="alert alert-green">✓ SKT basariyla guncellendi!</div>'
+    else:
+        barkod = None
 
-            if not urun:
-                urun_adi, kategori = openfoodfacts(barkod)
-                if urun_adi:
-                    c = get_db()
-                    c.execute("INSERT OR REPLACE INTO urunler (barkod,urun_adi,kategori,stok_adedi) VALUES (?,?,?,?)",
-                              (barkod, urun_adi, kategori or "Genel", 30))
-                    c.commit(); c.close()
-                    alert_html = f'<div class="alert alert-green">✓ Yeni urun eklendi: <strong>{urun_adi}</strong> (Open Food Facts)</div>'
-                    c = get_db()
-                    urun = c.execute("SELECT * FROM urunler WHERE barkod=?", (barkod,)).fetchone()
-                    c.close()
-                else:
-                    alert_html = f'<div id="alert-type" data-tip="error" style="display:none"></div><div class="alert alert-red">✗ Barkod bulunamadi: <strong>{barkod}</strong></div>'
+    if barkod:
+        c = get_db()
+        urun = c.execute("SELECT * FROM urunler WHERE barkod=?", (barkod,)).fetchone()
+        c.close()
 
-            if urun:
-                urun = dict(urun)
-                gun  = kalan_gun(urun.get("stt"))
-                rc   = stt_renk(gun)
-                et   = stt_etiket(gun)
+        if not urun:
+            urun_adi, kategori = openfoodfacts(barkod)
+            if urun_adi:
+                c = get_db()
+                c.execute("INSERT OR REPLACE INTO urunler (barkod,urun_adi,kategori,stok_adedi) VALUES (?,?,?,?)",
+                          (barkod, urun_adi, kategori or "Genel", 30))
+                c.commit(); c.close()
+                alert_html = f'<div class="alert alert-green">✓ Yeni urun eklendi: <strong>{urun_adi}</strong> (Open Food Facts)</div>'
+                c = get_db()
+                urun = c.execute("SELECT * FROM urunler WHERE barkod=?", (barkod,)).fetchone()
+                c.close()
+            else:
+                alert_html = f'<div id="alert-type" data-tip="error" style="display:none"></div><div class="alert alert-red">✗ Barkod bulunamadi: <strong>{barkod}</strong></div>'
 
-                if gun is not None and gun < 0:
-                    hdr_bg = "background:#3d0f0f"
-                    uyari  = '<div class="alert alert-red" style="margin-top:12px">⚠ TARIHI GECMIS URUN! RAFA KOYMA!</div>'
-                elif gun is not None and gun == 0:
-                    hdr_bg = "background:#3d0f0f"
-                    uyari  = '<div class="alert alert-red" style="margin-top:12px">⚠ BUGUN BITIYOR!</div>'
-                elif gun is not None and gun <= 3:
-                    hdr_bg = "background:#3d2800"
-                    uyari  = f'<div class="alert alert-yellow" style="margin-top:12px">⚠ {gun} gun kaldi — Dikkat!</div>'
-                else:
-                    hdr_bg = "background:#052e16"
-                    uyari  = ""
+        if urun:
+            urun = dict(urun)
+            gun  = kalan_gun(urun.get("stt"))
+            rc   = stt_renk(gun)
+            et   = stt_etiket(gun)
 
+            if gun is not None and gun < 0:
+                hdr_bg = "background:#3d0f0f"
+                uyari  = '<div class="alert alert-red" style="margin-top:12px">⚠ TARIHI GECMIS URUN! RAFA KOYMA!</div>'
+            elif gun is not None and gun == 0:
+                hdr_bg = "background:#3d0f0f"
+                uyari  = '<div class="alert alert-red" style="margin-top:12px">⚠ BUGUN BITIYOR!</div>'
+            elif gun is not None and gun <= 3:
+                hdr_bg = "background:#3d2800"
+                uyari  = f'<div class="alert alert-yellow" style="margin-top:12px">⚠ {gun} gun kaldi — Dikkat!</div>'
+            else:
+                hdr_bg = "background:#052e16"
+                uyari  = ""
+
+            if request.method == "POST":
                 log_hareket(barkod, urun["urun_adi"], "Okutma", 1,
                             "Web tarama", session.get("user","misafir"))
 
-                skt_gun_data = f'data-gun="{gun}"' if gun is not None else 'data-gun="null"'
-                sonuc_html = f"""
+            skt_gun_data = f'data-gun="{gun}"' if gun is not None else 'data-gun="null"'
+            skt_btn_label = "SKT Guncelle" if urun.get("stt") else "SKT Ekle"
+            sonuc_html = f"""
 <div id="skt-gun-data" {skt_gun_data} style="display:none"></div>
 <div id="alert-type" data-tip="success" style="display:none"></div>
 <div class="scan-result">
@@ -468,8 +477,25 @@ def tarama():
       &nbsp;&nbsp;|&nbsp;&nbsp;Min: {urun.get("min_stok",5)} adet
     </div>
     {uyari}
+    <div style="margin-top:14px">
+      <button onclick="sktPanelAc()" class="btn btn-muted" style="width:100%">📅 {skt_btn_label}</button>
+      <div id="skt-panel" style="display:none;margin-top:10px">
+        <form method="POST" action="/skt-guncelle">
+          <input type="hidden" name="barkod" value="{barkod}">
+          <input type="date" name="stt" value="{urun.get('stt','')}" style="margin-bottom:8px">
+          <div style="display:flex;gap:8px">
+            <button type="submit" class="btn btn-green" style="flex:1">Kaydet</button>
+            <button type="button" onclick="sktPanelKapat()" class="btn btn-muted" style="flex:1">Iptal</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
-</div>"""
+</div>
+<script>
+function sktPanelAc(){{ document.getElementById('skt-panel').style.display='block'; }}
+function sktPanelKapat(){{ document.getElementById('skt-panel').style.display='none'; }}
+</script>"""
 
     # Kamera JS (Quagga - dogruluk icin 3 tutarli okuma)
     kamera_js = """
@@ -609,6 +635,21 @@ function kameraKapat(){
   {sonuc_html}
 </div>"""
     return render(content, page="tarama", title="Tarama")
+
+# ═══════════════════════════════════════════════════
+#  SKT GUNCELLE
+# ═══════════════════════════════════════════════════
+@app.route("/skt-guncelle", methods=["POST"])
+@giris_gerekli
+def skt_guncelle():
+    barkod = request.form.get("barkod","").strip()
+    stt    = request.form.get("stt","").strip()
+    if barkod:
+        c = get_db()
+        c.execute("UPDATE urunler SET stt=?, son_guncelleme=CURRENT_TIMESTAMP WHERE barkod=?",
+                  (stt if stt else None, barkod))
+        c.commit(); c.close()
+    return redirect(f"/tarama?barkod={barkod}&skt_ok=1")
 
 # ═══════════════════════════════════════════════════
 #  URUNLER
