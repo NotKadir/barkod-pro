@@ -4,7 +4,7 @@ from datetime import datetime, date
 from flask import Flask, render_template_string, request, redirect, session, jsonify
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "scancore_secret_2024")
+app.secret_key = os.environ.get("SECRET_KEY", "nexstock_secret_2024")
 DB_NAME = os.environ.get("DB_PATH", "envanter_pro.db")
 
 # ═══════════════════════════════════════════════════
@@ -100,7 +100,7 @@ def openfoodfacts(barkod):
         f"https://world.openfoodfacts.net/api/v2/product/{barkod}?fields=product_name,product_name_tr,generic_name,categories_tags",
         f"https://world.openfoodfacts.org/api/v2/product/{barkod}.json",
     ]
-    headers = {"User-Agent": "ScanCore/3.0 (github.com/scancore)"}
+    headers = {"User-Agent": "NexStock/3.0 (github.com/nexstock)"}
     for url in urls:
         try:
             r = requests.get(url, headers=headers, timeout=8)
@@ -169,7 +169,7 @@ BASE = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ScanCore — {{ title }}</title>
+<title>NexStock — {{ title }}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#080d0a;color:#d1fae5;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
@@ -236,7 +236,7 @@ input:focus,select:focus{outline:none;border-color:#22c55e;box-shadow:0 0 0 2px 
 </head>
 <body>
 <div class="hdr">
-  <div class="logo">Scan<span>Core</span></div>
+  <div class="logo">Nex<span>Stock</span></div>
   <div class="nav">
     <a href="/tarama" class="{{ 'active' if page=='tarama' }}">📷 Tarama</a>
     {% if session.get('rol') not in ['misafir','goruntuleyici'] %}
@@ -262,7 +262,7 @@ CONTENT_BLOCK
 </div>
 </body></html>"""
 
-def render(content, page="", title="ScanCore", **kw):
+def render(content, page="", title="NexStock", **kw):
     html = BASE.replace("CONTENT_BLOCK", content)
     return render_template_string(html, session=session, page=page, title=title, **kw)
 
