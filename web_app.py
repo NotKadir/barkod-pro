@@ -522,7 +522,18 @@ function sesOkundu(){ beep(1200, 180, 'square'); setTimeout(function(){ beep(160
 function sesHata(){ beep(400, 200, 'sawtooth'); setTimeout(function(){ beep(300, 300, 'sawtooth'); }, 220); }
 function sesSkt(gun){
   if(gun === null) return;
-  if(gun < 0){ beep(800,150); setTimeout(function(){beep(600,150);},170); setTimeout(function(){beep(400,300);},340); }
+  if(gun < 0){
+    // Tarihi gecmis — rahatsiz edici alarm (5 kez yukari-asagi)
+    var t = 0;
+    for(var i=0; i<5; i++){
+      (function(i){
+        setTimeout(function(){ beep(1400, 120, 'sawtooth'); }, t);
+        t += 130;
+        setTimeout(function(){ beep(300, 180, 'sawtooth'); }, t);
+        t += 210;
+      })(i);
+    }
+  }
   else if(gun === 0){ beep(1000, 400, 'square'); }
   else if(gun <= 3){ beep(900, 250, 'sine'); }
 }
