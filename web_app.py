@@ -236,7 +236,7 @@ input:focus,select:focus{outline:none;border-color:#22c55e;box-shadow:0 0 0 2px 
 </head>
 <body>
 <div class="hdr">
-  <div class="logo">Nex<span>Stock</span></div>
+  <a href="https://nextstock-tan-t-m.vercel.app/" style="text-decoration:none" target="_blank"><div class="logo">Nex<span>Stock</span></div></a>
   <div class="nav">
     <a href="/tarama" class="{{ 'active' if page=='tarama' }}">📷 Tarama</a>
     {% if session.get('rol') not in ['misafir','goruntuleyici'] %}
@@ -252,10 +252,8 @@ input:focus,select:focus{outline:none;border-color:#22c55e;box-shadow:0 0 0 2px 
     <span class="rol-badge">{{ session.get('rol','').upper() }}</span>
     <span style="color:#6ee7b7;font-size:.85rem;margin-right:4px">{{ session.get('tam_ad') or session.get('user') }}</span>
     <a href="/cikis" class="nav btn-logout">Cikis</a>
-    <a href="https://nextstock-tan-t-m.vercel.app/" class="nav" style="color:#6ee7b7;margin-left:8px;border-left:1px solid #1a3d24;padding-left:16px" target="_blank">← Ana Sayfa</a>
     {% else %}
     <a href="/giris" class="nav btn-login">Giris Yap</a>
-    <a href="https://nextstock-tan-t-m.vercel.app/" class="nav" style="color:#6ee7b7;margin-left:8px;border-left:1px solid #1a3d24;padding-left:16px" target="_blank">← Ana Sayfa</a>
     {% endif %}
   </div>
 </div>
