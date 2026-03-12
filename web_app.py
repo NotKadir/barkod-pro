@@ -425,7 +425,7 @@ def tarama():
                     urun = c.execute("SELECT * FROM urunler WHERE barkod=?", (barkod,)).fetchone()
                     c.close()
                 else:
-                    alert_html = f'<div class="alert alert-red">✗ Barkod bulunamadi: <strong>{barkod}</strong></div>'
+                    alert_html = f'<div id="alert-type" data-tip="error" style="display:none"></div><div class="alert alert-red">✗ Barkod bulunamadi: <strong>{barkod}</strong></div>'
 
             if urun:
                 urun = dict(urun)
@@ -449,7 +449,10 @@ def tarama():
                 log_hareket(barkod, urun["urun_adi"], "Okutma", 1,
                             "Web tarama", session.get("user","misafir"))
 
+                skt_gun_data = f'data-gun="{gun}"' if gun is not None else 'data-gun="null"'
                 sonuc_html = f"""
+<div id="skt-gun-data" {skt_gun_data} style="display:none"></div>
+<div id="alert-type" data-tip="success" style="display:none"></div>
 <div class="scan-result">
   <div class="scan-header" style="{hdr_bg}">
     <div>
@@ -472,6 +475,46 @@ def tarama():
     kamera_js = """
 <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 <script>
+// ── SES SİSTEMİ ──────────────────────────────
+var _ctx = null;
+function _getCtx(){ if(!_ctx) _ctx = new (window.AudioContext||window.webkitAudioContext)(); return _ctx; }
+function beep(frekans, sure, tip){
+  try {
+    var ctx = _getCtx();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = tip || 'sine';
+    osc.frequency.setValueAtTime(frekans, ctx.currentTime);
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + sure/1000);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + sure/1000);
+  } catch(e){}
+}
+function sesOkundu(){ beep(1200, 180, 'square'); setTimeout(function(){ beep(1600, 120, 'square'); }, 200); }
+function sesHata(){ beep(400, 200, 'sawtooth'); setTimeout(function(){ beep(300, 300, 'sawtooth'); }, 220); }
+function sesSkt(gun){
+  if(gun === null) return;
+  if(gun < 0){ beep(800,150); setTimeout(function(){beep(600,150);},170); setTimeout(function(){beep(400,300);},340); }
+  else if(gun === 0){ beep(1000, 400, 'square'); }
+  else if(gun <= 3){ beep(900, 250, 'sine'); }
+}
+// Sayfa yüklenince SKT sesi çal
+window.addEventListener('DOMContentLoaded', function(){
+  var sktEl = document.getElementById('skt-gun-data');
+  if(sktEl){
+    var gun = parseInt(sktEl.getAttribute('data-gun'));
+    if(!isNaN(gun)) setTimeout(function(){ sesSkt(gun); }, 400);
+  }
+  var alertEl = document.getElementById('alert-type');
+  if(alertEl){
+    var tip = alertEl.getAttribute('data-tip');
+    if(tip==='success') setTimeout(function(){ sesOkundu(); }, 200);
+    else if(tip==='error') setTimeout(function(){ sesHata(); }, 200);
+  }
+});
+// ── KAMERA ───────────────────────────────────
 var _aktif=false, _sayac={}, _son="", _sonT=0;
 
 function kameraAc(){
@@ -522,6 +565,7 @@ function kameraAc(){
 
       document.getElementById('kam-durum').innerText='OKUNDU: '+kod;
       document.getElementById('kam-durum').style.color='#22c55e';
+      sesOkundu();
       Quagga.stop(); _aktif=false;
 
       document.getElementById('barkod-input').value=kod;
