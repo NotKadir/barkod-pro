@@ -252,9 +252,10 @@ input:focus,select:focus{outline:none;border-color:#22c55e;box-shadow:0 0 0 2px 
     <span class="rol-badge">{{ session.get('rol','').upper() }}</span>
     <span style="color:#6ee7b7;font-size:.85rem;margin-right:4px">{{ session.get('tam_ad') or session.get('user') }}</span>
     <a href="/cikis" class="nav btn-logout">Cikis</a>
+    <a href="https://nextstock-tan-t-m.vercel.app/" class="nav" style="color:#6ee7b7;margin-left:8px;border-left:1px solid #1a3d24;padding-left:16px" target="_blank">← Ana Sayfa</a>
     {% else %}
-    <a href="/anasayfa" class="nav" style="color:#6ee7b7">← Ana Sayfa</a>
     <a href="/giris" class="nav btn-login">Giris Yap</a>
+    <a href="https://nextstock-tan-t-m.vercel.app/" class="nav" style="color:#6ee7b7;margin-left:8px;border-left:1px solid #1a3d24;padding-left:16px" target="_blank">← Ana Sayfa</a>
     {% endif %}
   </div>
 </div>
