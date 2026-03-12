@@ -253,6 +253,7 @@ input:focus,select:focus{outline:none;border-color:#22c55e;box-shadow:0 0 0 2px 
     <span style="color:#6ee7b7;font-size:.85rem;margin-right:4px">{{ session.get('tam_ad') or session.get('user') }}</span>
     <a href="/cikis" class="nav btn-logout">Cikis</a>
     {% else %}
+    <a href="/anasayfa" class="nav" style="color:#6ee7b7">← Ana Sayfa</a>
     <a href="/giris" class="nav btn-login">Giris Yap</a>
     {% endif %}
   </div>
@@ -318,6 +319,10 @@ def cikis():
 # ═══════════════════════════════════════════════════
 #  ANA SAYFA
 # ═══════════════════════════════════════════════════
+@app.route("/anasayfa")
+def anasayfa():
+    return redirect("https://nexstock-landing.vercel.app", code=302)
+
 @app.route("/")
 @giris_gerekli
 def index():
