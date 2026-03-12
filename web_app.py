@@ -102,6 +102,17 @@ def giris_gerekli(f):
     @functools.wraps(f)
     def decorated(*args, **kwargs):
         if not session.get("user"):
+            # Misafir olarak otomatik gir
+            session["user"]   = "misafir"
+            session["rol"]    = "goruntuleyici"
+            session["tam_ad"] = "Misafir"
+        return f(*args, **kwargs)
+    return decorated
+
+def admin_gerekli(f):
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user") or session.get("rol") == "goruntuleyici":
             return redirect("/giris")
         return f(*args, **kwargs)
     return decorated
@@ -170,22 +181,26 @@ BASE = """<!DOCTYPE html>
 <body>
 <div class="header">
   <div class="logo">Scan<span>Core</span></div>
-  {% if session.get('user') %}
   <div class="nav">
-    <a href="/" class="{{ 'active' if page=='dashboard' }}">Dashboard</a>
     <a href="/tarama" class="{{ 'active' if page=='tarama' }}">Tarama</a>
+    {% if session.get('rol') not in ['goruntuleyici', None] %}
+    <a href="/" class="{{ 'active' if page=='dashboard' }}">Dashboard</a>
     <a href="/urunler" class="{{ 'active' if page=='urunler' }}">Urunler</a>
     <a href="/hareketler" class="{{ 'active' if page=='hareketler' }}">Hareketler</a>
+    {% endif %}
     {% if session.get('rol') in ['admin','mudur'] %}
     <a href="/raporlar" class="{{ 'active' if page=='raporlar' }}">Raporlar</a>
     {% endif %}
     {% if session.get('rol') == 'admin' %}
     <a href="/kullanicilar" class="{{ 'active' if page=='kullanicilar' }}">Kullanicilar</a>
     {% endif %}
+    {% if session.get('user') and session.get('user') != 'misafir' %}
     <span style="color:#2d5a3d;margin-left:12px;font-size:.85rem">{{ session.get('tam_ad') or session.get('user') }}</span>
     <a href="/cikis" class="nav logout">Cikis</a>
+    {% else %}
+    <a href="/giris" class="nav" style="background:#22c55e;color:#080d0a;font-weight:700">Giris Yap</a>
+    {% endif %}
   </div>
-  {% endif %}
 </div>
 <div class="main">{% block content %}{% endblock %}</div>
 </body></html>"""
@@ -244,6 +259,8 @@ def cikis():
 @app.route("/")
 @giris_gerekli
 def dashboard():
+    if session.get("rol") == "goruntuleyici":
+        return redirect("/tarama")
     conn = get_db()
     today = date.today().isoformat()
     stats = {
@@ -340,19 +357,96 @@ def tarama():
         sonuc_html = ""
 
     tmpl = f"""
-<div class="scan-box">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<div class="scan-box" style="max-width:600px">
   <div class="page-title">Barkod Tarama</div>
-  <form method="POST">
-    <input name="barkod" placeholder="Barkod numarasini girin..." autofocus>
-    <button type="submit" class="btn btn-green" style="width:100%;margin-top:8px">OKUT</button>
+
+  <!-- Kamera -->
+  <div id="kamera-alan" style="display:none;margin-bottom:16px">
+    <div id="interactive" style="width:100%;height:280px;background:#111c15;border-radius:10px;overflow:hidden;position:relative;border:2px solid #22c55e"></div>
+    <div id="kamera-sonuc" style="text-align:center;color:#22c55e;font-weight:700;margin-top:8px;font-size:1.1rem"></div>
+    <button onclick="kameraKapat()" class="btn btn-red" style="width:100%;margin-top:8px">Kamerayi Kapat</button>
+  </div>
+
+  <!-- Manuel giriş -->
+  <form method="POST" id="barkod-form">
+    <input name="barkod" id="barkod-input" placeholder="Barkod numarasini girin..." autofocus value="">
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="submit" class="btn btn-green" style="flex:1">OKUT</button>
+      <button type="button" onclick="kameraAc()" class="btn btn-muted" style="flex:1">📷 Kamera</button>
+    </div>
   </form>
+
   {sonuc_html}
-</div>"""
+</div>
+
+<style>
+#interactive video {{ width:100%;height:100%;object-fit:cover }}
+#interactive canvas {{ display:none }}
+.drawingBuffer {{ display:none }}
+</style>
+
+<script>
+var kameraAktif = false;
+
+function kameraAc() {{
+  document.getElementById('kamera-alan').style.display = 'block';
+  kameraAktif = true;
+  Quagga.init({{
+    inputStream: {{
+      name: "Live",
+      type: "LiveStream",
+      target: document.querySelector('#interactive'),
+      constraints: {{ facingMode: "environment" }}
+    }},
+    decoder: {{
+      readers: ["ean_reader","ean_8_reader","code_128_reader","code_39_reader","upc_reader"]
+    }},
+    locate: true
+  }}, function(err) {{
+    if (err) {{
+      document.getElementById('kamera-sonuc').textContent = 'Kamera acilamadi: ' + err;
+      document.getElementById('kamera-sonuc').style.color = '#e05252';
+      return;
+    }}
+    Quagga.start();
+  }});
+
+  var sonOkunan = "";
+  var sonZaman  = 0;
+  Quagga.onDetected(function(result) {{
+    var kod = result.codeResult.code;
+    var simdi = Date.now();
+    // Ayni barkodu 2 saniye icinde tekrar okuma
+    if (kod === sonOkunan && simdi - sonZaman < 2000) return;
+    sonOkunan = kod;
+    sonZaman  = simdi;
+
+    document.getElementById('kamera-sonuc').textContent = 'OKUNDU: ' + kod;
+    Quagga.stop();
+    kameraAktif = false;
+    document.getElementById('kamera-alan').style.display = 'none';
+
+    // Forma yaz ve gonder
+    document.getElementById('barkod-input').value = kod;
+    setTimeout(function() {{
+      document.getElementById('barkod-form').submit();
+    }}, 300);
+  }});
+}}
+
+function kameraKapat() {{
+  if (kameraAktif) {{ Quagga.stop(); kameraAktif = false; }}
+  document.getElementById('kamera-alan').style.display = 'none';
+}}
+</script>"""
     return render(tmpl, page="tarama", title="Tarama")
 
 @app.route("/urunler")
 @giris_gerekli
 def urunler():
+    if session.get("rol") == "goruntuleyici":
+        return redirect("/tarama")
     ara = request.args.get("ara","")
     conn = get_db()
     q = "SELECT * FROM urunler WHERE 1=1"
@@ -387,6 +481,8 @@ def urunler():
 @app.route("/hareketler")
 @giris_gerekli
 def hareketler():
+    if session.get("rol") == "goruntuleyici":
+        return redirect("/tarama")
     conn = get_db()
     liste = [dict(r) for r in conn.execute(
         "SELECT * FROM stok_hareketleri ORDER BY tarih DESC LIMIT 200").fetchall()]
