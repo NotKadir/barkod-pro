@@ -89,11 +89,11 @@ def stt_etiket(gun):
     return f"{gun} gun kaldi"
 
 def stt_renk(gun):
-    if gun is None: return "#2d5a3d"
+    if gun is None: return "#525252"
     if gun < 0:  return "#e05252"
     if gun <= 3: return "#f0b429"
     if gun <= 7: return "#fb923c"
-    return "#22c55e"
+    return "#ffffff"
 
 def openfoodfacts(barkod):
     urls = [
@@ -174,8 +174,8 @@ BASE = r"""<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --g:#22c55e;--g2:#4ade80;--bg:#050805;--panel:#0a0f0b;
-  --card:#0d1410;--border:#1a3d24;--text:#d1fae5;--sub:#6ee7b7;--muted:#2d5a3d;
+  --g:#ffffff;--g2:#e5e5e5;--bg:#080808;--panel:#111111;
+  --card:#161616;--border:#2a2a2a;--text:#f5f5f5;--sub:#d4d4d4;--muted:#525252;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
@@ -257,7 +257,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;
   background:var(--card);padding:24px 20px;text-align:center;
   position:relative;overflow:hidden;transition:background .2s;
 }
-.stat-card:hover{background:#111c15}
+.stat-card:hover{background:#1f1f1f}
 .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
 .stat-card .val{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;line-height:1;margin-bottom:6px}
 .stat-card .lbl{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
@@ -273,7 +273,7 @@ th{
 }
 td{padding:11px 16px;border-bottom:1px solid rgba(26,61,36,.5);font-size:.85rem;transition:background .15s}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:#0d1410}
+tr:hover td{background:#161616}
 
 /* PANELS */
 .panel{background:var(--card);border:1px solid var(--border);padding:24px;margin-bottom:20px;position:relative;overflow:hidden}
@@ -287,7 +287,7 @@ tr:hover td{background:#0d1410}
 
 /* FORMS */
 input,select,textarea{
-  background:#0d1410;color:var(--text);
+  background:#161616;color:var(--text);
   border:1px solid var(--border);
   padding:10px 14px;width:100%;margin-bottom:10px;
   font-size:.9rem;font-family:'DM Sans',sans-serif;transition:.15s;
@@ -306,7 +306,7 @@ label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted)
 }
 .btn-green{background:var(--g);color:#050805}.btn-green:hover{background:var(--g2)}
 .btn-red{background:#3d0f0f;color:#e05252;clip-path:none;border:1px solid #5a1515}.btn-red:hover{background:#5a1515}
-.btn-muted{background:#0d1410;color:var(--sub);clip-path:none;border:1px solid var(--border)}.btn-muted:hover{border-color:var(--g);color:var(--g)}
+.btn-muted{background:#161616;color:var(--sub);clip-path:none;border:1px solid var(--border)}.btn-muted:hover{border-color:var(--g);color:var(--g)}
 
 /* SCAN PAGE */
 .scan-wrap{max-width:600px;margin:0 auto;padding-top:20px}
@@ -432,13 +432,13 @@ def giris():
     <div class="login-sub">Envanter Yonetim Sistemi</div>
     {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
     <form method="POST">
-      <label style="color:#6ee7b7;font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">KULLANICI ADI</label>
+      <label style="color:#a3a3a3;font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">KULLANICI ADI</label>
       <input name="k" placeholder="kullanici_adi" autofocus autocomplete="username">
-      <label style="color:#6ee7b7;font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">SIFRE</label>
+      <label style="color:#a3a3a3;font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">SIFRE</label>
       <input name="s" type="password" placeholder="••••••••" autocomplete="current-password">
       <button type="submit" class="btn btn-green" style="width:100%;margin-top:4px;padding:12px">GIRIS YAP</button>
     </form>
-    <div style="text-align:center;margin-top:16px;color:#2d5a3d;font-size:.8rem">Varsayilan: admin / admin123</div>
+    <div style="text-align:center;margin-top:16px;color:#525252;font-size:.8rem">Varsayilan: admin / admin123</div>
   </div>
 </div>"""
     return render(content, page="giris", title="Giris")
@@ -480,14 +480,14 @@ def index():
     c.close()
 
     kfg = [
-        ("toplam_urun","Toplam Urun","#22c55e"),
+        ("toplam_urun","Toplam Urun","#ffffff"),
         ("toplam_stok","Toplam Stok","#34d399"),
         ("tarihi_gecmis","Tarihi Gecmis","#e05252"),
         ("yaklasan","Yaklasan SKT","#f0b429"),
         ("kritik","Kritik Stok","#fb923c"),
         ("stoksuz","Stoksuz","#a78bfa"),
-        ("bugun","Bugun Islem","#22c55e"),
-        ("tedarikci","Tedarikci","#6ee7b7"),
+        ("bugun","Bugun Islem","#ffffff"),
+        ("tedarikci","Tedarikci","#a3a3a3"),
     ]
     kartlar = "".join(f'<div class="stat-card" style="border-color:{col}"><div class="val" style="color:{col}">{s[k]}</div><div class="lbl">{l}</div></div>' for k,l,col in kfg)
 
@@ -495,7 +495,7 @@ def index():
     for u in skt_list:
         gun = kalan_gun(u.get("stt"))
         rc  = stt_renk(gun)
-        skt_rows += f'<tr><td><strong>{u["urun_adi"]}</strong></td><td style="color:#6ee7b7">{u.get("stt","—")}</td><td style="color:{rc};font-weight:600">{stt_etiket(gun)}</td><td>{u["stok_adedi"]}</td></tr>'
+        skt_rows += f'<tr><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("stt","—")}</td><td style="color:{rc};font-weight:600">{stt_etiket(gun)}</td><td>{u["stok_adedi"]}</td></tr>'
 
     dusuk_rows = ""
     for u in dusuk:
@@ -505,7 +505,7 @@ def index():
     har_rows = ""
     for h in son_har:
         cls = "green" if h["hareket_tipi"]=="Giris" else "red" if h["hareket_tipi"] in ["Cikis","Okutma"] else ""
-        har_rows += f'<tr><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td>{h["miktar"]}</td><td style="color:#6ee7b7">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
+        har_rows += f'<tr><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td>{h["miktar"]}</td><td style="color:#a3a3a3">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
 
     content = f"""
 <div class="page-title">Dashboard</div>
@@ -588,7 +588,7 @@ def tarama():
                 hdr_bg = "background:#3d2800"
                 uyari  = f'<div class="alert alert-yellow" style="margin-top:12px">⚠ {gun} gun kaldi — Dikkat!</div>'
             else:
-                hdr_bg = "background:#052e16"
+                hdr_bg = "background:#0f0f0f"
                 uyari  = ""
 
             if request.method == "POST":
@@ -606,12 +606,12 @@ def tarama():
       <div class="scan-urun-adi">{urun["urun_adi"]}</div>
       <div class="scan-meta">Barkod: {barkod}&nbsp;&nbsp;|&nbsp;&nbsp;Kategori: {urun.get("kategori","—")}</div>
     </div>
-    <div style="font-size:1.7rem;font-weight:800;color:#22c55e">{float(urun.get("fiyat",0)):.2f} TL</div>
+    <div style="font-size:1.7rem;font-weight:800;color:#ffffff">{float(urun.get("fiyat",0)):.2f} TL</div>
   </div>
   <div class="scan-body">
     <span class="scan-skt" style="background:{rc}22;color:{rc};border:1px solid {rc}55">{et}</span>
-    <div style="margin-top:10px;color:#6ee7b7;font-size:.9rem">
-      Stok: <strong style="color:#d1fae5">{urun["stok_adedi"]} adet</strong>
+    <div style="margin-top:10px;color:#a3a3a3;font-size:.9rem">
+      Stok: <strong style="color:#f5f5f5">{urun["stok_adedi"]} adet</strong>
       &nbsp;&nbsp;|&nbsp;&nbsp;Min: {urun.get("min_stok",5)} adet
     </div>
     {uyari}
@@ -739,7 +739,7 @@ function kameraAc(){
       _son=kod; _sonT=simdi; _sayac={};
 
       document.getElementById('kam-durum').innerText='OKUNDU: '+kod;
-      document.getElementById('kam-durum').style.color='#22c55e';
+      document.getElementById('kam-durum').style.color='#ffffff';
       sesOkundu();
       Quagga.stop(); _aktif=false;
 
@@ -769,7 +769,7 @@ function kameraKapat(){
       <div id="interactive"></div>
       <div class="kamera-overlay"></div>
     </div>
-    <div id="kam-durum" style="text-align:center;color:#6ee7b7;font-size:.88rem;padding:6px 0">Barkodu cerceve icine getirin...</div>
+    <div id="kam-durum" style="text-align:center;color:#a3a3a3;font-size:.88rem;padding:6px 0">Barkodu cerceve icine getirin...</div>
     <button onclick="kameraKapat()" class="btn btn-red" style="width:100%;margin-top:6px">✕ Kamerayi Kapat</button>
   </div>
 
@@ -822,11 +822,11 @@ def urunler():
         gun = kalan_gun(u.get("stt"))
         rc  = stt_renk(gun)
         et  = stt_etiket(gun) if u.get("stt") else "—"
-        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#6ee7b7">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#6ee7b7">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#2d5a3d">{u.get("min_stok",5)}</td><td style="color:#22c55e">{float(u.get("fiyat",0)):.2f} TL</td></tr>'
+        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#525252">{u.get("min_stok",5)}</td><td style="color:#ffffff">{float(u.get("fiyat",0)):.2f} TL</td></tr>'
 
     content = f"""
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-  <div class="page-title" style="margin:0">Urunler <span style="color:#2d5a3d;font-size:.9rem">({len(liste)})</span></div>
+  <div class="page-title" style="margin:0">Urunler <span style="color:#525252;font-size:.9rem">({len(liste)})</span></div>
   <form method="get" style="display:flex;gap:8px">
     <input name="ara" value="{ara}" placeholder="Urun ara..." style="width:200px;margin:0">
     <button type="submit" class="btn btn-muted">Ara</button>
@@ -852,7 +852,7 @@ def hareketler():
     rows = ""
     for h in liste:
         cls = "green" if h["hareket_tipi"]=="Giris" else "red" if h["hareket_tipi"] in ["Cikis","Okutma"] else ""
-        rows += f'<tr><td style="color:#2d5a3d">{h["hareket_id"]}</td><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td style="font-family:monospace;font-size:.82rem;color:#6ee7b7">{h.get("barkod","—")}</td><td style="font-weight:700">{h["miktar"]}</td><td style="color:#6ee7b7">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
+        rows += f'<tr><td style="color:#525252">{h["hareket_id"]}</td><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{h.get("barkod","—")}</td><td style="font-weight:700">{h["miktar"]}</td><td style="color:#a3a3a3">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
 
     content = f"""
 <div class="page-title">Hareket Gecmisi</div>
@@ -899,9 +899,9 @@ def raporlar():
   <div class="panel">
     <h2>API Endpointleri</h2>
     <div class="tbl-wrap"><table>
-      <tr><td><a href="/api/stats" style="color:#22c55e">/api/stats</a></td><td class="muted">Dashboard istatistikleri</td></tr>
-      <tr><td><a href="/api/urunler" style="color:#22c55e">/api/urunler</a></td><td class="muted">Tum urunler JSON</td></tr>
-      <tr><td><a href="/api/hareketler" style="color:#22c55e">/api/hareketler</a></td><td class="muted">Son hareketler JSON</td></tr>
+      <tr><td><a href="/api/stats" style="color:#ffffff">/api/stats</a></td><td class="muted">Dashboard istatistikleri</td></tr>
+      <tr><td><a href="/api/urunler" style="color:#ffffff">/api/urunler</a></td><td class="muted">Tum urunler JSON</td></tr>
+      <tr><td><a href="/api/hareketler" style="color:#ffffff">/api/hareketler</a></td><td class="muted">Son hareketler JSON</td></tr>
     </table></div>
   </div>
 </div>"""
@@ -919,12 +919,12 @@ def kullanicilar():
     liste = [dict(r) for r in c.execute(
         "SELECT id,kullanici_adi,tam_ad,rol,aktif,son_giris FROM kullanicilar ORDER BY tam_ad").fetchall()]
     c.close()
-    RC = {"admin":"#22c55e","mudur":"#34d399","kasiyer":"#86efac","goruntuleyici":"#6ee7b7"}
+    RC = {"admin":"#ffffff","mudur":"#34d399","kasiyer":"#86efac","goruntuleyici":"#a3a3a3"}
     rows = ""
     for u in liste:
-        rc  = RC.get(u["rol"],"#6ee7b7")
+        rc  = RC.get(u["rol"],"#a3a3a3")
         akt = '<span class="green">✓ Aktif</span>' if u["aktif"] else '<span class="red">✗ Pasif</span>'
-        rows += f'<tr><td style="font-weight:600">{u["kullanici_adi"]}</td><td>{u.get("tam_ad","—")}</td><td style="color:{rc};font-weight:700">{u["rol"].upper()}</td><td>{akt}</td><td style="color:#6ee7b7">{str(u.get("son_giris","—"))[:16]}</td></tr>'
+        rows += f'<tr><td style="font-weight:600">{u["kullanici_adi"]}</td><td>{u.get("tam_ad","—")}</td><td style="color:{rc};font-weight:700">{u["rol"].upper()}</td><td>{akt}</td><td style="color:#a3a3a3">{str(u.get("son_giris","—"))[:16]}</td></tr>'
 
     content = f"""
 <div class="page-title">Kullanicilar</div>
