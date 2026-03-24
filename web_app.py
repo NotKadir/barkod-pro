@@ -958,9 +958,9 @@ function kameraAc(){
       target:document.querySelector('#interactive'),
       constraints:{facingMode:"environment",width:{ideal:1280},height:{ideal:720}}
     },
-    locator:{patchSize:"large",halfSample:false},
+    locator:{patchSize:"medium",halfSample:true},
     numOfWorkers:navigator.hardwareConcurrency||4,
-    frequency:10,
+    frequency:15,
     decoder:{
       readers:["ean_reader","ean_8_reader","upc_reader","upc_e_reader","code_128_reader"],
       multiple:false
@@ -982,23 +982,23 @@ function kameraAc(){
     var kod = res.codeResult.code;
     var format = res.codeResult.format;
 
-    // 1) Siki hata orani filtresi
+    // 1) Hata orani filtresi
     var hatalar = res.codeResult.decodedCodes.filter(function(x){return x.error!==undefined;});
     var toplamHata = hatalar.reduce(function(a,b){return a+b.error;},0);
-    if(hatalar.length > 0 && toplamHata/hatalar.length > 0.06) return;
+    if(hatalar.length > 0 && toplamHata/hatalar.length > 0.20) return;
 
     // 2) Barkod dogrulama (checksum + uzunluk + rakam)
     if(!gecerliBarkod(kod, format)) return;
 
-    // 3) Tutarlilik — 5 kez ayni kod
+    // 3) Tutarlilik — 3 kez ayni kod
     _sayac[kod] = (_sayac[kod]||0)+1;
-    document.getElementById('kam-durum').innerText='Okuma: '+kod+' ('+_sayac[kod]+'/5)';
+    document.getElementById('kam-durum').innerText='Okuma: '+kod+' ('+_sayac[kod]+'/3)';
     document.getElementById('kam-durum').style.color='rgba(165,216,255,.8)';
 
     // Gurultu temizleme
     if(Object.keys(_sayac).length > 8){ _sayac={}; return; }
 
-    if(_sayac[kod]>=5){
+    if(_sayac[kod]>=3){
       var simdi=Date.now();
       if(kod===_son && simdi-_sonT<3000) return;
       _son=kod; _sonT=simdi; _sayac={};
