@@ -627,8 +627,7 @@ function kameraKapat(){
     total_skt    = cstat.execute("SELECT COUNT(*) FROM urunler WHERE skt IS NOT NULL AND skt != ''").fetchone()[0] or 0
     cstat.close()
 
-    content = f"""
-{kamera_js}
+    content = kamera_js + f"""
 <style>
 .main{{padding:0;max-width:100%}}
 #t-canvas{{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5}}
