@@ -621,8 +621,7 @@ function kameraKapat(){
 </script>"""
 
     # Stats for motivation copy
-    db2 = get_db()
-    c2  = db2.cursor()
+    c2 = get_db()
     total_tarama = c2.execute("SELECT COUNT(*) FROM stok_hareketleri").fetchone()[0] or 0
     total_skt    = c2.execute("SELECT COUNT(*) FROM urunler WHERE skt IS NOT NULL AND skt != ''").fetchone()[0] or 0
     total_urun   = c2.execute("SELECT COUNT(*) FROM urunler").fetchone()[0] or 0
