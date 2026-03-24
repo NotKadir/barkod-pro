@@ -624,7 +624,7 @@ function kameraKapat(){
     cstat = get_db()
     total_tarama = cstat.execute("SELECT COUNT(*) FROM stok_hareketleri").fetchone()[0] or 0
     total_urun   = cstat.execute("SELECT COUNT(*) FROM urunler").fetchone()[0] or 0
-    total_skt    = cstat.execute("SELECT COUNT(*) FROM urunler WHERE skt IS NOT NULL AND skt != ''").fetchone()[0] or 0
+    total_skt    = cstat.execute("SELECT COUNT(*) FROM urunler WHERE stt IS NOT NULL AND stt != ''").fetchone()[0] or 0
     cstat.close()
 
     tarama_css = """
