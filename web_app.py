@@ -4,7 +4,7 @@ from datetime import datetime, date
 from flask import Flask, render_template_string, request, redirect, session, jsonify
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "nexstock_secret_2024")
+app.secret_key = os.environ.get("SECRET_KEY", "scancore_secret_2024")
 DB_NAME = os.environ.get("DB_PATH", "envanter_pro.db")
 
 # ═══════════════════════════════════════════════════
@@ -89,18 +89,18 @@ def stt_etiket(gun):
     return f"{gun} gun kaldi"
 
 def stt_renk(gun):
-    if gun is None: return "#525252"
+    if gun is None: return "#2d5a3d"
     if gun < 0:  return "#e05252"
     if gun <= 3: return "#f0b429"
     if gun <= 7: return "#fb923c"
-    return "#ffffff"
+    return "#22c55e"
 
 def openfoodfacts(barkod):
     urls = [
         f"https://world.openfoodfacts.net/api/v2/product/{barkod}?fields=product_name,product_name_tr,generic_name,categories_tags",
         f"https://world.openfoodfacts.org/api/v2/product/{barkod}.json",
     ]
-    headers = {"User-Agent": "NexStock/3.0 (github.com/nexstock)"}
+    headers = {"User-Agent": "ScanCore/3.0 (github.com/scancore)"}
     for url in urls:
         try:
             r = requests.get(url, headers=headers, timeout=8)
@@ -169,210 +169,76 @@ BASE = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NexStock — {{ title }}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<title>ScanCore — {{ title }}</title>
 <style>
-:root{
-  --g:#ffffff;--g2:#e5e5e5;--bg:#080808;--panel:#111111;
-  --card:#161616;--border:#2a2a2a;--text:#f5f5f5;--sub:#d4d4d4;--muted:#525252;
-}
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden}
-
-/* NOISE */
-body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;
-  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
-  opacity:.5}
-
-/* HEADER */
-.hdr{
-  position:sticky;top:0;z-index:100;
-  background:rgba(5,8,5,.92);
-  backdrop-filter:blur(20px);
-  border-bottom:1px solid var(--border);
-  padding:0 40px;
-  display:flex;align-items:center;justify-content:space-between;
-  height:60px;
-}
-.hdr::after{content:'';position:absolute;bottom:-1px;left:0;width:100%;height:1px;
-  background:linear-gradient(90deg,transparent,var(--g),transparent);opacity:.4}
-
-/* LOGO */
-.logo-link{text-decoration:none}
-.logo{
-  font-family:'Bebas Neue',sans-serif;
-  font-size:1.6rem;letter-spacing:3px;color:var(--text);
-  transition:opacity .2s;
-}
-.logo:hover{opacity:.7}
-.logo span{color:var(--g)}
-
-/* NAV */
-.nav{display:flex;align-items:center;gap:2px}
-.nav a{
-  color:var(--muted);text-decoration:none;
-  font-size:.8rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;
-  padding:7px 14px;transition:all .2s;position:relative;
-}
-.nav a::after{content:'';position:absolute;bottom:0;left:14px;right:14px;height:1px;
-  background:var(--g);transform:scaleX(0);transition:transform .2s}
-.nav a:hover{color:var(--text)}
-.nav a:hover::after,.nav a.active::after{transform:scaleX(1)}
-.nav a.active{color:var(--g)}
-.nav-divider{width:1px;height:20px;background:var(--border);margin:0 8px}
-.rol-badge{
-  font-family:'JetBrains Mono',monospace;
-  font-size:.68rem;font-weight:600;letter-spacing:1px;text-transform:uppercase;
-  padding:4px 10px;border:1px solid var(--border);color:var(--g);margin:0 6px;
-}
-.nav-user{font-size:.82rem;color:var(--sub);margin-right:4px}
-.btn-login{
-  background:var(--g)!important;color:#050805!important;font-weight:700!important;
-  padding:8px 20px!important;letter-spacing:.5px;
-  clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));
-}
-.btn-login:hover{background:var(--g2)!important}
-.btn-login::after{display:none!important}
-.btn-logout{color:#e05252!important}
-.btn-logout:hover{color:#ff7070!important}
-.btn-logout::after{background:#e05252!important}
-
-/* MAIN */
-.main{padding:32px 40px;max-width:1400px;margin:0 auto}
-
-/* PAGE TITLE */
-.page-title{
-  font-family:'Bebas Neue',sans-serif;
-  font-size:2.8rem;letter-spacing:2px;
-  color:var(--text);margin-bottom:28px;
-  display:flex;align-items:center;gap:16px;line-height:1;
-}
-.page-title::before{content:'';display:block;width:4px;height:36px;background:var(--g)}
-
-/* STAT CARDS */
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;margin-bottom:32px;background:var(--border)}
-.stat-card{
-  background:var(--card);padding:24px 20px;text-align:center;
-  position:relative;overflow:hidden;transition:background .2s;
-}
-.stat-card:hover{background:#1f1f1f}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
-.stat-card .val{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;line-height:1;margin-bottom:6px}
-.stat-card .lbl{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
-
-/* TABLES */
-.tbl-wrap{background:var(--card);border:1px solid var(--border);overflow:hidden;margin-bottom:20px}
+body{background:#080d0a;color:#d1fae5;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+.hdr{background:#0d1410;border-bottom:2px solid #22c55e;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100}
+.logo{font-size:1.15rem;font-weight:800;letter-spacing:1px;color:#d1fae5}
+.logo span{color:#22c55e}
+.nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.nav a{color:#6ee7b7;text-decoration:none;font-size:.88rem;padding:6px 13px;border-radius:6px;transition:.15s}
+.nav a:hover,.nav a.active{background:#1a3d24;color:#22c55e}
+.nav .btn-login{background:#22c55e;color:#080d0a;font-weight:700}
+.nav .btn-login:hover{background:#4ade80}
+.nav .btn-logout{color:#e05252}
+.nav .btn-logout:hover{background:#3d0f0f}
+.rol-badge{font-size:.75rem;font-weight:700;padding:3px 10px;border-radius:999px;background:#1a3d24;color:#22c55e;margin-right:4px}
+.main{padding:24px;max-width:1320px;margin:0 auto}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+.stat-card{background:#0d1410;border:1px solid #1a3d24;border-radius:10px;padding:18px 12px;text-align:center;border-top:3px solid}
+.stat-card .val{font-size:2rem;font-weight:800;margin-bottom:4px}
+.stat-card .lbl{font-size:.76rem;color:#6ee7b7;font-weight:500}
+.tbl-wrap{background:#0d1410;border:1px solid #1a3d24;border-radius:10px;overflow:hidden;margin-bottom:20px}
 table{width:100%;border-collapse:collapse}
-th{
-  background:#0a0f0b;padding:12px 16px;text-align:left;
-  font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--g);
-  font-weight:600;letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;
-  border-bottom:1px solid var(--border);
-}
-td{padding:11px 16px;border-bottom:1px solid rgba(26,61,36,.5);font-size:.85rem;transition:background .15s}
+th{background:#111c15;padding:10px 14px;text-align:left;font-size:.82rem;color:#22c55e;font-weight:600;white-space:nowrap}
+td{padding:9px 14px;border-bottom:1px solid #1a3d24;font-size:.84rem}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:#161616}
-
-/* PANELS */
-.panel{background:var(--card);border:1px solid var(--border);padding:24px;margin-bottom:20px;position:relative;overflow:hidden}
-.panel::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--g);opacity:.5}
-.panel h2{
-  font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;
-  color:var(--text);margin-bottom:16px;display:flex;align-items:center;gap:8px;
-}
-.panel h2::after{content:'';flex:1;height:1px;background:var(--border)}
+tr:hover td{background:#111c15}
+.panel{background:#0d1410;border:1px solid #1a3d24;border-radius:10px;padding:20px;margin-bottom:20px}
+.panel h2{font-size:.95rem;color:#22c55e;margin-bottom:14px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-
-/* FORMS */
-input,select,textarea{
-  background:#161616;color:var(--text);
-  border:1px solid var(--border);
-  padding:10px 14px;width:100%;margin-bottom:10px;
-  font-size:.9rem;font-family:'DM Sans',sans-serif;transition:.15s;
-  outline:none;border-radius:0;
-}
-input:focus,select:focus{border-color:var(--g);box-shadow:inset 0 0 0 1px var(--g)}
-label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px}
-
-/* BUTTONS */
-.btn{
-  display:inline-flex;align-items:center;justify-content:center;gap:6px;
-  padding:10px 22px;border:none;cursor:pointer;
-  font-size:.82rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
-  text-decoration:none;transition:.15s;font-family:'DM Sans',sans-serif;
-  clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));
-}
-.btn-green{background:var(--g);color:#050805}.btn-green:hover{background:var(--g2)}
-.btn-red{background:#3d0f0f;color:#e05252;clip-path:none;border:1px solid #5a1515}.btn-red:hover{background:#5a1515}
-.btn-muted{background:#161616;color:var(--sub);clip-path:none;border:1px solid var(--border)}.btn-muted:hover{border-color:var(--g);color:var(--g)}
-
-/* SCAN PAGE */
-.scan-wrap{max-width:600px;margin:0 auto;padding-top:20px}
-.scan-title{font-family:'Bebas Neue',sans-serif;font-size:2.5rem;letter-spacing:2px;margin-bottom:24px;display:flex;align-items:center;gap:12px}
-.scan-title::before{content:'';display:block;width:4px;height:32px;background:var(--g)}
+input,select,textarea{background:#111c15;color:#d1fae5;border:1px solid #1a3d24;border-radius:7px;padding:9px 13px;width:100%;margin-bottom:10px;font-size:.9rem;font-family:inherit;transition:.15s}
+input:focus,select:focus{outline:none;border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.15)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 20px;border-radius:7px;border:none;cursor:pointer;font-size:.88rem;font-weight:700;text-decoration:none;transition:.15s;font-family:inherit}
+.btn-green{background:#22c55e;color:#080d0a}.btn-green:hover{background:#4ade80}
+.btn-red{background:#3d0f0f;color:#e05252;border:1px solid #5a1515}.btn-red:hover{background:#5a1515}
+.btn-muted{background:#111c15;color:#6ee7b7;border:1px solid #1a3d24}.btn-muted:hover{background:#1a3d24}
+.scan-wrap{max-width:580px;margin:32px auto}
 .scan-input-row{display:flex;gap:8px;margin-bottom:8px}
-.scan-input-row input{margin:0;font-family:'JetBrains Mono',monospace;font-size:1.1rem;letter-spacing:3px;text-align:center}
-.scan-result{margin-top:24px;border:1px solid var(--border);overflow:hidden;position:relative}
-.scan-result::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--g),transparent)}
-.scan-header{padding:20px 24px;display:flex;justify-content:space-between;align-items:flex-start}
-.scan-body{padding:16px 24px 20px;background:var(--card)}
-.scan-urun-adi{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:1px;line-height:1}
-.scan-meta{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--sub);margin-top:6px;letter-spacing:.5px}
-.scan-skt{font-family:'JetBrains Mono',monospace;font-size:.85rem;font-weight:600;margin-top:12px;padding:8px 14px;display:inline-block;letter-spacing:.5px}
-
-/* CAMERA */
-.kamera-box{border:1px solid var(--g);overflow:hidden;position:relative;margin-bottom:12px;background:#000}
-#interactive{width:100%;height:300px;position:relative}
+.scan-input-row input{margin:0;font-size:1.2rem;text-align:center;letter-spacing:2px}
+.scan-result{margin-top:20px;border-radius:10px;overflow:hidden;border:1px solid #1a3d24}
+.scan-header{padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
+.scan-body{padding:14px 20px;background:#0d1410}
+.scan-urun-adi{font-size:1.3rem;font-weight:800}
+.scan-meta{font-size:.85rem;color:#6ee7b7;margin-top:4px}
+.scan-skt{font-size:1rem;font-weight:700;margin-top:10px;padding:8px 12px;border-radius:6px;display:inline-block}
+.kamera-box{background:#111c15;border:2px solid #22c55e;border-radius:10px;overflow:hidden;position:relative;margin-bottom:12px}
+#interactive{width:100%;height:280px;position:relative}
 #interactive video{width:100%;height:100%;object-fit:cover}
 #interactive canvas{display:none!important}
 .drawingBuffer{display:none!important}
-.kamera-overlay{
-  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:260px;height:130px;
-  border:2px solid var(--g);
-  box-shadow:0 0 0 9999px rgba(0,0,0,.6),0 0 20px var(--g) inset;
-  pointer-events:none;
-}
-.kamera-corner{position:absolute;width:16px;height:16px;border-color:var(--g);border-style:solid}
-.kamera-corner.tl{top:-1px;left:-1px;border-width:2px 0 0 2px}
-.kamera-corner.tr{top:-1px;right:-1px;border-width:2px 2px 0 0}
-.kamera-corner.bl{bottom:-1px;left:-1px;border-width:0 0 2px 2px}
-.kamera-corner.br{bottom:-1px;right:-1px;border-width:0 2px 2px 0}
-
-/* ALERTS */
-.alert{padding:12px 16px;margin-bottom:16px;font-size:.88rem;font-weight:500;border-left:3px solid;font-family:'DM Sans',sans-serif}
-.alert-red{background:#1a0505;color:#e05252;border-color:#e05252}
-.alert-green{background:#021008;color:var(--g);border-color:var(--g)}
-.alert-yellow{background:#1a1000;color:#f0b429;border-color:#f0b429}
-
-/* COLORS */
-.green{color:var(--g)}.red{color:#e05252}.yellow{color:#f0b429}.orange{color:#fb923c}.muted{color:var(--muted)}
-
-/* LOGIN */
-.login-wrap{max-width:400px;margin:80px auto}
-.login-wrap .panel{padding:40px}
-.login-logo{font-family:'Bebas Neue',sans-serif;font-size:2.5rem;letter-spacing:4px;text-align:center;margin-bottom:6px}
-.login-sub{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted);text-align:center;letter-spacing:2px;text-transform:uppercase;margin-bottom:32px}
-
-/* RESPONSIVE */
-@media(max-width:900px){
-  .hdr{padding:0 16px}
-  .main{padding:20px 16px}
+.kamera-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:240px;height:120px;border:3px solid #22c55e;border-radius:6px;box-shadow:0 0 0 9999px rgba(0,0,0,.55);pointer-events:none}
+.alert{padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:.9rem;font-weight:500}
+.alert-red{background:#3d0f0f;color:#e05252;border:1px solid #5a1515}
+.alert-green{background:#052e16;color:#22c55e;border:1px solid #1a3d24}
+.alert-yellow{background:#3d2800;color:#f0b429;border:1px solid #5a3800}
+.page-title{font-size:1.2rem;font-weight:800;color:#d1fae5;margin-bottom:20px}
+.green{color:#22c55e}.red{color:#e05252}.yellow{color:#f0b429}.muted{color:#2d5a3d}
+.login-wrap{max-width:380px;margin:80px auto}
+@media(max-width:700px){
   .grid2{grid-template-columns:1fr}
   .stat-grid{grid-template-columns:repeat(2,1fr)}
-  .nav a{padding:6px 8px;font-size:.75rem}
+  .hdr{padding:0 12px}
+  .main{padding:12px}
 }
 </style>
 </head>
 <body>
 <div class="hdr">
-  <a href="https://nextstock-tan-t-m.vercel.app/" class="logo-link" target="_blank">
-    <div class="logo">Nex<span>Stock</span></div>
-  </a>
+  <div class="logo">Scan<span>Core</span></div>
   <div class="nav">
-    <a href="/tarama" class="{{ 'active' if page=='tarama' }}">Tarama</a>
+    <a href="/tarama" class="{{ 'active' if page=='tarama' }}">📷 Tarama</a>
     {% if session.get('rol') not in ['misafir','goruntuleyici'] %}
     <a href="/" class="{{ 'active' if page=='dashboard' }}">Dashboard</a>
     <a href="/urunler" class="{{ 'active' if page=='urunler' }}">Urunler</a>
@@ -383,13 +249,11 @@ label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted)
     {% if session.get('rol') == 'admin' %}
     <a href="/kullanicilar" class="{{ 'active' if page=='kullanicilar' }}">Kullanicilar</a>
     {% endif %}
-    <div class="nav-divider"></div>
-    <span class="rol-badge">{{ session.get('rol','') }}</span>
-    <span class="nav-user">{{ session.get('tam_ad') or session.get('user') }}</span>
-    <a href="/cikis" class="btn-logout">Cikis</a>
+    <span class="rol-badge">{{ session.get('rol','').upper() }}</span>
+    <span style="color:#6ee7b7;font-size:.85rem;margin-right:4px">{{ session.get('tam_ad') or session.get('user') }}</span>
+    <a href="/cikis" class="nav btn-logout">Cikis</a>
     {% else %}
-    <div class="nav-divider"></div>
-    <a href="/giris" class="btn-login">Giris Yap</a>
+    <a href="/giris" class="nav btn-login">Giris Yap</a>
     {% endif %}
   </div>
 </div>
@@ -398,7 +262,7 @@ CONTENT_BLOCK
 </div>
 </body></html>"""
 
-def render(content, page="", title="NexStock", **kw):
+def render(content, page="", title="ScanCore", **kw):
     html = BASE.replace("CONTENT_BLOCK", content)
     return render_template_string(html, session=session, page=page, title=title, **kw)
 
@@ -428,17 +292,19 @@ def giris():
     content = f"""
 <div class="login-wrap">
   <div class="panel">
-    <div class="login-logo">Nex<span style="color:var(--g)">Stock</span></div>
-    <div class="login-sub">Envanter Yonetim Sistemi</div>
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:2rem;font-weight:800">Scan<span style="color:#22c55e">Core</span></div>
+      <div style="color:#6ee7b7;font-size:.9rem;margin-top:6px">Envanter Yonetim Sistemi</div>
+    </div>
     {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
     <form method="POST">
-      <label style="color:#a3a3a3;font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">KULLANICI ADI</label>
+      <label style="color:#6ee7b7;font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">KULLANICI ADI</label>
       <input name="k" placeholder="kullanici_adi" autofocus autocomplete="username">
-      <label style="color:#a3a3a3;font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">SIFRE</label>
+      <label style="color:#6ee7b7;font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">SIFRE</label>
       <input name="s" type="password" placeholder="••••••••" autocomplete="current-password">
       <button type="submit" class="btn btn-green" style="width:100%;margin-top:4px;padding:12px">GIRIS YAP</button>
     </form>
-    <div style="text-align:center;margin-top:16px;color:#525252;font-size:.8rem">Varsayilan: admin / admin123</div>
+    <div style="text-align:center;margin-top:16px;color:#2d5a3d;font-size:.8rem">Varsayilan: admin / admin123</div>
   </div>
 </div>"""
     return render(content, page="giris", title="Giris")
@@ -452,10 +318,6 @@ def cikis():
 # ═══════════════════════════════════════════════════
 #  ANA SAYFA
 # ═══════════════════════════════════════════════════
-@app.route("/anasayfa")
-def anasayfa():
-    return redirect("https://nexstock-landing.vercel.app", code=302)
-
 @app.route("/")
 @giris_gerekli
 def index():
@@ -480,14 +342,14 @@ def index():
     c.close()
 
     kfg = [
-        ("toplam_urun","Toplam Urun","#ffffff"),
+        ("toplam_urun","Toplam Urun","#22c55e"),
         ("toplam_stok","Toplam Stok","#34d399"),
         ("tarihi_gecmis","Tarihi Gecmis","#e05252"),
         ("yaklasan","Yaklasan SKT","#f0b429"),
         ("kritik","Kritik Stok","#fb923c"),
         ("stoksuz","Stoksuz","#a78bfa"),
-        ("bugun","Bugun Islem","#ffffff"),
-        ("tedarikci","Tedarikci","#a3a3a3"),
+        ("bugun","Bugun Islem","#22c55e"),
+        ("tedarikci","Tedarikci","#6ee7b7"),
     ]
     kartlar = "".join(f'<div class="stat-card" style="border-color:{col}"><div class="val" style="color:{col}">{s[k]}</div><div class="lbl">{l}</div></div>' for k,l,col in kfg)
 
@@ -495,7 +357,7 @@ def index():
     for u in skt_list:
         gun = kalan_gun(u.get("stt"))
         rc  = stt_renk(gun)
-        skt_rows += f'<tr><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("stt","—")}</td><td style="color:{rc};font-weight:600">{stt_etiket(gun)}</td><td>{u["stok_adedi"]}</td></tr>'
+        skt_rows += f'<tr><td><strong>{u["urun_adi"]}</strong></td><td style="color:#6ee7b7">{u.get("stt","—")}</td><td style="color:{rc};font-weight:600">{stt_etiket(gun)}</td><td>{u["stok_adedi"]}</td></tr>'
 
     dusuk_rows = ""
     for u in dusuk:
@@ -505,7 +367,7 @@ def index():
     har_rows = ""
     for h in son_har:
         cls = "green" if h["hareket_tipi"]=="Giris" else "red" if h["hareket_tipi"] in ["Cikis","Okutma"] else ""
-        har_rows += f'<tr><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td>{h["miktar"]}</td><td style="color:#a3a3a3">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
+        har_rows += f'<tr><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td>{h["miktar"]}</td><td style="color:#6ee7b7">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
 
     content = f"""
 <div class="page-title">Dashboard</div>
@@ -588,7 +450,7 @@ def tarama():
                 hdr_bg = "background:#3d2800"
                 uyari  = f'<div class="alert alert-yellow" style="margin-top:12px">⚠ {gun} gun kaldi — Dikkat!</div>'
             else:
-                hdr_bg = "background:#0f0f0f"
+                hdr_bg = "background:#052e16"
                 uyari  = ""
 
             if request.method == "POST":
@@ -606,12 +468,12 @@ def tarama():
       <div class="scan-urun-adi">{urun["urun_adi"]}</div>
       <div class="scan-meta">Barkod: {barkod}&nbsp;&nbsp;|&nbsp;&nbsp;Kategori: {urun.get("kategori","—")}</div>
     </div>
-    <div style="font-size:1.7rem;font-weight:800;color:#ffffff">{float(urun.get("fiyat",0)):.2f} TL</div>
+    <div style="font-size:1.7rem;font-weight:800;color:#22c55e">{float(urun.get("fiyat",0)):.2f} TL</div>
   </div>
   <div class="scan-body">
     <span class="scan-skt" style="background:{rc}22;color:{rc};border:1px solid {rc}55">{et}</span>
-    <div style="margin-top:10px;color:#a3a3a3;font-size:.9rem">
-      Stok: <strong style="color:#f5f5f5">{urun["stok_adedi"]} adet</strong>
+    <div style="margin-top:10px;color:#6ee7b7;font-size:.9rem">
+      Stok: <strong style="color:#d1fae5">{urun["stok_adedi"]} adet</strong>
       &nbsp;&nbsp;|&nbsp;&nbsp;Min: {urun.get("min_stok",5)} adet
     </div>
     {uyari}
@@ -739,7 +601,7 @@ function kameraAc(){
       _son=kod; _sonT=simdi; _sayac={};
 
       document.getElementById('kam-durum').innerText='OKUNDU: '+kod;
-      document.getElementById('kam-durum').style.color='#ffffff';
+      document.getElementById('kam-durum').style.color='#22c55e';
       sesOkundu();
       Quagga.stop(); _aktif=false;
 
@@ -758,31 +620,432 @@ function kameraKapat(){
 }
 </script>"""
 
+    # Stats for motivation copy
+    db2 = get_db()
+    c2  = db2.cursor()
+    total_tarama = c2.execute("SELECT COUNT(*) FROM stok_hareketleri").fetchone()[0] or 0
+    total_skt    = c2.execute("SELECT COUNT(*) FROM urunler WHERE skt IS NOT NULL AND skt != ''").fetchone()[0] or 0
+    total_urun   = c2.execute("SELECT COUNT(*) FROM urunler").fetchone()[0] or 0
+
     content = f"""
 {kamera_js}
-<div class="scan-wrap">
-  <div class="page-title">📷 Barkod Tarama</div>
-  {alert_html}
+<style>
+/* ── TARAMA PAGE OVERRIDE ── */
+.main {{ padding: 0; max-width: 100%; }}
 
-  <div id="kam-alan" style="display:none;margin-bottom:12px">
-    <div class="kamera-box">
-      <div id="interactive"></div>
-      <div class="kamera-overlay"></div>
+/* Canvas bg */
+#tarama-canvas {{
+  position: fixed; inset: 0; z-index: 0;
+  pointer-events: none; opacity: 0.55;
+}}
+
+.tarama-page {{
+  position: relative; z-index: 1;
+  min-height: calc(100vh - 58px);
+  display: grid;
+  grid-template-columns: 1fr 520px 1fr;
+  grid-template-rows: auto;
+  gap: 0;
+  padding: 48px 40px;
+  align-items: start;
+}}
+
+/* LEFT — stats */
+.t-left {{
+  padding-top: 8px;
+  padding-right: 32px;
+}}
+.t-eyebrow {{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .62rem; letter-spacing: 4px;
+  text-transform: uppercase; color: #2d5a3d;
+  margin-bottom: 32px;
+  display: flex; align-items: center; gap: 10px;
+}}
+.t-eyebrow::before {{
+  content: ''; display: block;
+  width: 24px; height: 1px; background: #22c55e;
+}}
+.t-stat {{
+  margin-bottom: 28px;
+  border-left: 2px solid #1a3d24;
+  padding-left: 18px;
+  transition: border-color .3s;
+}}
+.t-stat:hover {{ border-left-color: #22c55e; }}
+.t-stat-num {{
+  font-family: 'Bebas Neue', cursive;
+  font-size: 3.2rem; line-height: 1;
+  letter-spacing: -1px; color: #22c55e;
+  display: block;
+}}
+.t-stat-lbl {{
+  font-size: .7rem; letter-spacing: 2px;
+  text-transform: uppercase; color: #2d5a3d;
+  margin-top: 2px; display: block;
+}}
+.t-mission {{
+  margin-top: 48px;
+  padding: 20px;
+  border: 1px solid #1a3d24;
+  background: rgba(13,20,16,.6);
+}}
+.t-mission-q {{
+  font-size: .82rem; line-height: 1.75;
+  color: #6ee7b7; font-style: italic;
+}}
+.t-mission-q em {{ color: #22c55e; font-style: normal; font-weight: 700; }}
+
+/* CENTER — scan */
+.t-center {{ }}
+
+.t-title {{
+  font-family: 'Bebas Neue', cursive;
+  font-size: 3.8rem; letter-spacing: 2px;
+  line-height: 1; color: #d1fae5;
+  margin-bottom: 4px;
+  display: flex; align-items: center; gap: 14px;
+}}
+.t-title-icon {{ font-size: 2.4rem; }}
+.t-subtitle {{
+  font-size: .72rem; letter-spacing: 3px;
+  text-transform: uppercase; color: #2d5a3d;
+  margin-bottom: 32px;
+  font-family: 'JetBrains Mono', monospace;
+}}
+
+/* Scan box */
+.t-scan-box {{
+  background: rgba(13,20,16,.8);
+  border: 1px solid #1a3d24;
+  border-top: 2px solid #22c55e;
+  padding: 28px;
+  position: relative;
+  overflow: hidden;
+}}
+.t-scan-box::before {{
+  content: '';
+  position: absolute; left: 0; right: 0; top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #22c55e, transparent);
+  animation: scanShimmer 3s ease-in-out infinite;
+}}
+@keyframes scanShimmer {{
+  0%, 100% {{ opacity: .3; }} 50% {{ opacity: 1; }}
+}}
+
+.t-input-row {{
+  display: flex; gap: 8px; margin-bottom: 10px;
+}}
+.t-input {{
+  flex: 1;
+  background: #080d0a;
+  border: 1px solid #1a3d24;
+  color: #d1fae5;
+  padding: 14px 18px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.1rem; letter-spacing: 3px;
+  text-align: center;
+  transition: border-color .2s, box-shadow .2s;
+  margin: 0;
+}}
+.t-input:focus {{
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34,197,94,.12);
+  outline: none;
+}}
+.t-input::placeholder {{ color: #2d5a3d; letter-spacing: 2px; font-size: .9rem; }}
+.t-btn-okut {{
+  background: #22c55e; color: #080d0a;
+  border: none; padding: 14px 24px;
+  font-family: 'Bebas Neue', cursive;
+  font-size: 1.1rem; letter-spacing: 2px;
+  cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  transition: background .2s, transform .15s;
+  white-space: nowrap;
+}}
+.t-btn-okut:hover {{ background: #4ade80; transform: translateY(-2px); }}
+.t-btn-kamera {{
+  width: 100%;
+  background: transparent;
+  border: 1px solid #1a3d24;
+  color: #6ee7b7;
+  padding: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .78rem; letter-spacing: 2px;
+  text-transform: uppercase; cursor: pointer;
+  transition: all .2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}}
+.t-btn-kamera:hover {{
+  border-color: #22c55e; color: #22c55e;
+  background: rgba(34,197,94,.04);
+}}
+
+/* Pulse ring on scan box when active */
+.t-scan-box.scanning {{
+  border-color: #22c55e;
+  box-shadow: 0 0 0 1px rgba(34,197,94,.2), 0 0 24px rgba(34,197,94,.06);
+  animation: scanPulse 2s ease-in-out infinite;
+}}
+@keyframes scanPulse {{
+  0%, 100% {{ box-shadow: 0 0 0 1px rgba(34,197,94,.2), 0 0 24px rgba(34,197,94,.06); }}
+  50% {{ box-shadow: 0 0 0 2px rgba(34,197,94,.35), 0 0 40px rgba(34,197,94,.12); }}
+}}
+
+/* RIGHT — motivation */
+.t-right {{
+  padding-top: 8px;
+  padding-left: 32px;
+}}
+.t-tip {{
+  border: 1px solid #1a3d24;
+  background: rgba(13,20,16,.6);
+  padding: 20px;
+  margin-bottom: 16px;
+  position: relative; overflow: hidden;
+  transition: border-color .3s;
+}}
+.t-tip:hover {{ border-color: #22c55e; }}
+.t-tip::after {{
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #22c55e, transparent);
+  transform: scaleX(0); transform-origin: left;
+  transition: transform .4s cubic-bezier(.16,1,.3,1);
+}}
+.t-tip:hover::after {{ transform: scaleX(1); }}
+.t-tip-num {{
+  font-family: 'Bebas Neue', cursive;
+  font-size: .75rem; letter-spacing: 3px;
+  color: #22c55e; margin-bottom: 6px; display: block;
+}}
+.t-tip-txt {{
+  font-size: .82rem; line-height: 1.65; color: #6ee7b7;
+}}
+.t-tip-txt strong {{ color: #d1fae5; font-weight: 700; }}
+
+/* Kamera */
+.kamera-box {{
+  border: 2px solid #22c55e;
+  overflow: hidden; position: relative; margin-bottom: 10px;
+  background: #080d0a;
+}}
+#interactive {{ width: 100%; height: 240px; position: relative; }}
+#interactive video {{ width: 100%; height: 100%; object-fit: cover; }}
+#interactive canvas {{ display: none !important; }}
+.drawingBuffer {{ display: none !important; }}
+.kamera-overlay {{
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  width: 220px; height: 100px;
+  border: 2px solid #22c55e;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.6);
+  pointer-events: none;
+}}
+
+@media(max-width:900px) {{
+  .tarama-page {{ grid-template-columns: 1fr; padding: 20px; }}
+  .t-left, .t-right {{ display: none; }}
+  .t-title {{ font-size: 2.6rem; }}
+}}
+</style>
+
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+<canvas id="tarama-canvas"></canvas>
+
+<div class="tarama-page">
+
+  <!-- LEFT: Stats -->
+  <div class="t-left">
+    <div class="t-eyebrow">Sistem Durumu</div>
+
+    <div class="t-stat">
+      <span class="t-stat-num" id="anim-tarama">0</span>
+      <span class="t-stat-lbl">Toplam Tarama</span>
     </div>
-    <div id="kam-durum" style="text-align:center;color:#a3a3a3;font-size:.88rem;padding:6px 0">Barkodu cerceve icine getirin...</div>
-    <button onclick="kameraKapat()" class="btn btn-red" style="width:100%;margin-top:6px">✕ Kamerayi Kapat</button>
+    <div class="t-stat">
+      <span class="t-stat-num" id="anim-urun">0</span>
+      <span class="t-stat-lbl">Kayıtlı Ürün</span>
+    </div>
+    <div class="t-stat">
+      <span class="t-stat-num" id="anim-skt">0</span>
+      <span class="t-stat-lbl">SKT Takipli Ürün</span>
+    </div>
+
+    <div class="t-mission">
+      <div class="t-mission-q">
+        "The most devastating waste is caused not by scarcity —
+        but by <em>ignorance of the simplest information.</em>"
+      </div>
+    </div>
   </div>
 
-  <form method="POST" id="barkod-form">
-    <div class="scan-input-row">
-      <input name="barkod" id="barkod-input" placeholder="Barkod numarasi..." autofocus autocomplete="off">
-      <button type="submit" class="btn btn-green" style="white-space:nowrap;padding:9px 18px">OKUT</button>
+  <!-- CENTER: Scan -->
+  <div class="t-center">
+    <div class="t-title">
+      <span class="t-title-icon">📷</span>
+      TARAMA
     </div>
-    <button type="button" onclick="kameraAc()" class="btn btn-muted" style="width:100%">📷 Kamera ile Tara</button>
-  </form>
+    <div class="t-subtitle">Barkod Okuma Sistemi — NexStock</div>
 
-  {sonuc_html}
-</div>"""
+    {alert_html}
+
+    <div class="t-scan-box" id="scan-box">
+      <div id="kam-alan" style="display:none;margin-bottom:12px">
+        <div class="kamera-box">
+          <div id="interactive"></div>
+          <div class="kamera-overlay"></div>
+        </div>
+        <div id="kam-durum" style="text-align:center;color:#6ee7b7;font-size:.82rem;padding:6px 0;font-family:monospace;letter-spacing:2px">BARKODU ÇERÇEVE İÇİNE GETİRİN</div>
+        <button onclick="kameraKapat()" class="t-btn-kamera" style="border-color:#e05252;color:#e05252;margin-top:6px">✕ KAMERAYI KAPAT</button>
+      </div>
+
+      <form method="POST" id="barkod-form">
+        <div class="t-input-row">
+          <input name="barkod" id="barkod-input" class="t-input"
+            placeholder="Barkod numarası..." autofocus autocomplete="off"
+            oninput="document.getElementById('scan-box').classList.add('scanning')"
+            onblur="document.getElementById('scan-box').classList.remove('scanning')">
+          <button type="submit" class="t-btn-okut">OKUT</button>
+        </div>
+        <button type="button" onclick="kameraAc()" class="t-btn-kamera">
+          📷 KAMERA İLE TARA
+        </button>
+      </form>
+    </div>
+
+    {sonuc_html}
+  </div>
+
+  <!-- RIGHT: Tips -->
+  <div class="t-right">
+    <div class="t-eyebrow">Hızlı Rehber</div>
+
+    <div class="t-tip">
+      <span class="t-tip-num">01 — TARAMA</span>
+      <div class="t-tip-txt">Barkodu kutuya yazın veya <strong>kamera ile tarayın.</strong> Sistem ürünü otomatik tanır.</div>
+    </div>
+    <div class="t-tip">
+      <span class="t-tip-num">02 — SKT UYARISI</span>
+      <div class="t-tip-txt">Son kullanma tarihi <strong>7 günden az</strong> kalan ürünler otomatik uyarı verir.</div>
+    </div>
+    <div class="t-tip">
+      <span class="t-tip-num">03 — YENİ ÜRÜN</span>
+      <div class="t-tip-txt">Sistemde olmayan barkodlar <strong>Open Food Facts</strong> veritabanından otomatik sorgulanır.</div>
+    </div>
+    <div class="t-tip">
+      <span class="t-tip-num">04 — ROL SİSTEMİ</span>
+      <div class="t-tip-txt">Admin, müdür, kasiyer rolleri. Her rol <strong>kendi yetkisine</strong> göre işlem yapabilir.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* Canvas background — barcode particles */
+(function() {{
+  var cv  = document.getElementById('tarama-canvas');
+  var ctx = cv.getContext('2d');
+  var W, H;
+  function resize() {{ W = cv.width = window.innerWidth; H = cv.height = window.innerHeight; }}
+  resize(); window.addEventListener('resize', resize);
+
+  /* Floating barcode strips */
+  var bars = [];
+  for (var i = 0; i < 18; i++) {{
+    bars.push({{
+      x: Math.random() * W, y: Math.random() * H,
+      w: 60 + Math.random() * 120, h: 18 + Math.random() * 10,
+      vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.2,
+      a: 0.03 + Math.random() * 0.06,
+      stripes: Math.floor(8 + Math.random() * 16),
+    }});
+  }}
+
+  /* Dots */
+  var dots = [];
+  for (var j = 0; j < 60; j++) {{
+    dots.push({{
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4,
+      r: Math.random() * 1.5 + 0.5, a: Math.random() * 0.3 + 0.05,
+    }});
+  }}
+
+  var mX = -1000, mY = -1000;
+  window.addEventListener('mousemove', function(e) {{ mX = e.clientX; mY = e.clientY; }});
+
+  function draw() {{
+    ctx.clearRect(0, 0, W, H);
+
+    /* Draw barcodes */
+    bars.forEach(function(b) {{
+      b.x += b.vx; b.y += b.vy;
+      if (b.x < -200) b.x = W + 100;
+      if (b.x > W + 200) b.x = -100;
+      if (b.y < -100) b.y = H + 50;
+      if (b.y > H + 100) b.y = -50;
+
+      ctx.save();
+      ctx.globalAlpha = b.a;
+      /* white bg */
+      ctx.fillStyle = 'rgba(34,197,94,0.12)';
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      /* stripes */
+      ctx.fillStyle = 'rgba(34,197,94,0.5)';
+      var sw = b.w / (b.stripes * 2);
+      for (var s = 0; s < b.stripes; s++) {{
+        var sw2 = sw * (0.4 + Math.random() * 0.6);
+        ctx.fillRect(b.x + s * sw * 2, b.y + 2, sw2, b.h - 4);
+      }}
+      ctx.restore();
+    }});
+
+    /* Draw dots + connections */
+    dots.forEach(function(d) {{
+      d.x += d.vx; d.y += d.vy;
+      if (d.x < 0 || d.x > W) d.vx *= -1;
+      if (d.y < 0 || d.y > H) d.vy *= -1;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(34,197,94,' + d.a + ')';
+      ctx.fill();
+    }});
+
+    for (var i = 0; i < dots.length; i++) {{
+      var dx = dots[i].x - mX, dy = dots[i].y - mY;
+      var dist = Math.sqrt(dx*dx+dy*dy);
+      if (dist < 160) {{
+        ctx.beginPath(); ctx.moveTo(dots[i].x, dots[i].y); ctx.lineTo(mX, mY);
+        ctx.strokeStyle = 'rgba(34,197,94,' + (1-dist/160)*0.2 + ')';
+        ctx.lineWidth = 0.5; ctx.stroke();
+      }}
+    }}
+
+    requestAnimationFrame(draw);
+  }}
+  draw();
+}})();
+
+/* Counter animations */
+function animCount(el, target) {{
+  var start = 0, dur = 1600, t0 = performance.now();
+  (function tick(now) {{
+    var p = Math.min((now-t0)/dur, 1);
+    var ease = 1 - Math.pow(1-p, 4);
+    el.textContent = Math.floor(ease * target);
+    if (p < 1) requestAnimationFrame(tick); else el.textContent = target;
+  }})(t0);
+}}
+animCount(document.getElementById('anim-tarama'), {total_tarama});
+animCount(document.getElementById('anim-urun'),   {total_urun});
+animCount(document.getElementById('anim-skt'),    {total_skt});
+</script>
+"""
     return render(content, page="tarama", title="Tarama")
 
 # ═══════════════════════════════════════════════════
@@ -822,11 +1085,11 @@ def urunler():
         gun = kalan_gun(u.get("stt"))
         rc  = stt_renk(gun)
         et  = stt_etiket(gun) if u.get("stt") else "—"
-        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#525252">{u.get("min_stok",5)}</td><td style="color:#ffffff">{float(u.get("fiyat",0)):.2f} TL</td></tr>'
+        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#6ee7b7">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#6ee7b7">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#2d5a3d">{u.get("min_stok",5)}</td><td style="color:#22c55e">{float(u.get("fiyat",0)):.2f} TL</td></tr>'
 
     content = f"""
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-  <div class="page-title" style="margin:0">Urunler <span style="color:#525252;font-size:.9rem">({len(liste)})</span></div>
+  <div class="page-title" style="margin:0">Urunler <span style="color:#2d5a3d;font-size:.9rem">({len(liste)})</span></div>
   <form method="get" style="display:flex;gap:8px">
     <input name="ara" value="{ara}" placeholder="Urun ara..." style="width:200px;margin:0">
     <button type="submit" class="btn btn-muted">Ara</button>
@@ -852,7 +1115,7 @@ def hareketler():
     rows = ""
     for h in liste:
         cls = "green" if h["hareket_tipi"]=="Giris" else "red" if h["hareket_tipi"] in ["Cikis","Okutma"] else ""
-        rows += f'<tr><td style="color:#525252">{h["hareket_id"]}</td><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{h.get("barkod","—")}</td><td style="font-weight:700">{h["miktar"]}</td><td style="color:#a3a3a3">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
+        rows += f'<tr><td style="color:#2d5a3d">{h["hareket_id"]}</td><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td style="font-family:monospace;font-size:.82rem;color:#6ee7b7">{h.get("barkod","—")}</td><td style="font-weight:700">{h["miktar"]}</td><td style="color:#6ee7b7">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
 
     content = f"""
 <div class="page-title">Hareket Gecmisi</div>
@@ -899,9 +1162,9 @@ def raporlar():
   <div class="panel">
     <h2>API Endpointleri</h2>
     <div class="tbl-wrap"><table>
-      <tr><td><a href="/api/stats" style="color:#ffffff">/api/stats</a></td><td class="muted">Dashboard istatistikleri</td></tr>
-      <tr><td><a href="/api/urunler" style="color:#ffffff">/api/urunler</a></td><td class="muted">Tum urunler JSON</td></tr>
-      <tr><td><a href="/api/hareketler" style="color:#ffffff">/api/hareketler</a></td><td class="muted">Son hareketler JSON</td></tr>
+      <tr><td><a href="/api/stats" style="color:#22c55e">/api/stats</a></td><td class="muted">Dashboard istatistikleri</td></tr>
+      <tr><td><a href="/api/urunler" style="color:#22c55e">/api/urunler</a></td><td class="muted">Tum urunler JSON</td></tr>
+      <tr><td><a href="/api/hareketler" style="color:#22c55e">/api/hareketler</a></td><td class="muted">Son hareketler JSON</td></tr>
     </table></div>
   </div>
 </div>"""
@@ -919,12 +1182,12 @@ def kullanicilar():
     liste = [dict(r) for r in c.execute(
         "SELECT id,kullanici_adi,tam_ad,rol,aktif,son_giris FROM kullanicilar ORDER BY tam_ad").fetchall()]
     c.close()
-    RC = {"admin":"#ffffff","mudur":"#34d399","kasiyer":"#86efac","goruntuleyici":"#a3a3a3"}
+    RC = {"admin":"#22c55e","mudur":"#34d399","kasiyer":"#86efac","goruntuleyici":"#6ee7b7"}
     rows = ""
     for u in liste:
-        rc  = RC.get(u["rol"],"#a3a3a3")
+        rc  = RC.get(u["rol"],"#6ee7b7")
         akt = '<span class="green">✓ Aktif</span>' if u["aktif"] else '<span class="red">✗ Pasif</span>'
-        rows += f'<tr><td style="font-weight:600">{u["kullanici_adi"]}</td><td>{u.get("tam_ad","—")}</td><td style="color:{rc};font-weight:700">{u["rol"].upper()}</td><td>{akt}</td><td style="color:#a3a3a3">{str(u.get("son_giris","—"))[:16]}</td></tr>'
+        rows += f'<tr><td style="font-weight:600">{u["kullanici_adi"]}</td><td>{u.get("tam_ad","—")}</td><td style="color:{rc};font-weight:700">{u["rol"].upper()}</td><td>{akt}</td><td style="color:#6ee7b7">{str(u.get("son_giris","—"))[:16]}</td></tr>'
 
     content = f"""
 <div class="page-title">Kullanicilar</div>
