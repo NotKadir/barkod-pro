@@ -620,431 +620,144 @@ function kameraKapat(){
 }
 </script>"""
 
-    # Stats for motivation copy
-    c2 = get_db()
-    total_tarama = c2.execute("SELECT COUNT(*) FROM stok_hareketleri").fetchone()[0] or 0
-    total_skt    = c2.execute("SELECT COUNT(*) FROM urunler WHERE skt IS NOT NULL AND skt != ''").fetchone()[0] or 0
-    total_urun   = c2.execute("SELECT COUNT(*) FROM urunler").fetchone()[0] or 0
+    # Stats
+    cstat = get_db()
+    total_tarama = cstat.execute("SELECT COUNT(*) FROM stok_hareketleri").fetchone()[0] or 0
+    total_urun   = cstat.execute("SELECT COUNT(*) FROM urunler").fetchone()[0] or 0
+    total_skt    = cstat.execute("SELECT COUNT(*) FROM urunler WHERE skt IS NOT NULL AND skt != ''").fetchone()[0] or 0
+    cstat.close()
 
     content = f"""
 {kamera_js}
 <style>
-/* ── TARAMA PAGE OVERRIDE ── */
-.main {{ padding: 0; max-width: 100%; }}
-
-/* Canvas bg */
-#tarama-canvas {{
-  position: fixed; inset: 0; z-index: 0;
-  pointer-events: none; opacity: 0.55;
-}}
-
-.tarama-page {{
-  position: relative; z-index: 1;
-  min-height: calc(100vh - 58px);
-  display: grid;
-  grid-template-columns: 1fr 520px 1fr;
-  grid-template-rows: auto;
-  gap: 0;
-  padding: 48px 40px;
-  align-items: start;
-}}
-
-/* LEFT — stats */
-.t-left {{
-  padding-top: 8px;
-  padding-right: 32px;
-}}
-.t-eyebrow {{
-  font-family: 'JetBrains Mono', monospace;
-  font-size: .62rem; letter-spacing: 4px;
-  text-transform: uppercase; color: #2d5a3d;
-  margin-bottom: 32px;
-  display: flex; align-items: center; gap: 10px;
-}}
-.t-eyebrow::before {{
-  content: ''; display: block;
-  width: 24px; height: 1px; background: #22c55e;
-}}
-.t-stat {{
-  margin-bottom: 28px;
-  border-left: 2px solid #1a3d24;
-  padding-left: 18px;
-  transition: border-color .3s;
-}}
-.t-stat:hover {{ border-left-color: #22c55e; }}
-.t-stat-num {{
-  font-family: 'Bebas Neue', cursive;
-  font-size: 3.2rem; line-height: 1;
-  letter-spacing: -1px; color: #22c55e;
-  display: block;
-}}
-.t-stat-lbl {{
-  font-size: .7rem; letter-spacing: 2px;
-  text-transform: uppercase; color: #2d5a3d;
-  margin-top: 2px; display: block;
-}}
-.t-mission {{
-  margin-top: 48px;
-  padding: 20px;
-  border: 1px solid #1a3d24;
-  background: rgba(13,20,16,.6);
-}}
-.t-mission-q {{
-  font-size: .82rem; line-height: 1.75;
-  color: #6ee7b7; font-style: italic;
-}}
-.t-mission-q em {{ color: #22c55e; font-style: normal; font-weight: 700; }}
-
-/* CENTER — scan */
-.t-center {{ }}
-
-.t-title {{
-  font-family: 'Bebas Neue', cursive;
-  font-size: 3.8rem; letter-spacing: 2px;
-  line-height: 1; color: #d1fae5;
-  margin-bottom: 4px;
-  display: flex; align-items: center; gap: 14px;
-}}
-.t-title-icon {{ font-size: 2.4rem; }}
-.t-subtitle {{
-  font-size: .72rem; letter-spacing: 3px;
-  text-transform: uppercase; color: #2d5a3d;
-  margin-bottom: 32px;
-  font-family: 'JetBrains Mono', monospace;
-}}
-
-/* Scan box */
-.t-scan-box {{
-  background: rgba(13,20,16,.8);
-  border: 1px solid #1a3d24;
-  border-top: 2px solid #22c55e;
-  padding: 28px;
-  position: relative;
-  overflow: hidden;
-}}
-.t-scan-box::before {{
-  content: '';
-  position: absolute; left: 0; right: 0; top: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #22c55e, transparent);
-  animation: scanShimmer 3s ease-in-out infinite;
-}}
-@keyframes scanShimmer {{
-  0%, 100% {{ opacity: .3; }} 50% {{ opacity: 1; }}
-}}
-
-.t-input-row {{
-  display: flex; gap: 8px; margin-bottom: 10px;
-}}
-.t-input {{
-  flex: 1;
-  background: #080d0a;
-  border: 1px solid #1a3d24;
-  color: #d1fae5;
-  padding: 14px 18px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 1.1rem; letter-spacing: 3px;
-  text-align: center;
-  transition: border-color .2s, box-shadow .2s;
-  margin: 0;
-}}
-.t-input:focus {{
-  border-color: #22c55e;
-  box-shadow: 0 0 0 2px rgba(34,197,94,.12);
-  outline: none;
-}}
-.t-input::placeholder {{ color: #2d5a3d; letter-spacing: 2px; font-size: .9rem; }}
-.t-btn-okut {{
-  background: #22c55e; color: #080d0a;
-  border: none; padding: 14px 24px;
-  font-family: 'Bebas Neue', cursive;
-  font-size: 1.1rem; letter-spacing: 2px;
-  cursor: pointer;
-  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
-  transition: background .2s, transform .15s;
-  white-space: nowrap;
-}}
-.t-btn-okut:hover {{ background: #4ade80; transform: translateY(-2px); }}
-.t-btn-kamera {{
-  width: 100%;
-  background: transparent;
-  border: 1px solid #1a3d24;
-  color: #6ee7b7;
-  padding: 12px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: .78rem; letter-spacing: 2px;
-  text-transform: uppercase; cursor: pointer;
-  transition: all .2s;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-}}
-.t-btn-kamera:hover {{
-  border-color: #22c55e; color: #22c55e;
-  background: rgba(34,197,94,.04);
-}}
-
-/* Pulse ring on scan box when active */
-.t-scan-box.scanning {{
-  border-color: #22c55e;
-  box-shadow: 0 0 0 1px rgba(34,197,94,.2), 0 0 24px rgba(34,197,94,.06);
-  animation: scanPulse 2s ease-in-out infinite;
-}}
-@keyframes scanPulse {{
-  0%, 100% {{ box-shadow: 0 0 0 1px rgba(34,197,94,.2), 0 0 24px rgba(34,197,94,.06); }}
-  50% {{ box-shadow: 0 0 0 2px rgba(34,197,94,.35), 0 0 40px rgba(34,197,94,.12); }}
-}}
-
-/* RIGHT — motivation */
-.t-right {{
-  padding-top: 8px;
-  padding-left: 32px;
-}}
-.t-tip {{
-  border: 1px solid #1a3d24;
-  background: rgba(13,20,16,.6);
-  padding: 20px;
-  margin-bottom: 16px;
-  position: relative; overflow: hidden;
-  transition: border-color .3s;
-}}
-.t-tip:hover {{ border-color: #22c55e; }}
-.t-tip::after {{
-  content: '';
-  position: absolute; bottom: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #22c55e, transparent);
-  transform: scaleX(0); transform-origin: left;
-  transition: transform .4s cubic-bezier(.16,1,.3,1);
-}}
-.t-tip:hover::after {{ transform: scaleX(1); }}
-.t-tip-num {{
-  font-family: 'Bebas Neue', cursive;
-  font-size: .75rem; letter-spacing: 3px;
-  color: #22c55e; margin-bottom: 6px; display: block;
-}}
-.t-tip-txt {{
-  font-size: .82rem; line-height: 1.65; color: #6ee7b7;
-}}
-.t-tip-txt strong {{ color: #d1fae5; font-weight: 700; }}
-
-/* Kamera */
-.kamera-box {{
-  border: 2px solid #22c55e;
-  overflow: hidden; position: relative; margin-bottom: 10px;
-  background: #080d0a;
-}}
-#interactive {{ width: 100%; height: 240px; position: relative; }}
-#interactive video {{ width: 100%; height: 100%; object-fit: cover; }}
-#interactive canvas {{ display: none !important; }}
-.drawingBuffer {{ display: none !important; }}
-.kamera-overlay {{
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%,-50%);
-  width: 220px; height: 100px;
-  border: 2px solid #22c55e;
-  box-shadow: 0 0 0 9999px rgba(0,0,0,.6);
-  pointer-events: none;
-}}
-
-@media(max-width:900px) {{
-  .tarama-page {{ grid-template-columns: 1fr; padding: 20px; }}
-  .t-left, .t-right {{ display: none; }}
-  .t-title {{ font-size: 2.6rem; }}
+.main{{padding:0;max-width:100%}}
+#t-canvas{{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5}}
+.t-page{{position:relative;z-index:1;min-height:calc(100vh - 58px);display:grid;grid-template-columns:1fr 500px 1fr;gap:0;padding:48px 40px;align-items:start}}
+.t-left{{padding-right:32px}}
+.t-right{{padding-left:32px}}
+.t-eyebrow{{font-family:'JetBrains Mono',monospace;font-size:.6rem;letter-spacing:4px;text-transform:uppercase;color:#2d5a3d;margin-bottom:28px;display:flex;align-items:center;gap:10px}}
+.t-eyebrow::before{{content:'';display:block;width:20px;height:1px;background:#22c55e}}
+.t-stat{{margin-bottom:24px;border-left:2px solid #1a3d24;padding-left:16px;transition:border-color .3s}}
+.t-stat:hover{{border-left-color:#22c55e}}
+.t-stat-num{{font-family:'Bebas Neue',cursive;font-size:3rem;line-height:1;letter-spacing:-1px;color:#22c55e;display:block}}
+.t-stat-lbl{{font-size:.65rem;letter-spacing:2px;text-transform:uppercase;color:#2d5a3d;margin-top:2px;display:block}}
+.t-mission{{margin-top:40px;padding:18px;border:1px solid #1a3d24;background:rgba(13,20,16,.6)}}
+.t-mission-q{{font-size:.8rem;line-height:1.75;color:#6ee7b7;font-style:italic}}
+.t-mission-q em{{color:#22c55e;font-style:normal;font-weight:700}}
+.t-title{{font-family:'Bebas Neue',cursive;font-size:3.5rem;letter-spacing:2px;line-height:1;color:#d1fae5;margin-bottom:4px;display:flex;align-items:center;gap:12px}}
+.t-subtitle{{font-family:'JetBrains Mono',monospace;font-size:.65rem;letter-spacing:3px;text-transform:uppercase;color:#2d5a3d;margin-bottom:28px}}
+.t-box{{background:rgba(13,20,16,.85);border:1px solid #1a3d24;border-top:2px solid #22c55e;padding:24px;position:relative;overflow:hidden}}
+.t-box::before{{content:'';position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,#22c55e,transparent);animation:tShimmer 3s ease-in-out infinite}}
+@keyframes tShimmer{{0%,100%{{opacity:.3}}50%{{opacity:1}}}}
+.t-inp{{width:100%;background:#080d0a;border:1px solid #1a3d24;color:#d1fae5;padding:14px 16px;font-family:'JetBrains Mono',monospace;font-size:1rem;letter-spacing:3px;text-align:center;transition:border-color .2s,box-shadow .2s;margin:0}}
+.t-inp:focus{{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.12);outline:none}}
+.t-inp::placeholder{{color:#2d5a3d;letter-spacing:2px;font-size:.85rem}}
+.t-row{{display:flex;gap:8px;margin-bottom:10px}}
+.t-okut{{background:#22c55e;color:#080d0a;border:none;padding:14px 22px;font-family:'Bebas Neue',cursive;font-size:1.1rem;letter-spacing:2px;cursor:pointer;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));transition:background .2s,transform .15s;white-space:nowrap}}
+.t-okut:hover{{background:#4ade80;transform:translateY(-2px)}}
+.t-kam-btn{{width:100%;background:transparent;border:1px solid #1a3d24;color:#6ee7b7;padding:11px;font-family:'JetBrains Mono',monospace;font-size:.72rem;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}}
+.t-kam-btn:hover{{border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,.04)}}
+.t-tip{{border:1px solid #1a3d24;background:rgba(13,20,16,.6);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;transition:border-color .3s}}
+.t-tip:hover{{border-color:#22c55e}}
+.t-tip::after{{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#22c55e,transparent);transform:scaleX(0);transform-origin:left;transition:transform .4s cubic-bezier(.16,1,.3,1)}}
+.t-tip:hover::after{{transform:scaleX(1)}}
+.t-tip-n{{font-family:'JetBrains Mono',monospace;font-size:.6rem;letter-spacing:3px;color:#22c55e;margin-bottom:6px;display:block}}
+.t-tip-t{{font-size:.8rem;line-height:1.65;color:#6ee7b7}}
+.t-tip-t strong{{color:#d1fae5}}
+@media(max-width:900px){{
+  .t-page{{grid-template-columns:1fr;padding:20px}}
+  .t-left,.t-right{{display:none}}
+  .t-title{{font-size:2.4rem}}
 }}
 </style>
-
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
-<canvas id="tarama-canvas"></canvas>
+<canvas id="t-canvas"></canvas>
+<div class="t-page">
 
-<div class="tarama-page">
-
-  <!-- LEFT: Stats -->
   <div class="t-left">
     <div class="t-eyebrow">Sistem Durumu</div>
-
-    <div class="t-stat">
-      <span class="t-stat-num" id="anim-tarama">0</span>
-      <span class="t-stat-lbl">Toplam Tarama</span>
-    </div>
-    <div class="t-stat">
-      <span class="t-stat-num" id="anim-urun">0</span>
-      <span class="t-stat-lbl">Kayıtlı Ürün</span>
-    </div>
-    <div class="t-stat">
-      <span class="t-stat-num" id="anim-skt">0</span>
-      <span class="t-stat-lbl">SKT Takipli Ürün</span>
-    </div>
-
+    <div class="t-stat"><span class="t-stat-num" id="an-tar">0</span><span class="t-stat-lbl">Toplam Tarama</span></div>
+    <div class="t-stat"><span class="t-stat-num" id="an-urun">0</span><span class="t-stat-lbl">Kayıtlı Ürün</span></div>
+    <div class="t-stat"><span class="t-stat-num" id="an-skt">0</span><span class="t-stat-lbl">SKT Takipli</span></div>
     <div class="t-mission">
-      <div class="t-mission-q">
-        "The most devastating waste is caused not by scarcity —
-        but by <em>ignorance of the simplest information.</em>"
-      </div>
+      <div class="t-mission-q">"The most devastating waste is caused not by scarcity — but by <em>ignorance of the simplest information.</em>"</div>
     </div>
   </div>
 
-  <!-- CENTER: Scan -->
-  <div class="t-center">
-    <div class="t-title">
-      <span class="t-title-icon">📷</span>
-      TARAMA
-    </div>
-    <div class="t-subtitle">Barkod Okuma Sistemi — NexStock</div>
-
+  <div>
+    <div class="t-title"><span>📷</span> TARAMA</div>
+    <div class="t-subtitle">Barkod Okuma — NexStock</div>
     {alert_html}
-
-    <div class="t-scan-box" id="scan-box">
+    <div class="t-box" id="scan-box">
       <div id="kam-alan" style="display:none;margin-bottom:12px">
-        <div class="kamera-box">
-          <div id="interactive"></div>
-          <div class="kamera-overlay"></div>
-        </div>
-        <div id="kam-durum" style="text-align:center;color:#6ee7b7;font-size:.82rem;padding:6px 0;font-family:monospace;letter-spacing:2px">BARKODU ÇERÇEVE İÇİNE GETİRİN</div>
-        <button onclick="kameraKapat()" class="t-btn-kamera" style="border-color:#e05252;color:#e05252;margin-top:6px">✕ KAMERAYI KAPAT</button>
+        <div class="kamera-box"><div id="interactive"></div><div class="kamera-overlay"></div></div>
+        <div id="kam-durum" style="text-align:center;color:#6ee7b7;font-size:.78rem;padding:6px 0;font-family:monospace;letter-spacing:2px">BARKODU ÇERÇEVE İÇİNE GETİRİN</div>
+        <button onclick="kameraKapat()" class="t-kam-btn" style="border-color:#e05252;color:#e05252;margin-top:6px">✕ KAMERAYI KAPAT</button>
       </div>
-
       <form method="POST" id="barkod-form">
-        <div class="t-input-row">
-          <input name="barkod" id="barkod-input" class="t-input"
-            placeholder="Barkod numarası..." autofocus autocomplete="off"
-            oninput="document.getElementById('scan-box').classList.add('scanning')"
-            onblur="document.getElementById('scan-box').classList.remove('scanning')">
-          <button type="submit" class="t-btn-okut">OKUT</button>
+        <div class="t-row">
+          <input name="barkod" id="barkod-input" class="t-inp" placeholder="Barkod numarası..." autofocus autocomplete="off">
+          <button type="submit" class="t-okut">OKUT</button>
         </div>
-        <button type="button" onclick="kameraAc()" class="t-btn-kamera">
-          📷 KAMERA İLE TARA
-        </button>
+        <button type="button" onclick="kameraAc()" class="t-kam-btn">📷 KAMERA İLE TARA</button>
       </form>
     </div>
-
     {sonuc_html}
   </div>
 
-  <!-- RIGHT: Tips -->
   <div class="t-right">
     <div class="t-eyebrow">Hızlı Rehber</div>
-
-    <div class="t-tip">
-      <span class="t-tip-num">01 — TARAMA</span>
-      <div class="t-tip-txt">Barkodu kutuya yazın veya <strong>kamera ile tarayın.</strong> Sistem ürünü otomatik tanır.</div>
-    </div>
-    <div class="t-tip">
-      <span class="t-tip-num">02 — SKT UYARISI</span>
-      <div class="t-tip-txt">Son kullanma tarihi <strong>7 günden az</strong> kalan ürünler otomatik uyarı verir.</div>
-    </div>
-    <div class="t-tip">
-      <span class="t-tip-num">03 — YENİ ÜRÜN</span>
-      <div class="t-tip-txt">Sistemde olmayan barkodlar <strong>Open Food Facts</strong> veritabanından otomatik sorgulanır.</div>
-    </div>
-    <div class="t-tip">
-      <span class="t-tip-num">04 — ROL SİSTEMİ</span>
-      <div class="t-tip-txt">Admin, müdür, kasiyer rolleri. Her rol <strong>kendi yetkisine</strong> göre işlem yapabilir.</div>
-    </div>
+    <div class="t-tip"><span class="t-tip-n">01 — TARAMA</span><div class="t-tip-t">Barkodu kutuya yazın veya <strong>kamera ile tarayın.</strong></div></div>
+    <div class="t-tip"><span class="t-tip-n">02 — SKT UYARISI</span><div class="t-tip-t">Son kullanma tarihi <strong>7 günden az</strong> kalan ürünler otomatik uyarı verir.</div></div>
+    <div class="t-tip"><span class="t-tip-n">03 — YENİ ÜRÜN</span><div class="t-tip-t">Bilinmeyen barkodlar <strong>Open Food Facts</strong>'ten otomatik sorgulanır.</div></div>
+    <div class="t-tip"><span class="t-tip-n">04 — ROL SİSTEMİ</span><div class="t-tip-t">Her rol <strong>kendi yetkisine</strong> göre işlem yapabilir.</div></div>
   </div>
 
 </div>
-
 <script>
-/* Canvas background — barcode particles */
-(function() {{
-  var cv  = document.getElementById('tarama-canvas');
-  var ctx = cv.getContext('2d');
-  var W, H;
-  function resize() {{ W = cv.width = window.innerWidth; H = cv.height = window.innerHeight; }}
-  resize(); window.addEventListener('resize', resize);
-
-  /* Floating barcode strips */
-  var bars = [];
-  for (var i = 0; i < 18; i++) {{
-    bars.push({{
-      x: Math.random() * W, y: Math.random() * H,
-      w: 60 + Math.random() * 120, h: 18 + Math.random() * 10,
-      vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.2,
-      a: 0.03 + Math.random() * 0.06,
-      stripes: Math.floor(8 + Math.random() * 16),
-    }});
-  }}
-
-  /* Dots */
-  var dots = [];
-  for (var j = 0; j < 60; j++) {{
-    dots.push({{
-      x: Math.random() * W, y: Math.random() * H,
-      vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4,
-      r: Math.random() * 1.5 + 0.5, a: Math.random() * 0.3 + 0.05,
-    }});
-  }}
-
-  var mX = -1000, mY = -1000;
-  window.addEventListener('mousemove', function(e) {{ mX = e.clientX; mY = e.clientY; }});
-
-  function draw() {{
-    ctx.clearRect(0, 0, W, H);
-
-    /* Draw barcodes */
-    bars.forEach(function(b) {{
-      b.x += b.vx; b.y += b.vy;
-      if (b.x < -200) b.x = W + 100;
-      if (b.x > W + 200) b.x = -100;
-      if (b.y < -100) b.y = H + 50;
-      if (b.y > H + 100) b.y = -50;
-
-      ctx.save();
-      ctx.globalAlpha = b.a;
-      /* white bg */
-      ctx.fillStyle = 'rgba(34,197,94,0.12)';
-      ctx.fillRect(b.x, b.y, b.w, b.h);
-      /* stripes */
-      ctx.fillStyle = 'rgba(34,197,94,0.5)';
-      var sw = b.w / (b.stripes * 2);
-      for (var s = 0; s < b.stripes; s++) {{
-        var sw2 = sw * (0.4 + Math.random() * 0.6);
-        ctx.fillRect(b.x + s * sw * 2, b.y + 2, sw2, b.h - 4);
-      }}
+(function(){{
+  var cv=document.getElementById('t-canvas'),ctx=cv.getContext('2d'),W,H;
+  function rsz(){{W=cv.width=window.innerWidth;H=cv.height=window.innerHeight;}}
+  rsz();window.addEventListener('resize',rsz);
+  var bars=[];
+  for(var i=0;i<16;i++)bars.push({{x:Math.random()*W,y:Math.random()*H,w:60+Math.random()*110,h:16+Math.random()*10,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.2,a:.03+Math.random()*.05,s:Math.floor(8+Math.random()*14)}});
+  var dots=[];
+  for(var j=0;j<60;j++)dots.push({{x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4,r:Math.random()*1.5+.5,a:Math.random()*.25+.05}});
+  var mX=-999,mY=-999;
+  window.addEventListener('mousemove',function(e){{mX=e.clientX;mY=e.clientY;}});
+  function draw(){{
+    ctx.clearRect(0,0,W,H);
+    bars.forEach(function(b){{
+      b.x+=b.vx;b.y+=b.vy;
+      if(b.x<-200)b.x=W+100;if(b.x>W+200)b.x=-100;
+      if(b.y<-100)b.y=H+50;if(b.y>H+100)b.y=-50;
+      ctx.save();ctx.globalAlpha=b.a;
+      ctx.fillStyle='rgba(34,197,94,.1)';ctx.fillRect(b.x,b.y,b.w,b.h);
+      ctx.fillStyle='rgba(34,197,94,.5)';
+      var sw=b.w/(b.s*2);
+      for(var s=0;s<b.s;s++)ctx.fillRect(b.x+s*sw*2,b.y+2,sw*.7,b.h-4);
       ctx.restore();
     }});
-
-    /* Draw dots + connections */
-    dots.forEach(function(d) {{
-      d.x += d.vx; d.y += d.vy;
-      if (d.x < 0 || d.x > W) d.vx *= -1;
-      if (d.y < 0 || d.y > H) d.vy *= -1;
-      ctx.beginPath();
-      ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(34,197,94,' + d.a + ')';
-      ctx.fill();
+    dots.forEach(function(d){{
+      d.x+=d.vx;d.y+=d.vy;
+      if(d.x<0||d.x>W)d.vx*=-1;if(d.y<0||d.y>H)d.vy*=-1;
+      ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,Math.PI*2);
+      ctx.fillStyle='rgba(34,197,94,'+d.a+')';ctx.fill();
     }});
-
-    for (var i = 0; i < dots.length; i++) {{
-      var dx = dots[i].x - mX, dy = dots[i].y - mY;
-      var dist = Math.sqrt(dx*dx+dy*dy);
-      if (dist < 160) {{
-        ctx.beginPath(); ctx.moveTo(dots[i].x, dots[i].y); ctx.lineTo(mX, mY);
-        ctx.strokeStyle = 'rgba(34,197,94,' + (1-dist/160)*0.2 + ')';
-        ctx.lineWidth = 0.5; ctx.stroke();
-      }}
+    for(var i=0;i<dots.length;i++){{
+      var dx=dots[i].x-mX,dy=dots[i].y-mY,dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<160){{ctx.beginPath();ctx.moveTo(dots[i].x,dots[i].y);ctx.lineTo(mX,mY);ctx.strokeStyle='rgba(34,197,94,'+((1-dist/160)*.18)+')';ctx.lineWidth=.5;ctx.stroke();}}
     }}
-
     requestAnimationFrame(draw);
   }}
   draw();
 }})();
-
-/* Counter animations */
-function animCount(el, target) {{
-  var start = 0, dur = 1600, t0 = performance.now();
-  (function tick(now) {{
-    var p = Math.min((now-t0)/dur, 1);
-    var ease = 1 - Math.pow(1-p, 4);
-    el.textContent = Math.floor(ease * target);
-    if (p < 1) requestAnimationFrame(tick); else el.textContent = target;
-  }})(t0);
-}}
-animCount(document.getElementById('anim-tarama'), {total_tarama});
-animCount(document.getElementById('anim-urun'),   {total_urun});
-animCount(document.getElementById('anim-skt'),    {total_skt});
-</script>
-"""
+function anC(el,v){{var t0=performance.now(),dur=1600;(function tick(now){{var p=Math.min((now-t0)/dur,1),e=1-Math.pow(1-p,4);el.textContent=Math.floor(e*v);if(p<1)requestAnimationFrame(tick);else el.textContent=v;}})(t0);}}
+anC(document.getElementById('an-tar'),{total_tarama});
+anC(document.getElementById('an-urun'),{total_urun});
+anC(document.getElementById('an-skt'),{total_skt});
+</script>"""
     return render(content, page="tarama", title="Tarama")
 
 # ═══════════════════════════════════════════════════
