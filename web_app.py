@@ -191,6 +191,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;
 .main{animation:pageIn .6s cubic-bezier(.16,1,.3,1) both}
 @keyframes pageIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 
+/* SKT ALARM ANIMATIONS */
+@keyframes sktFlash{0%,100%{opacity:0}50%{opacity:1}}
+@keyframes sktShake{0%,100%{transform:translateX(0)}15%{transform:translateX(-8px)}30%{transform:translateX(8px)}45%{transform:translateX(-6px)}60%{transform:translateX(6px)}75%{transform:translateX(-3px)}90%{transform:translateX(3px)}}
+
 /* HEADER */
 .hdr{
   position:sticky;top:0;z-index:100;
@@ -201,41 +205,59 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;
   display:flex;align-items:center;justify-content:space-between;
   height:64px;
   transition:background .4s,border .4s;
+  animation:hdrIn .8s cubic-bezier(.16,1,.3,1) both;
 }
+@keyframes hdrIn{from{opacity:0;transform:translateY(-100%)}to{opacity:1;transform:none}}
 .hdr::after{content:'';position:absolute;bottom:-1px;left:0;width:100%;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent);animation:hdrPulse 4s ease-in-out infinite}
-@keyframes hdrPulse{0%,100%{opacity:.3}50%{opacity:.7}}
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.25),var(--accent),rgba(255,255,255,.25),transparent);
+  background-size:200% 100%;animation:hdrLine 6s linear infinite}
+@keyframes hdrLine{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
 /* LOGO */
 .logo-link{text-decoration:none}
 .logo{
   font-family:'Bebas Neue',sans-serif;
   font-size:1.8rem;letter-spacing:4px;color:var(--text);
-  transition:letter-spacing .3s,opacity .3s;
+  transition:letter-spacing .3s,opacity .3s,text-shadow .3s;
+  position:relative;
 }
-.logo:hover{opacity:.8;letter-spacing:6px}
+.logo:hover{opacity:.9;letter-spacing:6px;text-shadow:0 0 20px rgba(255,255,255,.2)}
 .logo span{color:var(--g);font-style:normal}
+/* Logo shine sweep */
+.logo::after{
+  content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);
+  animation:logoSweep 4s ease-in-out infinite;
+}
+@keyframes logoSweep{0%,80%,100%{left:-100%}40%{left:200%}}
 
 /* NAV */
 .nav{display:flex;align-items:center;gap:2px}
 .nav a{
   color:var(--muted);text-decoration:none;
   font-size:.72rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
-  padding:8px 16px;transition:all .25s;position:relative;
+  padding:8px 16px;transition:all .25s cubic-bezier(.16,1,.3,1);position:relative;
+  overflow:hidden;
 }
 .nav a::after{content:'';position:absolute;bottom:0;left:16px;right:16px;height:1px;
-  background:var(--g);transform:scaleX(0);transition:transform .3s cubic-bezier(.16,1,.3,1)}
+  background:linear-gradient(90deg,transparent,var(--g),transparent);transform:scaleX(0);transition:transform .35s cubic-bezier(.16,1,.3,1)}
+.nav a::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.03);opacity:0;transition:opacity .25s}
 .nav a:hover{color:var(--text)}
+.nav a:hover::before{opacity:1}
 .nav a:hover::after,.nav a.active::after{transform:scaleX(1)}
 .nav a.active{color:var(--g)}
+.nav a:active{transform:scale(.96)}
 .nav-divider{width:1px;height:20px;background:var(--border);margin:0 10px}
 .rol-badge{
   font-family:'JetBrains Mono',monospace;
   font-size:.65rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;
   padding:4px 12px;border:1px solid var(--border);color:var(--g);margin:0 8px;
-  transition:border-color .3s;
+  transition:all .3s cubic-bezier(.16,1,.3,1);
+  position:relative;overflow:hidden;
 }
-.rol-badge:hover{border-color:rgba(255,255,255,.3)}
+.rol-badge:hover{border-color:rgba(255,255,255,.3);box-shadow:0 0 12px rgba(255,255,255,.05)}
+.rol-badge::after{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.06) 50%,transparent 70%);animation:badgeSweep 3s ease-in-out infinite}
+@keyframes badgeSweep{0%,100%{transform:translateX(-100%)}50%{transform:translateX(100%)}}
 .nav-user{font-size:.82rem;color:var(--sub);margin-right:4px}
 .btn-login{
   background:var(--g)!important;color:#060606!important;font-weight:800!important;
@@ -273,10 +295,13 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;
   background:var(--card);padding:24px 20px;text-align:center;
   position:relative;overflow:hidden;transition:all .35s cubic-bezier(.16,1,.3,1);
 }
-.stat-card:hover{background:#1a1a1a;transform:translateY(-2px)}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--g),transparent);opacity:0;transition:opacity .3s}
-.stat-card:hover::before{opacity:1}
-.stat-card .val{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;line-height:1;margin-bottom:6px}
+.stat-card:hover{background:#1a1a1a;transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--g),var(--accent),var(--g),transparent);
+  background-size:200% 100%;opacity:0;transition:opacity .3s}
+.stat-card:hover::before{opacity:1;animation:hdrLine 3s linear infinite}
+.stat-card .val{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;line-height:1;margin-bottom:6px;transition:transform .3s cubic-bezier(.16,1,.3,1)}
+.stat-card:hover .val{transform:scale(1.08)}
 .stat-card .lbl{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
 
 /* TABLES */
@@ -289,9 +314,11 @@ th{
   font-weight:600;letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;
   border-bottom:1px solid var(--border);
 }
-td{padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.04);font-size:.85rem;transition:all .2s}
+td{padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.04);font-size:.85rem;transition:all .25s cubic-bezier(.16,1,.3,1)}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:rgba(255,255,255,.03)}
+tr:hover td{background:rgba(255,255,255,.04)}
+tr{transition:transform .2s}
+tr:hover{transform:translateX(3px)}
 
 /* PANELS */
 .panel{background:var(--card);border:1px solid var(--border);padding:24px;margin-bottom:20px;position:relative;overflow:hidden;transition:border-color .3s}
@@ -351,14 +378,21 @@ label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted)
 .scan-result{
   margin-top:24px;overflow:hidden;position:relative;
   border:1px solid var(--border);
-  animation:resultIn .5s cubic-bezier(.16,1,.3,1) both;
+  animation:resultIn .6s cubic-bezier(.16,1,.3,1) both;
+  transition:border-color .3s,box-shadow .3s;
 }
-@keyframes resultIn{from{opacity:0;transform:translateY(20px) scale(.98)}to{opacity:1;transform:none}}
+.scan-result:hover{border-color:rgba(255,255,255,.1);box-shadow:0 12px 40px rgba(0,0,0,.3)}
+@keyframes resultIn{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:none}}
 .scan-result::before{
   content:'';position:absolute;top:0;left:0;right:0;height:2px;
   background:linear-gradient(90deg,transparent,var(--g),var(--accent),var(--g),transparent);
   background-size:200% 100%;
-  animation:gradientSlide 3s ease-in-out infinite;
+  animation:gradientSlide 3s ease-in-out infinite;z-index:2;
+}
+.scan-result::after{
+  content:'';position:absolute;top:2px;left:0;right:0;height:40px;
+  background:linear-gradient(180deg,rgba(165,216,255,.04),transparent);
+  pointer-events:none;z-index:1;
 }
 @keyframes gradientSlide{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .scan-header{padding:20px 24px;display:flex;justify-content:space-between;align-items:flex-start;position:relative}
@@ -472,6 +506,38 @@ label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted)
 <div class="main">
 CONTENT_BLOCK
 </div>
+<script>
+// Magnetic buttons
+document.querySelectorAll('.btn-green,.btn-login,.nav-demo').forEach(function(btn){
+  btn.addEventListener('mousemove',function(e){
+    var r=btn.getBoundingClientRect();
+    var x=(e.clientX-r.left-r.width/2)*.15;
+    var y=(e.clientY-r.top-r.height/2)*.15;
+    btn.style.transform='translate('+x+'px,'+y+'px)';
+  });
+  btn.addEventListener('mouseleave',function(){btn.style.transform='';});
+});
+// Stat card counter animation
+document.querySelectorAll('.stat-card .val').forEach(function(el){
+  var target=parseInt(el.textContent);
+  if(isNaN(target)||target===0) return;
+  el.textContent='0';
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(en.isIntersecting){
+        io.unobserve(el);
+        var dur=1200,t0=performance.now();
+        (function tick(now){
+          var p=Math.min((now-t0)/dur,1);
+          el.textContent=Math.floor((1-Math.pow(1-p,4))*target);
+          if(p<1) requestAnimationFrame(tick); else el.textContent=target;
+        })(t0);
+      }
+    });
+  },{threshold:.3});
+  io.observe(el);
+});
+</script>
 </body></html>"""
 
 def render(content, page="", title="NexStock", **kw):
@@ -797,18 +863,49 @@ function sesHata(){ beep(400, 200, 'sawtooth'); setTimeout(function(){ beep(300,
 function sesSkt(gun){
   if(gun === null) return;
   if(gun < 0){
-    var t = 0;
-    for(var i=0; i<5; i++){
-      (function(i){
-        setTimeout(function(){ beep(1400, 120, 'sawtooth'); }, t);
-        t += 130;
-        setTimeout(function(){ beep(300, 180, 'sawtooth'); }, t);
-        t += 210;
-      })(i);
+    // SIREN ALARMI — tarihi gecmis urun, cok agresif
+    var ctx = _getCtx();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sawtooth';
+    gain.gain.setValueAtTime(0.6, ctx.currentTime);
+    // Siren: frekans yukari-asagi sallanir 3 saniye boyunca
+    for(var i=0; i<12; i++){
+      osc.frequency.setValueAtTime(800, ctx.currentTime + i*0.25);
+      osc.frequency.linearRampToValueAtTime(1600, ctx.currentTime + i*0.25 + 0.125);
+      osc.frequency.linearRampToValueAtTime(800, ctx.currentTime + i*0.25 + 0.25);
     }
+    gain.gain.setValueAtTime(0.6, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 3);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 3);
+    // Ekrani kirmizi flash yap
+    var flash = document.createElement('div');
+    flash.style.cssText='position:fixed;inset:0;background:rgba(224,82,82,.25);z-index:9998;pointer-events:none;animation:sktFlash 0.3s ease-in-out 6 both';
+    document.body.appendChild(flash);
+    setTimeout(function(){ flash.remove(); }, 2000);
+    // Sonucu titret
+    var res = document.querySelector('.scan-result');
+    if(res){ res.style.animation='sktShake 0.4s ease-in-out 3'; setTimeout(function(){ res.style.animation=''; },1500); }
   }
-  else if(gun === 0){ beep(1000, 400, 'square'); }
-  else if(gun <= 3){ beep(900, 250, 'sine'); }
+  else if(gun === 0){
+    // Bugun bitiyor — orta seviye alarm
+    var ctx = _getCtx();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'square';
+    gain.gain.setValueAtTime(0.5, ctx.currentTime);
+    for(var i=0; i<6; i++){
+      osc.frequency.setValueAtTime(600, ctx.currentTime + i*0.3);
+      osc.frequency.linearRampToValueAtTime(1200, ctx.currentTime + i*0.3 + 0.15);
+    }
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 2);
+  }
+  else if(gun <= 3){ beep(900, 300, 'sine'); setTimeout(function(){ beep(900, 300, 'sine'); }, 400); }
 }
 window.addEventListener('DOMContentLoaded', function(){
   var sktEl = document.getElementById('skt-gun-data');
