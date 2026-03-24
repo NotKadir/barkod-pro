@@ -4,7 +4,7 @@ from datetime import datetime, date
 from flask import Flask, render_template_string, request, redirect, session, jsonify
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "scancore_secret_2024")
+app.secret_key = os.environ.get("SECRET_KEY", "nexstock_secret_2024")
 DB_NAME = os.environ.get("DB_PATH", "envanter_pro.db")
 
 # ═══════════════════════════════════════════════════
@@ -89,18 +89,18 @@ def stt_etiket(gun):
     return f"{gun} gun kaldi"
 
 def stt_renk(gun):
-    if gun is None: return "#2d5a3d"
+    if gun is None: return "#525252"
     if gun < 0:  return "#e05252"
     if gun <= 3: return "#f0b429"
     if gun <= 7: return "#fb923c"
-    return "#22c55e"
+    return "#ffffff"
 
 def openfoodfacts(barkod):
     urls = [
         f"https://world.openfoodfacts.net/api/v2/product/{barkod}?fields=product_name,product_name_tr,generic_name,categories_tags",
         f"https://world.openfoodfacts.org/api/v2/product/{barkod}.json",
     ]
-    headers = {"User-Agent": "ScanCore/3.0 (github.com/scancore)"}
+    headers = {"User-Agent": "NexStock/3.0 (github.com/nexstock)"}
     for url in urls:
         try:
             r = requests.get(url, headers=headers, timeout=8)
@@ -169,76 +169,286 @@ BASE = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ScanCore — {{ title }}</title>
+<title>NexStock — {{ title }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
+:root{
+  --g:#ffffff;--g2:#e5e5e5;--bg:#060606;--panel:#0e0e0e;
+  --card:#111111;--border:#222;--text:#f5f5f5;--sub:#d4d4d4;--muted:#525252;
+  --accent:rgba(165,216,255,1);
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#080d0a;color:#d1fae5;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
-.hdr{background:#0d1410;border-bottom:2px solid #22c55e;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:100}
-.logo{font-size:1.15rem;font-weight:800;letter-spacing:1px;color:#d1fae5}
-.logo span{color:#22c55e}
-.nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
-.nav a{color:#6ee7b7;text-decoration:none;font-size:.88rem;padding:6px 13px;border-radius:6px;transition:.15s}
-.nav a:hover,.nav a.active{background:#1a3d24;color:#22c55e}
-.nav .btn-login{background:#22c55e;color:#080d0a;font-weight:700}
-.nav .btn-login:hover{background:#4ade80}
-.nav .btn-logout{color:#e05252}
-.nav .btn-logout:hover{background:#3d0f0f}
-.rol-badge{font-size:.75rem;font-weight:700;padding:3px 10px;border-radius:999px;background:#1a3d24;color:#22c55e;margin-right:4px}
-.main{padding:24px;max-width:1320px;margin:0 auto}
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
-.stat-card{background:#0d1410;border:1px solid #1a3d24;border-radius:10px;padding:18px 12px;text-align:center;border-top:3px solid}
-.stat-card .val{font-size:2rem;font-weight:800;margin-bottom:4px}
-.stat-card .lbl{font-size:.76rem;color:#6ee7b7;font-weight:500}
-.tbl-wrap{background:#0d1410;border:1px solid #1a3d24;border-radius:10px;overflow:hidden;margin-bottom:20px}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* NOISE */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
+  opacity:.45}
+
+/* PAGE TRANSITION */
+.main{animation:pageIn .6s cubic-bezier(.16,1,.3,1) both}
+@keyframes pageIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+/* HEADER */
+.hdr{
+  position:sticky;top:0;z-index:100;
+  background:rgba(6,6,6,.88);
+  backdrop-filter:blur(24px) saturate(1.2);
+  border-bottom:1px solid rgba(255,255,255,.04);
+  padding:0 40px;
+  display:flex;align-items:center;justify-content:space-between;
+  height:64px;
+  transition:background .4s,border .4s;
+}
+.hdr::after{content:'';position:absolute;bottom:-1px;left:0;width:100%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent);animation:hdrPulse 4s ease-in-out infinite}
+@keyframes hdrPulse{0%,100%{opacity:.3}50%{opacity:.7}}
+
+/* LOGO */
+.logo-link{text-decoration:none}
+.logo{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:1.8rem;letter-spacing:4px;color:var(--text);
+  transition:letter-spacing .3s,opacity .3s;
+}
+.logo:hover{opacity:.8;letter-spacing:6px}
+.logo span{color:var(--g);font-style:normal}
+
+/* NAV */
+.nav{display:flex;align-items:center;gap:2px}
+.nav a{
+  color:var(--muted);text-decoration:none;
+  font-size:.72rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  padding:8px 16px;transition:all .25s;position:relative;
+}
+.nav a::after{content:'';position:absolute;bottom:0;left:16px;right:16px;height:1px;
+  background:var(--g);transform:scaleX(0);transition:transform .3s cubic-bezier(.16,1,.3,1)}
+.nav a:hover{color:var(--text)}
+.nav a:hover::after,.nav a.active::after{transform:scaleX(1)}
+.nav a.active{color:var(--g)}
+.nav-divider{width:1px;height:20px;background:var(--border);margin:0 10px}
+.rol-badge{
+  font-family:'JetBrains Mono',monospace;
+  font-size:.65rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;
+  padding:4px 12px;border:1px solid var(--border);color:var(--g);margin:0 8px;
+  transition:border-color .3s;
+}
+.rol-badge:hover{border-color:rgba(255,255,255,.3)}
+.nav-user{font-size:.82rem;color:var(--sub);margin-right:4px}
+.btn-login{
+  background:var(--g)!important;color:#060606!important;font-weight:800!important;
+  padding:8px 22px!important;letter-spacing:1px;
+  clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));
+  transition:all .3s cubic-bezier(.16,1,.3,1)!important;
+  position:relative;overflow:hidden;
+}
+.btn-login::before{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 20%,rgba(255,255,255,.2) 50%,transparent 80%);transform:translateX(-100%);transition:transform .5s}
+.btn-login:hover{background:var(--g2)!important;transform:translateY(-2px);box-shadow:0 8px 24px rgba(255,255,255,.15)}
+.btn-login:hover::before{transform:translateX(100%)}
+.btn-login::after{display:none!important}
+.btn-logout{color:#e05252!important;transition:all .25s!important}
+.btn-logout:hover{color:#ff7070!important}
+.btn-logout::after{background:#e05252!important}
+
+/* MAIN */
+.main{padding:32px 40px;max-width:1400px;margin:0 auto}
+
+/* PAGE TITLE */
+.page-title{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:2.8rem;letter-spacing:2px;
+  color:var(--text);margin-bottom:28px;
+  display:flex;align-items:center;gap:16px;line-height:1;
+  animation:titleSlide .7s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes titleSlide{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:none}}
+.page-title::before{content:'';display:block;width:4px;height:36px;background:var(--g);animation:barGrow .5s .2s cubic-bezier(.16,1,.3,1) both}
+@keyframes barGrow{from{height:0}to{height:36px}}
+
+/* STAT CARDS */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;margin-bottom:32px;background:var(--border)}
+.stat-card{
+  background:var(--card);padding:24px 20px;text-align:center;
+  position:relative;overflow:hidden;transition:all .35s cubic-bezier(.16,1,.3,1);
+}
+.stat-card:hover{background:#1a1a1a;transform:translateY(-2px)}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--g),transparent);opacity:0;transition:opacity .3s}
+.stat-card:hover::before{opacity:1}
+.stat-card .val{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;line-height:1;margin-bottom:6px}
+.stat-card .lbl{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+
+/* TABLES */
+.tbl-wrap{background:var(--card);border:1px solid var(--border);overflow:hidden;margin-bottom:20px;transition:border-color .3s}
+.tbl-wrap:hover{border-color:rgba(255,255,255,.1)}
 table{width:100%;border-collapse:collapse}
-th{background:#111c15;padding:10px 14px;text-align:left;font-size:.82rem;color:#22c55e;font-weight:600;white-space:nowrap}
-td{padding:9px 14px;border-bottom:1px solid #1a3d24;font-size:.84rem}
+th{
+  background:#0a0a0a;padding:12px 16px;text-align:left;
+  font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--g);
+  font-weight:600;letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;
+  border-bottom:1px solid var(--border);
+}
+td{padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.04);font-size:.85rem;transition:all .2s}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:#111c15}
-.panel{background:#0d1410;border:1px solid #1a3d24;border-radius:10px;padding:20px;margin-bottom:20px}
-.panel h2{font-size:.95rem;color:#22c55e;margin-bottom:14px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+tr:hover td{background:rgba(255,255,255,.03)}
+
+/* PANELS */
+.panel{background:var(--card);border:1px solid var(--border);padding:24px;margin-bottom:20px;position:relative;overflow:hidden;transition:border-color .3s}
+.panel:hover{border-color:rgba(255,255,255,.1)}
+.panel::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--g);opacity:.4;transition:opacity .3s}
+.panel:hover::before{opacity:.8}
+.panel h2{
+  font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;
+  color:var(--text);margin-bottom:16px;display:flex;align-items:center;gap:8px;
+}
+.panel h2::after{content:'';flex:1;height:1px;background:var(--border)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-input,select,textarea{background:#111c15;color:#d1fae5;border:1px solid #1a3d24;border-radius:7px;padding:9px 13px;width:100%;margin-bottom:10px;font-size:.9rem;font-family:inherit;transition:.15s}
-input:focus,select:focus{outline:none;border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.15)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 20px;border-radius:7px;border:none;cursor:pointer;font-size:.88rem;font-weight:700;text-decoration:none;transition:.15s;font-family:inherit}
-.btn-green{background:#22c55e;color:#080d0a}.btn-green:hover{background:#4ade80}
-.btn-red{background:#3d0f0f;color:#e05252;border:1px solid #5a1515}.btn-red:hover{background:#5a1515}
-.btn-muted{background:#111c15;color:#6ee7b7;border:1px solid #1a3d24}.btn-muted:hover{background:#1a3d24}
-.scan-wrap{max-width:580px;margin:32px auto}
+
+/* FORMS */
+input,select,textarea{
+  background:rgba(255,255,255,.03);color:var(--text);
+  border:1px solid var(--border);
+  padding:11px 14px;width:100%;margin-bottom:10px;
+  font-size:.9rem;font-family:'Syne',sans-serif;
+  transition:all .25s cubic-bezier(.16,1,.3,1);
+  outline:none;border-radius:0;
+}
+input:focus,select:focus{border-color:var(--g);box-shadow:0 0 0 1px var(--g),0 0 20px rgba(255,255,255,.05)}
+label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px}
+
+/* BUTTONS */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:10px 22px;border:none;cursor:pointer;
+  font-size:.82rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+  text-decoration:none;font-family:'Syne',sans-serif;
+  transition:all .3s cubic-bezier(.16,1,.3,1);
+  clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));
+  position:relative;overflow:hidden;
+}
+.btn::before{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent 20%,rgba(255,255,255,.12) 50%,transparent 80%);transform:translateX(-100%);transition:transform .5s}
+.btn:hover::before{transform:translateX(100%)}
+.btn-green{background:var(--g);color:#060606}
+.btn-green:hover{background:var(--g2);transform:translateY(-2px);box-shadow:0 8px 24px rgba(255,255,255,.15)}
+.btn-red{background:#3d0f0f;color:#e05252;clip-path:none;border:1px solid #5a1515}
+.btn-red:hover{background:#5a1515;transform:translateY(-2px)}
+.btn-muted{background:rgba(255,255,255,.04);color:var(--sub);clip-path:none;border:1px solid var(--border)}
+.btn-muted:hover{border-color:var(--g);color:var(--g);transform:translateY(-2px);box-shadow:0 6px 20px rgba(255,255,255,.06)}
+
+/* SCAN PAGE */
+.scan-wrap{max-width:600px;margin:0 auto;padding-top:20px}
+.scan-title{font-family:'Bebas Neue',sans-serif;font-size:2.5rem;letter-spacing:2px;margin-bottom:24px;display:flex;align-items:center;gap:12px}
+.scan-title::before{content:'';display:block;width:4px;height:32px;background:var(--g)}
 .scan-input-row{display:flex;gap:8px;margin-bottom:8px}
-.scan-input-row input{margin:0;font-size:1.2rem;text-align:center;letter-spacing:2px}
-.scan-result{margin-top:20px;border-radius:10px;overflow:hidden;border:1px solid #1a3d24}
-.scan-header{padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
-.scan-body{padding:14px 20px;background:#0d1410}
-.scan-urun-adi{font-size:1.3rem;font-weight:800}
-.scan-meta{font-size:.85rem;color:#6ee7b7;margin-top:4px}
-.scan-skt{font-size:1rem;font-weight:700;margin-top:10px;padding:8px 12px;border-radius:6px;display:inline-block}
-.kamera-box{background:#111c15;border:2px solid #22c55e;border-radius:10px;overflow:hidden;position:relative;margin-bottom:12px}
-#interactive{width:100%;height:280px;position:relative}
+.scan-input-row input{
+  margin:0;font-family:'JetBrains Mono',monospace;font-size:1.1rem;
+  letter-spacing:3px;text-align:center;
+  background:rgba(255,255,255,.03);
+}
+
+/* SCAN RESULT — creative addition: animated gradient border + slide-in */
+.scan-result{
+  margin-top:24px;overflow:hidden;position:relative;
+  border:1px solid var(--border);
+  animation:resultIn .5s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes resultIn{from{opacity:0;transform:translateY(20px) scale(.98)}to{opacity:1;transform:none}}
+.scan-result::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--g),var(--accent),var(--g),transparent);
+  background-size:200% 100%;
+  animation:gradientSlide 3s ease-in-out infinite;
+}
+@keyframes gradientSlide{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.scan-header{padding:20px 24px;display:flex;justify-content:space-between;align-items:flex-start;position:relative}
+.scan-header::after{content:'';position:absolute;bottom:0;left:24px;right:24px;height:1px;background:var(--border)}
+.scan-body{padding:16px 24px 20px;background:var(--card)}
+.scan-urun-adi{
+  font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:1px;line-height:1;
+  animation:nameIn .4s .1s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes nameIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+.scan-meta{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--sub);margin-top:6px;letter-spacing:.5px}
+.scan-skt{
+  font-family:'JetBrains Mono',monospace;font-size:.85rem;font-weight:600;
+  margin-top:12px;padding:8px 14px;display:inline-block;letter-spacing:.5px;
+  animation:sktPop .3s .2s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes sktPop{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}
+
+/* CAMERA */
+.kamera-box{
+  border:1px solid rgba(255,255,255,.2);overflow:hidden;position:relative;
+  margin-bottom:12px;background:#000;border-radius:2px;
+}
+#interactive{width:100%;height:300px;position:relative}
 #interactive video{width:100%;height:100%;object-fit:cover}
 #interactive canvas{display:none!important}
 .drawingBuffer{display:none!important}
-.kamera-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:240px;height:120px;border:3px solid #22c55e;border-radius:6px;box-shadow:0 0 0 9999px rgba(0,0,0,.55);pointer-events:none}
-.alert{padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:.9rem;font-weight:500}
-.alert-red{background:#3d0f0f;color:#e05252;border:1px solid #5a1515}
-.alert-green{background:#052e16;color:#22c55e;border:1px solid #1a3d24}
-.alert-yellow{background:#3d2800;color:#f0b429;border:1px solid #5a3800}
-.page-title{font-size:1.2rem;font-weight:800;color:#d1fae5;margin-bottom:20px}
-.green{color:#22c55e}.red{color:#e05252}.yellow{color:#f0b429}.muted{color:#2d5a3d}
-.login-wrap{max-width:380px;margin:80px auto}
-@media(max-width:700px){
+.kamera-overlay{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:260px;height:130px;
+  border:2px solid var(--g);
+  box-shadow:0 0 0 9999px rgba(0,0,0,.55),0 0 24px rgba(165,216,255,.15) inset;
+  pointer-events:none;
+}
+/* Scanning laser line */
+.kamera-overlay::after{
+  content:'';position:absolute;left:4px;right:4px;height:2px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  box-shadow:0 0 12px var(--accent);
+  animation:scanLaser 2s ease-in-out infinite;
+  opacity:.8;
+}
+@keyframes scanLaser{0%{top:4px}50%{top:calc(100% - 6px)}100%{top:4px}}
+/* Corner brackets */
+.kamera-overlay::before{
+  content:'';position:absolute;inset:-1px;
+  border:16px solid transparent;
+  border-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M0,16V0H16M32,0H48V16M48,32V48H32M16,48H0V32' fill='none' stroke='white' stroke-width='2'/%3E%3C/svg%3E") 16 fill;
+  pointer-events:none;
+}
+
+/* ALERTS */
+.alert{
+  padding:12px 16px;margin-bottom:16px;font-size:.88rem;font-weight:500;
+  border-left:3px solid;font-family:'Syne',sans-serif;
+  animation:alertIn .4s cubic-bezier(.16,1,.3,1) both;
+}
+@keyframes alertIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+.alert-red{background:rgba(224,82,82,.06);color:#e05252;border-color:#e05252}
+.alert-green{background:rgba(255,255,255,.03);color:var(--g);border-color:var(--g)}
+.alert-yellow{background:rgba(240,180,41,.05);color:#f0b429;border-color:#f0b429}
+
+/* COLORS */
+.green{color:var(--g)}.red{color:#e05252}.yellow{color:#f0b429}.orange{color:#fb923c}.muted{color:var(--muted)}
+
+/* LOGIN */
+.login-wrap{max-width:400px;margin:80px auto;animation:loginIn .7s cubic-bezier(.16,1,.3,1) both}
+@keyframes loginIn{from{opacity:0;transform:translateY(24px) scale(.97)}to{opacity:1;transform:none}}
+.login-wrap .panel{padding:40px}
+.login-logo{font-family:'Bebas Neue',sans-serif;font-size:2.5rem;letter-spacing:4px;text-align:center;margin-bottom:6px}
+.login-sub{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted);text-align:center;letter-spacing:2px;text-transform:uppercase;margin-bottom:32px}
+
+/* RESPONSIVE */
+@media(max-width:900px){
+  .hdr{padding:0 16px}
+  .main{padding:20px 16px}
   .grid2{grid-template-columns:1fr}
   .stat-grid{grid-template-columns:repeat(2,1fr)}
-  .hdr{padding:0 12px}
-  .main{padding:12px}
+  .nav a{padding:6px 8px;font-size:.7rem}
+  .nav-user{display:none}
 }
 </style>
 </head>
 <body>
 <div class="hdr">
-  <div class="logo">Scan<span>Core</span></div>
+  <a href="https://nextstock-tan-t-m.vercel.app/" class="logo-link" target="_blank">
+    <div class="logo">Nex<span>Stock</span></div>
+  </a>
   <div class="nav">
-    <a href="/tarama" class="{{ 'active' if page=='tarama' }}">📷 Tarama</a>
+    <a href="/tarama" class="{{ 'active' if page=='tarama' }}">Tarama</a>
     {% if session.get('rol') not in ['misafir','goruntuleyici'] %}
     <a href="/" class="{{ 'active' if page=='dashboard' }}">Dashboard</a>
     <a href="/urunler" class="{{ 'active' if page=='urunler' }}">Urunler</a>
@@ -249,11 +459,13 @@ input:focus,select:focus{outline:none;border-color:#22c55e;box-shadow:0 0 0 2px 
     {% if session.get('rol') == 'admin' %}
     <a href="/kullanicilar" class="{{ 'active' if page=='kullanicilar' }}">Kullanicilar</a>
     {% endif %}
-    <span class="rol-badge">{{ session.get('rol','').upper() }}</span>
-    <span style="color:#6ee7b7;font-size:.85rem;margin-right:4px">{{ session.get('tam_ad') or session.get('user') }}</span>
-    <a href="/cikis" class="nav btn-logout">Cikis</a>
+    <div class="nav-divider"></div>
+    <span class="rol-badge">{{ session.get('rol','') }}</span>
+    <span class="nav-user">{{ session.get('tam_ad') or session.get('user') }}</span>
+    <a href="/cikis" class="btn-logout">Cikis</a>
     {% else %}
-    <a href="/giris" class="nav btn-login">Giris Yap</a>
+    <div class="nav-divider"></div>
+    <a href="/giris" class="btn-login">Giris Yap</a>
     {% endif %}
   </div>
 </div>
@@ -262,7 +474,7 @@ CONTENT_BLOCK
 </div>
 </body></html>"""
 
-def render(content, page="", title="ScanCore", **kw):
+def render(content, page="", title="NexStock", **kw):
     html = BASE.replace("CONTENT_BLOCK", content)
     return render_template_string(html, session=session, page=page, title=title, **kw)
 
@@ -292,19 +504,17 @@ def giris():
     content = f"""
 <div class="login-wrap">
   <div class="panel">
-    <div style="text-align:center;margin-bottom:28px">
-      <div style="font-size:2rem;font-weight:800">Scan<span style="color:#22c55e">Core</span></div>
-      <div style="color:#6ee7b7;font-size:.9rem;margin-top:6px">Envanter Yonetim Sistemi</div>
-    </div>
+    <div class="login-logo">Nex<span style="color:var(--g)">Stock</span></div>
+    <div class="login-sub">Envanter Yonetim Sistemi</div>
     {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
     <form method="POST">
-      <label style="color:#6ee7b7;font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">KULLANICI ADI</label>
+      <label style="color:#a3a3a3;font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">KULLANICI ADI</label>
       <input name="k" placeholder="kullanici_adi" autofocus autocomplete="username">
-      <label style="color:#6ee7b7;font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">SIFRE</label>
+      <label style="color:#a3a3a3;font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">SIFRE</label>
       <input name="s" type="password" placeholder="••••••••" autocomplete="current-password">
       <button type="submit" class="btn btn-green" style="width:100%;margin-top:4px;padding:12px">GIRIS YAP</button>
     </form>
-    <div style="text-align:center;margin-top:16px;color:#2d5a3d;font-size:.8rem">Varsayilan: admin / admin123</div>
+    <div style="text-align:center;margin-top:16px;color:#525252;font-size:.8rem">Varsayilan: admin / admin123</div>
   </div>
 </div>"""
     return render(content, page="giris", title="Giris")
@@ -318,6 +528,10 @@ def cikis():
 # ═══════════════════════════════════════════════════
 #  ANA SAYFA
 # ═══════════════════════════════════════════════════
+@app.route("/anasayfa")
+def anasayfa():
+    return redirect("https://nexstock-landing.vercel.app", code=302)
+
 @app.route("/")
 @giris_gerekli
 def index():
@@ -342,14 +556,14 @@ def index():
     c.close()
 
     kfg = [
-        ("toplam_urun","Toplam Urun","#22c55e"),
+        ("toplam_urun","Toplam Urun","#ffffff"),
         ("toplam_stok","Toplam Stok","#34d399"),
         ("tarihi_gecmis","Tarihi Gecmis","#e05252"),
         ("yaklasan","Yaklasan SKT","#f0b429"),
         ("kritik","Kritik Stok","#fb923c"),
         ("stoksuz","Stoksuz","#a78bfa"),
-        ("bugun","Bugun Islem","#22c55e"),
-        ("tedarikci","Tedarikci","#6ee7b7"),
+        ("bugun","Bugun Islem","#ffffff"),
+        ("tedarikci","Tedarikci","#a3a3a3"),
     ]
     kartlar = "".join(f'<div class="stat-card" style="border-color:{col}"><div class="val" style="color:{col}">{s[k]}</div><div class="lbl">{l}</div></div>' for k,l,col in kfg)
 
@@ -357,7 +571,7 @@ def index():
     for u in skt_list:
         gun = kalan_gun(u.get("stt"))
         rc  = stt_renk(gun)
-        skt_rows += f'<tr><td><strong>{u["urun_adi"]}</strong></td><td style="color:#6ee7b7">{u.get("stt","—")}</td><td style="color:{rc};font-weight:600">{stt_etiket(gun)}</td><td>{u["stok_adedi"]}</td></tr>'
+        skt_rows += f'<tr><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("stt","—")}</td><td style="color:{rc};font-weight:600">{stt_etiket(gun)}</td><td>{u["stok_adedi"]}</td></tr>'
 
     dusuk_rows = ""
     for u in dusuk:
@@ -367,7 +581,7 @@ def index():
     har_rows = ""
     for h in son_har:
         cls = "green" if h["hareket_tipi"]=="Giris" else "red" if h["hareket_tipi"] in ["Cikis","Okutma"] else ""
-        har_rows += f'<tr><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td>{h["miktar"]}</td><td style="color:#6ee7b7">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
+        har_rows += f'<tr><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td>{h["miktar"]}</td><td style="color:#a3a3a3">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
 
     content = f"""
 <div class="page-title">Dashboard</div>
@@ -450,7 +664,7 @@ def tarama():
                 hdr_bg = "background:#3d2800"
                 uyari  = f'<div class="alert alert-yellow" style="margin-top:12px">⚠ {gun} gun kaldi — Dikkat!</div>'
             else:
-                hdr_bg = "background:#052e16"
+                hdr_bg = "background:#0f0f0f"
                 uyari  = ""
 
             if request.method == "POST":
@@ -468,12 +682,12 @@ def tarama():
       <div class="scan-urun-adi">{urun["urun_adi"]}</div>
       <div class="scan-meta">Barkod: {barkod}&nbsp;&nbsp;|&nbsp;&nbsp;Kategori: {urun.get("kategori","—")}</div>
     </div>
-    <div style="font-size:1.7rem;font-weight:800;color:#22c55e">{float(urun.get("fiyat",0)):.2f} TL</div>
+    <div style="font-size:1.7rem;font-weight:800;color:#ffffff">{float(urun.get("fiyat",0)):.2f} TL</div>
   </div>
   <div class="scan-body">
     <span class="scan-skt" style="background:{rc}22;color:{rc};border:1px solid {rc}55">{et}</span>
-    <div style="margin-top:10px;color:#6ee7b7;font-size:.9rem">
-      Stok: <strong style="color:#d1fae5">{urun["stok_adedi"]} adet</strong>
+    <div style="margin-top:10px;color:#a3a3a3;font-size:.9rem">
+      Stok: <strong style="color:#f5f5f5">{urun["stok_adedi"]} adet</strong>
       &nbsp;&nbsp;|&nbsp;&nbsp;Min: {urun.get("min_stok",5)} adet
     </div>
     {uyari}
@@ -601,7 +815,7 @@ function kameraAc(){
       _son=kod; _sonT=simdi; _sayac={};
 
       document.getElementById('kam-durum').innerText='OKUNDU: '+kod;
-      document.getElementById('kam-durum').style.color='#22c55e';
+      document.getElementById('kam-durum').style.color='#ffffff';
       sesOkundu();
       Quagga.stop(); _aktif=false;
 
@@ -620,159 +834,31 @@ function kameraKapat(){
 }
 </script>"""
 
-    # Stats
-    cstat = get_db()
-    total_tarama = cstat.execute("SELECT COUNT(*) FROM stok_hareketleri").fetchone()[0] or 0
-    total_urun   = cstat.execute("SELECT COUNT(*) FROM urunler").fetchone()[0] or 0
-    total_skt    = cstat.execute("SELECT COUNT(*) FROM urunler WHERE stt IS NOT NULL AND stt != ''").fetchone()[0] or 0
-    cstat.close()
+    content = f"""
+{kamera_js}
+<div class="scan-wrap">
+  <div class="page-title">📷 Barkod Tarama</div>
+  {alert_html}
 
-    tarama_css = """
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<style>
-.main{padding:0;max-width:100%}
-#tc{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5}
-.tp{position:relative;z-index:1;min-height:calc(100vh - 58px);display:grid;grid-template-columns:1fr 500px 1fr;gap:0;padding:48px 40px;align-items:start}
-.tl{padding-right:32px}
-.tr{padding-left:32px}
-.tey{font-family:'JetBrains Mono',monospace;font-size:.6rem;letter-spacing:4px;text-transform:uppercase;color:#2d5a3d;margin-bottom:28px;display:flex;align-items:center;gap:10px}
-.tey::before{content:'';display:block;width:20px;height:1px;background:#22c55e}
-.tst{margin-bottom:24px;border-left:2px solid #1a3d24;padding-left:16px;transition:border-color .3s}
-.tst:hover{border-left-color:#22c55e}
-.tsn{font-family:'Bebas Neue',cursive;font-size:3rem;line-height:1;letter-spacing:-1px;color:#22c55e;display:block}
-.tsl{font-size:.65rem;letter-spacing:2px;text-transform:uppercase;color:#2d5a3d;margin-top:2px;display:block}
-.tmq{margin-top:40px;padding:18px;border:1px solid #1a3d24;background:rgba(13,20,16,.6);font-size:.8rem;line-height:1.75;color:#6ee7b7;font-style:italic}
-.tmq em{color:#22c55e;font-style:normal;font-weight:700}
-.ttl{font-family:'Bebas Neue',cursive;font-size:3.5rem;letter-spacing:2px;line-height:1;color:#d1fae5;margin-bottom:4px;display:flex;align-items:center;gap:12px}
-.tsub{font-family:'JetBrains Mono',monospace;font-size:.65rem;letter-spacing:3px;text-transform:uppercase;color:#2d5a3d;margin-bottom:28px}
-.tbox{background:rgba(13,20,16,.85);border:1px solid #1a3d24;border-top:2px solid #22c55e;padding:24px;position:relative;overflow:hidden}
-.tbox::before{content:'';position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,#22c55e,transparent);animation:tsh 3s ease-in-out infinite}
-@keyframes tsh{0%,100%{opacity:.3}50%{opacity:1}}
-.tinp{width:100%;background:#080d0a;border:1px solid #1a3d24;color:#d1fae5;padding:14px 16px;font-family:'JetBrains Mono',monospace;font-size:1rem;letter-spacing:3px;text-align:center;transition:border-color .2s,box-shadow .2s;margin:0}
-.tinp:focus{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.12);outline:none}
-.tinp::placeholder{color:#2d5a3d;letter-spacing:2px;font-size:.85rem}
-.trow{display:flex;gap:8px;margin-bottom:10px}
-.tokut{background:#22c55e;color:#080d0a;border:none;padding:14px 22px;font-family:'Bebas Neue',cursive;font-size:1.1rem;letter-spacing:2px;cursor:pointer;clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px));transition:background .2s,transform .15s;white-space:nowrap}
-.tokut:hover{background:#4ade80;transform:translateY(-2px)}
-.tkbtn{width:100%;background:transparent;border:1px solid #1a3d24;color:#6ee7b7;padding:11px;font-family:'JetBrains Mono',monospace;font-size:.72rem;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
-.tkbtn:hover{border-color:#22c55e;color:#22c55e;background:rgba(34,197,94,.04)}
-.ttip{border:1px solid #1a3d24;background:rgba(13,20,16,.6);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;transition:border-color .3s}
-.ttip:hover{border-color:#22c55e}
-.ttip::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#22c55e,transparent);transform:scaleX(0);transform-origin:left;transition:transform .4s cubic-bezier(.16,1,.3,1)}
-.ttip:hover::after{transform:scaleX(1)}
-.ttn{font-family:'JetBrains Mono',monospace;font-size:.6rem;letter-spacing:3px;color:#22c55e;margin-bottom:6px;display:block}
-.ttt{font-size:.8rem;line-height:1.65;color:#6ee7b7}
-.ttt strong{color:#d1fae5}
-@media(max-width:900px){
-  .tp{grid-template-columns:1fr;padding:20px}
-  .tl,.tr{display:none}
-  .ttl{font-size:2.4rem}
-}
-</style>"""
-
-    tarama_canvas_js = """
-<canvas id="tc"></canvas>
-<script>
-(function(){
-  var cv=document.getElementById('tc'),ctx=cv.getContext('2d'),W,H;
-  function rsz(){W=cv.width=window.innerWidth;H=cv.height=window.innerHeight;}
-  rsz();window.addEventListener('resize',rsz);
-  var bars=[];
-  for(var i=0;i<16;i++)bars.push({x:Math.random()*W,y:Math.random()*H,w:60+Math.random()*110,h:16+Math.random()*10,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.2,a:.03+Math.random()*.05,s:Math.floor(8+Math.random()*14)});
-  var dots=[];
-  for(var j=0;j<60;j++)dots.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.4,vy:(Math.random()-.5)*.4,r:Math.random()*1.5+.5,a:Math.random()*.25+.05});
-  var mX=-999,mY=-999;
-  window.addEventListener('mousemove',function(e){mX=e.clientX;mY=e.clientY;});
-  function draw(){
-    ctx.clearRect(0,0,W,H);
-    bars.forEach(function(b){
-      b.x+=b.vx;b.y+=b.vy;
-      if(b.x<-200)b.x=W+100;if(b.x>W+200)b.x=-100;
-      if(b.y<-100)b.y=H+50;if(b.y>H+100)b.y=-50;
-      ctx.save();ctx.globalAlpha=b.a;
-      ctx.fillStyle='rgba(34,197,94,.1)';ctx.fillRect(b.x,b.y,b.w,b.h);
-      ctx.fillStyle='rgba(34,197,94,.5)';
-      var sw=b.w/(b.s*2);
-      for(var s=0;s<b.s;s++)ctx.fillRect(b.x+s*sw*2,b.y+2,sw*.7,b.h-4);
-      ctx.restore();
-    });
-    dots.forEach(function(d){
-      d.x+=d.vx;d.y+=d.vy;
-      if(d.x<0||d.x>W)d.vx*=-1;if(d.y<0||d.y>H)d.vy*=-1;
-      ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,Math.PI*2);
-      ctx.fillStyle='rgba(34,197,94,'+d.a+')';ctx.fill();
-    });
-    for(var i=0;i<dots.length;i++){
-      var dx=dots[i].x-mX,dy=dots[i].y-mY,dist=Math.sqrt(dx*dx+dy*dy);
-      if(dist<160){ctx.beginPath();ctx.moveTo(dots[i].x,dots[i].y);ctx.lineTo(mX,mY);ctx.strokeStyle='rgba(34,197,94,'+((1-dist/160)*.18)+')';ctx.lineWidth=.5;ctx.stroke();}
-    }
-    requestAnimationFrame(draw);
-  }
-  draw();
-})();
-</script>"""
-
-    tarama_counter_js = (
-        "<script>"
-        "function anC(el,v){var t0=performance.now(),dur=1600;"
-        "(function tick(now){var p=Math.min((now-t0)/dur,1),e=1-Math.pow(1-p,4);"
-        "el.textContent=Math.floor(e*v);if(p<1)requestAnimationFrame(tick);"
-        "else el.textContent=v;})(t0);}"
-        "anC(document.getElementById('an-tar')," + str(total_tarama) + ");"
-        "anC(document.getElementById('an-urun')," + str(total_urun) + ");"
-        "anC(document.getElementById('an-skt')," + str(total_skt) + ");"
-        "</script>"
-    )
-
-    tarama_html = (
-        tarama_css
-        + tarama_canvas_js
-        + """
-<div class="tp">
-  <div class="tl">
-    <div class="tey">Sistem Durumu</div>
-    <div class="tst"><span class="tsn" id="an-tar">0</span><span class="tsl">Toplam Tarama</span></div>
-    <div class="tst"><span class="tsn" id="an-urun">0</span><span class="tsl">Kayitli Urun</span></div>
-    <div class="tst"><span class="tsn" id="an-skt">0</span><span class="tsl">SKT Takipli</span></div>
-    <div class="tmq">"The most devastating waste is caused not by scarcity - but by <em>ignorance of the simplest information.</em>"</div>
-  </div>
-  <div>
-    <div class="ttl"><span>&#128247;</span> TARAMA</div>
-    <div class="tsub">Barkod Okuma - NexStock</div>
-"""
-        + alert_html
-        + """
-    <div class="tbox">
-      <div id="kam-alan" style="display:none;margin-bottom:12px">
-        <div class="kamera-box"><div id="interactive"></div><div class="kamera-overlay"></div></div>
-        <div id="kam-durum" style="text-align:center;color:#6ee7b7;font-size:.78rem;padding:6px 0;font-family:monospace;letter-spacing:2px">BARKODU CERCEVE ICINE GETIRIN</div>
-        <button onclick="kameraKapat()" class="tkbtn" style="border-color:#e05252;color:#e05252;margin-top:6px">X KAMERAYI KAPAT</button>
-      </div>
-      <form method="POST" id="barkod-form">
-        <div class="trow">
-          <input name="barkod" id="barkod-input" class="tinp" placeholder="Barkod numarasi..." autofocus autocomplete="off">
-          <button type="submit" class="tokut">OKUT</button>
-        </div>
-        <button type="button" onclick="kameraAc()" class="tkbtn">&#128247; KAMERA ILE TARA</button>
-      </form>
+  <div id="kam-alan" style="display:none;margin-bottom:12px">
+    <div class="kamera-box">
+      <div id="interactive"></div>
+      <div class="kamera-overlay"></div>
     </div>
-"""
-        + sonuc_html
-        + """
+    <div id="kam-durum" style="text-align:center;color:#a3a3a3;font-size:.88rem;padding:6px 0">Barkodu cerceve icine getirin...</div>
+    <button onclick="kameraKapat()" class="btn btn-red" style="width:100%;margin-top:6px">✕ Kamerayi Kapat</button>
   </div>
-  <div class="tr">
-    <div class="tey">Hizli Rehber</div>
-    <div class="ttip"><span class="ttn">01 - TARAMA</span><div class="ttt">Barkodu kutuya yazin veya <strong>kamera ile tarayin.</strong></div></div>
-    <div class="ttip"><span class="ttn">02 - SKT UYARISI</span><div class="ttt">Son kullanma tarihi <strong>7 gunden az</strong> kalan urunler otomatik uyari verir.</div></div>
-    <div class="ttip"><span class="ttn">03 - YENI URUN</span><div class="ttt">Bilinmeyen barkodlar <strong>Open Food Facts</strong>'ten otomatik sorgulanir.</div></div>
-    <div class="ttip"><span class="ttn">04 - ROL SISTEMI</span><div class="ttt">Her rol <strong>kendi yetkisine</strong> gore islem yapabilir.</div></div>
-  </div>
-</div>
-"""
-        + tarama_counter_js
-    )
 
-    content = kamera_js + tarama_html
+  <form method="POST" id="barkod-form">
+    <div class="scan-input-row">
+      <input name="barkod" id="barkod-input" placeholder="Barkod numarasi..." autofocus autocomplete="off">
+      <button type="submit" class="btn btn-green" style="white-space:nowrap;padding:9px 18px">OKUT</button>
+    </div>
+    <button type="button" onclick="kameraAc()" class="btn btn-muted" style="width:100%">📷 Kamera ile Tara</button>
+  </form>
+
+  {sonuc_html}
+</div>"""
     return render(content, page="tarama", title="Tarama")
 
 # ═══════════════════════════════════════════════════
@@ -812,11 +898,11 @@ def urunler():
         gun = kalan_gun(u.get("stt"))
         rc  = stt_renk(gun)
         et  = stt_etiket(gun) if u.get("stt") else "—"
-        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#6ee7b7">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#6ee7b7">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#2d5a3d">{u.get("min_stok",5)}</td><td style="color:#22c55e">{float(u.get("fiyat",0)):.2f} TL</td></tr>'
+        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#525252">{u.get("min_stok",5)}</td><td style="color:#ffffff">{float(u.get("fiyat",0)):.2f} TL</td></tr>'
 
     content = f"""
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-  <div class="page-title" style="margin:0">Urunler <span style="color:#2d5a3d;font-size:.9rem">({len(liste)})</span></div>
+  <div class="page-title" style="margin:0">Urunler <span style="color:#525252;font-size:.9rem">({len(liste)})</span></div>
   <form method="get" style="display:flex;gap:8px">
     <input name="ara" value="{ara}" placeholder="Urun ara..." style="width:200px;margin:0">
     <button type="submit" class="btn btn-muted">Ara</button>
@@ -842,7 +928,7 @@ def hareketler():
     rows = ""
     for h in liste:
         cls = "green" if h["hareket_tipi"]=="Giris" else "red" if h["hareket_tipi"] in ["Cikis","Okutma"] else ""
-        rows += f'<tr><td style="color:#2d5a3d">{h["hareket_id"]}</td><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td style="font-family:monospace;font-size:.82rem;color:#6ee7b7">{h.get("barkod","—")}</td><td style="font-weight:700">{h["miktar"]}</td><td style="color:#6ee7b7">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
+        rows += f'<tr><td style="color:#525252">{h["hareket_id"]}</td><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{h.get("barkod","—")}</td><td style="font-weight:700">{h["miktar"]}</td><td style="color:#a3a3a3">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
 
     content = f"""
 <div class="page-title">Hareket Gecmisi</div>
@@ -889,9 +975,9 @@ def raporlar():
   <div class="panel">
     <h2>API Endpointleri</h2>
     <div class="tbl-wrap"><table>
-      <tr><td><a href="/api/stats" style="color:#22c55e">/api/stats</a></td><td class="muted">Dashboard istatistikleri</td></tr>
-      <tr><td><a href="/api/urunler" style="color:#22c55e">/api/urunler</a></td><td class="muted">Tum urunler JSON</td></tr>
-      <tr><td><a href="/api/hareketler" style="color:#22c55e">/api/hareketler</a></td><td class="muted">Son hareketler JSON</td></tr>
+      <tr><td><a href="/api/stats" style="color:#ffffff">/api/stats</a></td><td class="muted">Dashboard istatistikleri</td></tr>
+      <tr><td><a href="/api/urunler" style="color:#ffffff">/api/urunler</a></td><td class="muted">Tum urunler JSON</td></tr>
+      <tr><td><a href="/api/hareketler" style="color:#ffffff">/api/hareketler</a></td><td class="muted">Son hareketler JSON</td></tr>
     </table></div>
   </div>
 </div>"""
@@ -909,12 +995,12 @@ def kullanicilar():
     liste = [dict(r) for r in c.execute(
         "SELECT id,kullanici_adi,tam_ad,rol,aktif,son_giris FROM kullanicilar ORDER BY tam_ad").fetchall()]
     c.close()
-    RC = {"admin":"#22c55e","mudur":"#34d399","kasiyer":"#86efac","goruntuleyici":"#6ee7b7"}
+    RC = {"admin":"#ffffff","mudur":"#34d399","kasiyer":"#86efac","goruntuleyici":"#a3a3a3"}
     rows = ""
     for u in liste:
-        rc  = RC.get(u["rol"],"#6ee7b7")
+        rc  = RC.get(u["rol"],"#a3a3a3")
         akt = '<span class="green">✓ Aktif</span>' if u["aktif"] else '<span class="red">✗ Pasif</span>'
-        rows += f'<tr><td style="font-weight:600">{u["kullanici_adi"]}</td><td>{u.get("tam_ad","—")}</td><td style="color:{rc};font-weight:700">{u["rol"].upper()}</td><td>{akt}</td><td style="color:#6ee7b7">{str(u.get("son_giris","—"))[:16]}</td></tr>'
+        rows += f'<tr><td style="font-weight:600">{u["kullanici_adi"]}</td><td>{u.get("tam_ad","—")}</td><td style="color:{rc};font-weight:700">{u["rol"].upper()}</td><td>{akt}</td><td style="color:#a3a3a3">{str(u.get("son_giris","—"))[:16]}</td></tr>'
 
     content = f"""
 <div class="page-title">Kullanicilar</div>
