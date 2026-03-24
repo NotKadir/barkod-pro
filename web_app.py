@@ -8,7 +8,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "nexstock_secret_2024")
 DB_NAME = os.environ.get("DB_PATH", "envanter_pro.db")
 
 # ═══════════════════════════════════════════════════
-#  VERİTABANI
+#  VERİTABANIrr
 # ═══════════════════════════════════════════════════
 def get_db():
     c = sqlite3.connect(DB_NAME)
@@ -711,11 +711,71 @@ function sktPanelAc(){{ document.getElementById('skt-panel').style.display='bloc
 function sktPanelKapat(){{ document.getElementById('skt-panel').style.display='none'; }}
 </script>"""
 
-    # Kamera JS (Quagga - dogruluk icin 3 tutarli okuma)
+    # ── Son taranan urunler ──
+    son_tarananlar_html = ""
+    try:
+        c = get_db()
+        son_list = c.execute("""
+            SELECT DISTINCT sh.barkod, sh.urun_adi, u.kategori, u.stok_adedi, u.stt,
+                   MAX(sh.tarih) as son_tarih
+            FROM stok_hareketleri sh
+            LEFT JOIN urunler u ON sh.barkod = u.barkod
+            WHERE sh.hareket_tipi = 'Okutma'
+            GROUP BY sh.barkod
+            ORDER BY son_tarih DESC
+            LIMIT 5
+        """).fetchall()
+        c.close()
+        if son_list:
+            cards = ""
+            for i, s in enumerate(son_list):
+                s = dict(s)
+                gun = kalan_gun(s.get("stt"))
+                rc = stt_renk(gun)
+                et = stt_etiket(gun)
+                skt_badge = f'<span style="font-size:.62rem;padding:3px 8px;background:{rc}18;color:{rc};border:1px solid {rc}44;font-family:JetBrains Mono,monospace;letter-spacing:1px">{et}</span>'
+                cards += f'''<a href="/tarama?barkod={s["barkod"]}" class="son-card" style="animation-delay:{i*0.08}s">
+                  <div class="son-card-top">
+                    <div class="son-card-name">{s["urun_adi"]}</div>
+                    {skt_badge}
+                  </div>
+                  <div class="son-card-bottom">
+                    <span class="son-card-barkod">{s["barkod"]}</span>
+                    <span class="son-card-stok">{s.get("stok_adedi",0)} adet</span>
+                  </div>
+                </a>'''
+            son_tarananlar_html = f'''
+<div class="son-tarananlar">
+  <div class="son-baslik">
+    <span style="color:var(--muted);font-family:JetBrains Mono,monospace;font-size:.68rem;letter-spacing:2px;text-transform:uppercase">Son Tarananlar</span>
+  </div>
+  <div class="son-grid">{cards}</div>
+</div>'''
+    except Exception:
+        pass
+
+    # ── Toplam istatistik ──
+    stats_html = ""
+    try:
+        c = get_db()
+        toplam = c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0]
+        dusuk = c.execute("SELECT COUNT(*) FROM urunler WHERE stok_adedi <= min_stok").fetchone()[0]
+        bugun_scan = c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE hareket_tipi='Okutma' AND date(tarih)=date('now')").fetchone()[0]
+        c.close()
+        stats_html = f'''
+<div class="mini-stats">
+  <div class="ms-card" style="animation-delay:.05s"><div class="ms-val">{toplam}</div><div class="ms-lbl">Toplam Urun</div></div>
+  <div class="ms-card" style="animation-delay:.1s"><div class="ms-val" style="color:#e05252">{dusuk}</div><div class="ms-lbl">Dusuk Stok</div></div>
+  <div class="ms-card" style="animation-delay:.15s"><div class="ms-val">{bugun_scan}</div><div class="ms-lbl">Bugun Tarama</div></div>
+</div>'''
+    except Exception:
+        pass
+
+    # Kamera JS — siki dogrulama ile
     kamera_js = """
 <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 <script>
-// ── SES SİSTEMİ ──────────────────────────────
+// ── SES SISTEMI ──────────────────────────────
 var _ctx = null;
 function _getCtx(){ if(!_ctx) _ctx = new (window.AudioContext||window.webkitAudioContext)(); return _ctx; }
 function beep(frekans, sure, tip){
@@ -737,7 +797,6 @@ function sesHata(){ beep(400, 200, 'sawtooth'); setTimeout(function(){ beep(300,
 function sesSkt(gun){
   if(gun === null) return;
   if(gun < 0){
-    // Tarihi gecmis — rahatsiz edici alarm (5 kez yukari-asagi)
     var t = 0;
     for(var i=0; i<5; i++){
       (function(i){
@@ -751,7 +810,6 @@ function sesSkt(gun){
   else if(gun === 0){ beep(1000, 400, 'square'); }
   else if(gun <= 3){ beep(900, 250, 'sine'); }
 }
-// Sayfa yüklenince SKT sesi çal
 window.addEventListener('DOMContentLoaded', function(){
   var sktEl = document.getElementById('skt-gun-data');
   if(sktEl){
@@ -765,23 +823,50 @@ window.addEventListener('DOMContentLoaded', function(){
     else if(tip==='error') setTimeout(function(){ sesHata(); }, 200);
   }
 });
+
+// ── BARKOD DOGRULAMA ─────────────────────────
+function gecerliBarkod(kod, format){
+  if(format && (format.indexOf('ean')!==-1 || format.indexOf('upc')!==-1)){
+    if(!/^\\d+$/.test(kod)) return false;
+  }
+  if(format==='ean_13' && kod.length!==13) return false;
+  if(format==='ean_8' && kod.length!==8) return false;
+  if(format==='upc_a' && kod.length!==12) return false;
+  if(format==='upc_e' && kod.length!==8) return false;
+  if(format==='ean_13' && kod.length===13){
+    var t=0;
+    for(var i=0;i<12;i++) t+=parseInt(kod[i])*(i%2===0?1:3);
+    if((10-t%10)%10!==parseInt(kod[12])) return false;
+  }
+  if(format==='ean_8' && kod.length===8){
+    var t=0;
+    for(var i=0;i<7;i++) t+=parseInt(kod[i])*(i%2===0?3:1);
+    if((10-t%10)%10!==parseInt(kod[7])) return false;
+  }
+  return true;
+}
+
 // ── KAMERA ───────────────────────────────────
 var _aktif=false, _sayac={}, _son="", _sonT=0;
 
 function kameraAc(){
   document.getElementById('kam-alan').style.display='block';
+  var idleEl = document.getElementById('idle-hero');
+  if(idleEl) idleEl.style.display='none';
   _aktif=true; _sayac={}; _son="";
+
   Quagga.init({
     inputStream:{
       name:"Live", type:"LiveStream",
       target:document.querySelector('#interactive'),
       constraints:{facingMode:"environment",width:{ideal:1280},height:{ideal:720}}
     },
-    locator:{patchSize:"medium",halfSample:true},
-    numOfWorkers:2,
-    frequency:15,
+    locator:{patchSize:"large",halfSample:false},
+    numOfWorkers:navigator.hardwareConcurrency||4,
+    frequency:10,
     decoder:{
-      readers:["ean_reader","ean_8_reader","code_128_reader","upc_reader","upc_e_reader"]
+      readers:["ean_reader","ean_8_reader","upc_reader","upc_e_reader","code_128_reader"],
+      multiple:false
     },
     locate:true
   }, function(err){
@@ -798,24 +883,31 @@ function kameraAc(){
 
   Quagga.onDetected(function(res){
     var kod = res.codeResult.code;
-    // Hata orani filtresi
+    var format = res.codeResult.format;
+
+    // 1) Siki hata orani filtresi
     var hatalar = res.codeResult.decodedCodes.filter(function(x){return x.error!==undefined;});
     var toplamHata = hatalar.reduce(function(a,b){return a+b.error;},0);
-    if(hatalar.length > 0 && toplamHata/hatalar.length > 0.12) return;
+    if(hatalar.length > 0 && toplamHata/hatalar.length > 0.06) return;
 
-    // EAN-13 uzunluk kontrolu
-    if(res.codeResult.format==="ean_13" && kod.length!==13) return;
+    // 2) Barkod dogrulama (checksum + uzunluk + rakam)
+    if(!gecerliBarkod(kod, format)) return;
 
+    // 3) Tutarlilik — 5 kez ayni kod
     _sayac[kod] = (_sayac[kod]||0)+1;
-    document.getElementById('kam-durum').innerText='Okuma: '+kod+' ('+_sayac[kod]+'/3)';
+    document.getElementById('kam-durum').innerText='Okuma: '+kod+' ('+_sayac[kod]+'/5)';
+    document.getElementById('kam-durum').style.color='rgba(165,216,255,.8)';
 
-    if(_sayac[kod]>=3){
+    // Gurultu temizleme
+    if(Object.keys(_sayac).length > 8){ _sayac={}; return; }
+
+    if(_sayac[kod]>=5){
       var simdi=Date.now();
-      if(kod===_son && simdi-_sonT<2000) return;
+      if(kod===_son && simdi-_sonT<3000) return;
       _son=kod; _sonT=simdi; _sayac={};
 
       document.getElementById('kam-durum').innerText='OKUNDU: '+kod;
-      document.getElementById('kam-durum').style.color='#ffffff';
+      document.getElementById('kam-durum').style.color='#4ade80';
       sesOkundu();
       Quagga.stop(); _aktif=false;
 
@@ -823,7 +915,7 @@ function kameraAc(){
       setTimeout(function(){
         document.getElementById('kam-alan').style.display='none';
         document.getElementById('barkod-form').submit();
-      },500);
+      },600);
     }
   });
 }
@@ -831,13 +923,122 @@ function kameraAc(){
 function kameraKapat(){
   if(_aktif){try{Quagga.stop();}catch(e){} _aktif=false;}
   document.getElementById('kam-alan').style.display='none';
+  var idleEl = document.getElementById('idle-hero');
+  if(idleEl) idleEl.style.display='';
 }
+</script>"""
+
+    # ── Idle hero (animasyonlu barkod gorseli — bos sayfa icin) ──
+    idle_hero = "" if sonuc_html else """
+<div id="idle-hero" class="idle-hero">
+  <canvas id="barcode-canvas" width="400" height="140"></canvas>
+  <div class="idle-text">Barkodu okutun veya kamerayi acin</div>
+  <div class="idle-sub">EAN-13 &middot; EAN-8 &middot; UPC-A &middot; Code 128</div>
+</div>
+<script>
+(function(){
+  var c=document.getElementById('barcode-canvas');
+  if(!c) return;
+  var ctx=c.getContext('2d');
+  var W=c.width, H=c.height;
+  var bars=[];
+  for(var i=0;i<55;i++){
+    bars.push({
+      x: 24 + (i/55)*(W-48),
+      w: Math.random()>0.5 ? 2 : 3,
+      h: 70 + Math.random()*40,
+      delay: Math.random()*2,
+      speed: .4+Math.random()*.5
+    });
+  }
+  var t=0;
+  function draw(){
+    t+=0.016;
+    ctx.clearRect(0,0,W,H);
+    for(var i=0;i<bars.length;i++){
+      var b=bars[i];
+      var phase=Math.sin(t*b.speed+b.delay)*0.3+0.7;
+      ctx.fillStyle='rgba(255,255,255,'+(phase*0.2)+')';
+      ctx.fillRect(b.x, (H-b.h)/2, b.w, b.h);
+    }
+    var scanY = H*0.15 + (H*0.7)*((Math.sin(t*1.2)+1)/2);
+    ctx.strokeStyle='rgba(165,216,255,0.45)';
+    ctx.lineWidth=1;
+    ctx.shadowColor='rgba(165,216,255,0.7)';
+    ctx.shadowBlur=10;
+    ctx.beginPath();ctx.moveTo(18,scanY);ctx.lineTo(W-18,scanY);ctx.stroke();
+    ctx.shadowBlur=0;
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
 </script>"""
 
     content = f"""
 {kamera_js}
+<style>
+.idle-hero{{
+  text-align:center;margin:28px 0 24px;padding:24px 0;
+  border:1px solid var(--border);background:var(--card);
+  position:relative;overflow:hidden;
+  animation:resultIn .6s cubic-bezier(.16,1,.3,1) both;
+}}
+.idle-hero canvas{{display:block;margin:0 auto;opacity:.8}}
+.idle-text{{
+  font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:3px;
+  color:var(--sub);margin-top:14px;
+}}
+.idle-sub{{
+  font-family:'JetBrains Mono',monospace;font-size:.58rem;letter-spacing:2px;
+  color:var(--muted);margin-top:5px;text-transform:uppercase;
+}}
+.idle-hero::before{{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,rgba(165,216,255,.6),transparent);
+  animation:gradientSlide 3s ease-in-out infinite;background-size:200% 100%;
+}}
+.son-tarananlar{{margin-top:24px;animation:resultIn .5s .15s cubic-bezier(.16,1,.3,1) both}}
+.son-baslik{{margin-bottom:10px}}
+.son-grid{{display:flex;flex-direction:column;gap:5px}}
+.son-card{{
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;
+  padding:13px 16px;background:var(--card);border:1px solid var(--border);
+  text-decoration:none;color:var(--text);
+  transition:all .3s cubic-bezier(.16,1,.3,1);
+  animation:alertIn .4s cubic-bezier(.16,1,.3,1) both;
+  position:relative;overflow:hidden;
+}}
+.son-card::after{{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--g),transparent);
+  transform:scaleX(0);transition:transform .4s cubic-bezier(.16,1,.3,1);
+}}
+.son-card:hover{{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.1);transform:translateX(4px)}}
+.son-card:hover::after{{transform:scaleX(1)}}
+.son-card-top{{display:flex;align-items:center;gap:10px;flex:1;min-width:0}}
+.son-card-name{{
+  font-family:'Syne',sans-serif;font-size:.85rem;font-weight:700;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}}
+.son-card-bottom{{display:flex;align-items:center;gap:12px}}
+.son-card-barkod{{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--muted);letter-spacing:1px}}
+.son-card-stok{{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--sub);letter-spacing:1px}}
+.mini-stats{{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+  background:var(--border);margin-bottom:20px;
+}}
+.ms-card{{
+  background:var(--card);padding:16px 12px;text-align:center;
+  transition:all .3s cubic-bezier(.16,1,.3,1);
+  animation:resultIn .4s cubic-bezier(.16,1,.3,1) both;
+}}
+.ms-card:hover{{background:rgba(255,255,255,.03)}}
+.ms-val{{font-family:'Bebas Neue',sans-serif;font-size:2rem;line-height:1;color:var(--g)}}
+.ms-lbl{{font-family:'JetBrains Mono',monospace;font-size:.58rem;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-top:4px}}
+</style>
 <div class="scan-wrap">
-  <div class="page-title">📷 Barkod Tarama</div>
+  <div class="page-title">Barkod Tarama</div>
+  {stats_html}
   {alert_html}
 
   <div id="kam-alan" style="display:none;margin-bottom:12px">
@@ -845,8 +1046,8 @@ function kameraKapat(){
       <div id="interactive"></div>
       <div class="kamera-overlay"></div>
     </div>
-    <div id="kam-durum" style="text-align:center;color:#a3a3a3;font-size:.88rem;padding:6px 0">Barkodu cerceve icine getirin...</div>
-    <button onclick="kameraKapat()" class="btn btn-red" style="width:100%;margin-top:6px">✕ Kamerayi Kapat</button>
+    <div id="kam-durum" style="text-align:center;color:#a3a3a3;font-size:.85rem;padding:8px 0;font-family:JetBrains Mono,monospace;letter-spacing:1px">Barkodu cerceve icine getirin...</div>
+    <button onclick="kameraKapat()" class="btn btn-red" style="width:100%;margin-top:6px">Kamerayi Kapat</button>
   </div>
 
   <form method="POST" id="barkod-form">
@@ -854,10 +1055,12 @@ function kameraKapat(){
       <input name="barkod" id="barkod-input" placeholder="Barkod numarasi..." autofocus autocomplete="off">
       <button type="submit" class="btn btn-green" style="white-space:nowrap;padding:9px 18px">OKUT</button>
     </div>
-    <button type="button" onclick="kameraAc()" class="btn btn-muted" style="width:100%">📷 Kamera ile Tara</button>
+    <button type="button" onclick="kameraAc()" class="btn btn-muted" style="width:100%">Kamera ile Tara</button>
   </form>
 
+  {idle_hero}
   {sonuc_html}
+  {son_tarananlar_html}
 </div>"""
     return render(content, page="tarama", title="Tarama")
 
