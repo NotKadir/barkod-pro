@@ -661,7 +661,7 @@ document.addEventListener('DOMContentLoaded',function(){
   var msgs=['INITIALIZING','LOADING ASSETS','CONNECTING DB','CALIBRATING','SYSTEM READY'];
   var pct=0;
   var iv=setInterval(function(){
-    pct+=Math.random()*6+3;
+    pct+=Math.random()*2+1;
     if(pct>100) pct=100;
     if(ldBar) ldBar.style.width=pct+'%';
     if(ldPct) ldPct.textContent=Math.floor(pct)+'%';
@@ -673,10 +673,10 @@ document.addEventListener('DOMContentLoaded',function(){
       setTimeout(function(){
         if(loader) loader.classList.add('phase-out');
         window._stopLoaderCanvas&&window._stopLoaderCanvas();
-        setTimeout(function(){ if(loader) loader.style.display='none'; },1000);
-      },250);
+        setTimeout(function(){ if(loader) loader.style.display='none'; },1200);
+      },300);
     }
-  },50);
+  },40);
 });
 </script>
 </head>
