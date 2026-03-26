@@ -283,7 +283,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;
   animation:ldRule .8s 1s cubic-bezier(.16,1,.3,1) forwards;
 }
 @keyframes ldRule{to{width:260px}}
-.ld-status{display:flex;align-items:center;gap:14px;opacity:0;animation:ldFade .5s 1.2s forwards}
+.ld-status{display:flex;align-items:center;gap:14px;opacity:0;animation:ldFade .3s .1s forwards}
 @keyframes ldFade{to{opacity:1}}
 .ld-pct{
   font-family:'JetBrains Mono',monospace;
@@ -661,7 +661,7 @@ document.addEventListener('DOMContentLoaded',function(){
   var msgs=['INITIALIZING','LOADING ASSETS','CONNECTING DB','CALIBRATING','SYSTEM READY'];
   var pct=0;
   var iv=setInterval(function(){
-    pct+=Math.random()*2+1;
+    pct+=Math.random()*2.5+1.5;
     if(pct>100) pct=100;
     if(ldBar) ldBar.style.width=pct+'%';
     if(ldPct) ldPct.textContent=Math.floor(pct)+'%';
@@ -673,8 +673,8 @@ document.addEventListener('DOMContentLoaded',function(){
       setTimeout(function(){
         if(loader) loader.classList.add('phase-out');
         window._stopLoaderCanvas&&window._stopLoaderCanvas();
-        setTimeout(function(){ if(loader) loader.style.display='none'; },1200);
-      },300);
+        setTimeout(function(){ if(loader) loader.style.display='none'; },1000);
+      },200);
     }
   },40);
 });
