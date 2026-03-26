@@ -33,13 +33,20 @@ def init_db():
         barkod TEXT PRIMARY KEY,
         urun_adi TEXT NOT NULL,
         kategori TEXT DEFAULT 'Genel',
-        stt DATE,
-        stok_adedi INTEGER DEFAULT 0,
         min_stok INTEGER DEFAULT 5,
         fiyat REAL DEFAULT 0.0,
         aciklama TEXT,
         eklenme_tarihi DATETIME DEFAULT CURRENT_TIMESTAMP,
         son_guncelleme DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS partiler (
+        parti_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barkod TEXT NOT NULL,
+        stt DATE,
+        miktar INTEGER DEFAULT 0,
+        eklenme_tarihi DATETIME DEFAULT CURRENT_TIMESTAMP,
+        ekleyen TEXT DEFAULT 'sistem',
+        FOREIGN KEY (barkod) REFERENCES urunler(barkod)
     );
     CREATE TABLE IF NOT EXISTS stok_hareketleri (
         hareket_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,7 +76,37 @@ def init_db():
     except: pass
     c.close()
 
+def migrate_to_partiler():
+    c = get_db()
+    cols = [r[1] for r in c.execute("PRAGMA table_info(urunler)").fetchall()]
+    if "stt" not in cols:
+        c.close()
+        return
+    # Mevcut verileri partiler tablosuna aktar
+    rows = c.execute("SELECT barkod, stt, stok_adedi FROM urunler").fetchall()
+    for r in rows:
+        if r[1] or r[2]:
+            c.execute("INSERT INTO partiler (barkod, stt, miktar, ekleyen) VALUES (?,?,?,?)",
+                      (r[0], r[1], r[2] if r[2] else 0, "migrasyon"))
+    # Tabloyu yeniden olustur (stt ve stok_adedi olmadan)
+    c.execute("""CREATE TABLE urunler_new (
+        barkod TEXT PRIMARY KEY,
+        urun_adi TEXT NOT NULL,
+        kategori TEXT DEFAULT 'Genel',
+        min_stok INTEGER DEFAULT 5,
+        fiyat REAL DEFAULT 0.0,
+        aciklama TEXT,
+        eklenme_tarihi DATETIME DEFAULT CURRENT_TIMESTAMP,
+        son_guncelleme DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""")
+    c.execute("INSERT INTO urunler_new SELECT barkod, urun_adi, kategori, min_stok, fiyat, aciklama, eklenme_tarihi, son_guncelleme FROM urunler")
+    c.execute("DROP TABLE urunler")
+    c.execute("ALTER TABLE urunler_new RENAME TO urunler")
+    c.commit()
+    c.close()
+
 init_db()
+migrate_to_partiler()
 
 # ═══════════════════════════════════════════════════
 #  YARDIMCI
@@ -120,16 +157,32 @@ def openfoodfacts(barkod):
         except: continue
     return None, None
 
+def get_toplam_stok(c, barkod):
+    row = c.execute("SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=?", (barkod,)).fetchone()
+    return row[0]
+
+def get_en_yakin_stt(c, barkod):
+    row = c.execute("SELECT MIN(stt) FROM partiler WHERE barkod=? AND miktar>0 AND stt IS NOT NULL", (barkod,)).fetchone()
+    return row[0] if row else None
+
 def log_hareket(barkod, urun_adi, tip, miktar, aciklama, kullanici):
     c = get_db()
-    urun = c.execute("SELECT stok_adedi FROM urunler WHERE barkod=?", (barkod,)).fetchone()
-    onceki = urun["stok_adedi"] if urun else 0
+    onceki = get_toplam_stok(c, barkod)
     if tip in ("Cikis","Okutma"):
-        sonraki = max(0, onceki - miktar)
-        c.execute("UPDATE urunler SET stok_adedi=MAX(0,stok_adedi-?) WHERE barkod=?", (miktar, barkod))
+        remaining = miktar
+        partiler_rows = c.execute(
+            "SELECT parti_id, miktar FROM partiler WHERE barkod=? AND miktar>0 ORDER BY CASE WHEN stt IS NULL THEN 1 ELSE 0 END, stt ASC, eklenme_tarihi ASC",
+            (barkod,)
+        ).fetchall()
+        for p in partiler_rows:
+            if remaining <= 0:
+                break
+            azalt = min(remaining, p["miktar"])
+            c.execute("UPDATE partiler SET miktar=miktar-? WHERE parti_id=?", (azalt, p["parti_id"]))
+            remaining -= azalt
+        sonraki = get_toplam_stok(c, barkod)
     elif tip == "Giris":
         sonraki = onceki + miktar
-        c.execute("UPDATE urunler SET stok_adedi=stok_adedi+? WHERE barkod=?", (miktar, barkod))
     else:
         sonraki = onceki
     c.execute("INSERT INTO stok_hareketleri (barkod,urun_adi,hareket_tipi,miktar,onceki_stok,sonraki_stok,kullanici,aciklama) VALUES (?,?,?,?,?,?,?,?)",
@@ -608,16 +661,28 @@ def index():
     today = date.today().isoformat()
     s = {
         "toplam_urun":   c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0],
-        "toplam_stok":   c.execute("SELECT COALESCE(SUM(stok_adedi),0) FROM urunler").fetchone()[0],
-        "tarihi_gecmis": c.execute("SELECT COUNT(*) FROM urunler WHERE stt IS NOT NULL AND stt<?", (today,)).fetchone()[0],
-        "yaklasan":      c.execute("SELECT COUNT(*) FROM urunler WHERE stt IS NOT NULL AND stt>=? AND stt<=date(?,'+'||7||' days')", (today,today)).fetchone()[0],
-        "kritik":        c.execute("SELECT COUNT(*) FROM urunler WHERE stok_adedi>0 AND stok_adedi<=min_stok").fetchone()[0],
-        "stoksuz":       c.execute("SELECT COUNT(*) FROM urunler WHERE stok_adedi<=0").fetchone()[0],
+        "toplam_stok":   c.execute("SELECT COALESCE(SUM(miktar),0) FROM partiler").fetchone()[0],
+        "tarihi_gecmis": c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<? AND miktar>0", (today,)).fetchone()[0],
+        "yaklasan":      c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt>=? AND stt<=date(?,'+'||7||' days') AND miktar>0", (today,today)).fetchone()[0],
+        "kritik":        c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) > 0 AND (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= u.min_stok").fetchone()[0],
+        "stoksuz":       c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= 0").fetchone()[0],
         "bugun":         c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE DATE(tarih)=DATE('now')").fetchone()[0],
         "tedarikci":     c.execute("SELECT COUNT(*) FROM tedarikciler WHERE aktif=1").fetchone()[0],
     }
-    skt_list = [dict(r) for r in c.execute("SELECT * FROM urunler WHERE stt IS NOT NULL AND stt<=date(?,'+'||7||' days') ORDER BY stt", (today,)).fetchall()]
-    dusuk    = [dict(r) for r in c.execute("SELECT * FROM urunler WHERE stok_adedi<=min_stok ORDER BY stok_adedi LIMIT 20").fetchall()]
+    skt_list = [dict(r) for r in c.execute("""
+        SELECT u.barkod, u.urun_adi, u.kategori, p.stt,
+               COALESCE((SELECT SUM(miktar) FROM partiler WHERE barkod=u.barkod), 0) as stok_adedi
+        FROM partiler p JOIN urunler u ON p.barkod = u.barkod
+        WHERE p.stt IS NOT NULL AND p.stt <= date(?,'+'||7||' days') AND p.miktar > 0
+        GROUP BY p.barkod ORDER BY p.stt
+    """, (today,)).fetchall()]
+    dusuk = [dict(r) for r in c.execute("""
+        SELECT u.*, COALESCE(ps.toplam, 0) as stok_adedi
+        FROM urunler u
+        LEFT JOIN (SELECT barkod, SUM(miktar) as toplam FROM partiler GROUP BY barkod) ps ON u.barkod = ps.barkod
+        WHERE COALESCE(ps.toplam, 0) <= u.min_stok
+        ORDER BY COALESCE(ps.toplam, 0) LIMIT 20
+    """).fetchall()]
     son_har  = [dict(r) for r in c.execute("SELECT * FROM stok_hareketleri ORDER BY tarih DESC LIMIT 10").fetchall()]
     c.close()
 
@@ -698,25 +763,34 @@ def tarama():
     if barkod:
         c = get_db()
         urun = c.execute("SELECT * FROM urunler WHERE barkod=?", (barkod,)).fetchone()
-        c.close()
 
         if not urun:
+            c.close()
             urun_adi, kategori = openfoodfacts(barkod)
             if urun_adi:
                 c = get_db()
-                c.execute("INSERT OR REPLACE INTO urunler (barkod,urun_adi,kategori,stok_adedi) VALUES (?,?,?,?)",
-                          (barkod, urun_adi, kategori or "Genel", 30))
-                c.commit(); c.close()
+                c.execute("INSERT OR REPLACE INTO urunler (barkod,urun_adi,kategori) VALUES (?,?,?)",
+                          (barkod, urun_adi, kategori or "Genel"))
+                c.execute("INSERT INTO partiler (barkod, miktar, ekleyen) VALUES (?,?,?)",
+                          (barkod, 30, "sistem"))
+                c.commit()
                 alert_html = f'<div class="alert alert-green">✓ Yeni urun eklendi: <strong>{urun_adi}</strong> (Open Food Facts)</div>'
-                c = get_db()
                 urun = c.execute("SELECT * FROM urunler WHERE barkod=?", (barkod,)).fetchone()
-                c.close()
             else:
                 alert_html = f'<div id="alert-type" data-tip="error" style="display:none"></div><div class="alert alert-red">✗ Barkod bulunamadi: <strong>{barkod}</strong></div>'
+                c = get_db()
 
         if urun:
             urun = dict(urun)
-            gun  = kalan_gun(urun.get("stt"))
+            toplam_stok = get_toplam_stok(c, barkod)
+            en_yakin = get_en_yakin_stt(c, barkod)
+            partiler_list = [dict(r) for r in c.execute(
+                "SELECT * FROM partiler WHERE barkod=? AND miktar>0 ORDER BY CASE WHEN stt IS NULL THEN 1 ELSE 0 END, stt ASC",
+                (barkod,)
+            ).fetchall()]
+            c.close()
+
+            gun  = kalan_gun(en_yakin)
             rc   = stt_renk(gun)
             et   = stt_etiket(gun)
 
@@ -736,9 +810,41 @@ def tarama():
             if request.method == "POST":
                 log_hareket(barkod, urun["urun_adi"], "Okutma", 1,
                             "Web tarama", session.get("user","misafir"))
+                # Stok degismis olabilir, yeniden cek
+                c2 = get_db()
+                toplam_stok = get_toplam_stok(c2, barkod)
+                partiler_list = [dict(r) for r in c2.execute(
+                    "SELECT * FROM partiler WHERE barkod=? AND miktar>0 ORDER BY CASE WHEN stt IS NULL THEN 1 ELSE 0 END, stt ASC",
+                    (barkod,)
+                ).fetchall()]
+                c2.close()
+
+            # Parti satirlari
+            parti_rows = ""
+            for p in partiler_list:
+                pgun = kalan_gun(p.get("stt"))
+                prc = stt_renk(pgun)
+                pet = stt_etiket(pgun) if p.get("stt") else "SKT Yok"
+                parti_rows += f'''<tr>
+                  <td style="color:#a3a3a3;font-size:.78rem">#{p["parti_id"]}</td>
+                  <td>{p.get("stt","—")}</td>
+                  <td style="color:{prc};font-weight:600;font-size:.82rem">{pet}</td>
+                  <td style="font-weight:700">{p["miktar"]} adet</td>
+                  <td>
+                    <form method="POST" action="/parti-tukendi" style="margin:0">
+                      <input type="hidden" name="parti_id" value="{p["parti_id"]}">
+                      <input type="hidden" name="barkod" value="{barkod}">
+                      <button type="submit" class="btn btn-red" style="padding:4px 10px;font-size:.7rem">Tukendi</button>
+                    </form>
+                  </td>
+                </tr>'''
+
+            # Parti dropdown secenekleri (stok cikisi icin)
+            parti_opts = '<option value="fefo">Otomatik (FEFO)</option>'
+            for p in partiler_list:
+                parti_opts += f'<option value="{p["parti_id"]}">#{p["parti_id"]} — {p.get("stt","SKT Yok")} ({p["miktar"]} adet)</option>'
 
             skt_gun_data = f'data-gun="{gun}"' if gun is not None else 'data-gun="null"'
-            skt_btn_label = "SKT Guncelle" if urun.get("stt") else "SKT Ekle"
             sonuc_html = f"""
 <div id="skt-gun-data" {skt_gun_data} style="display:none"></div>
 <div id="alert-type" data-tip="success" style="display:none"></div>
@@ -753,36 +859,83 @@ def tarama():
   <div class="scan-body">
     <span class="scan-skt" style="background:{rc}22;color:{rc};border:1px solid {rc}55">{et}</span>
     <div style="margin-top:10px;color:#a3a3a3;font-size:.9rem">
-      Stok: <strong style="color:#f5f5f5">{urun["stok_adedi"]} adet</strong>
+      Toplam Stok: <strong style="color:#f5f5f5">{toplam_stok} adet</strong>
       &nbsp;&nbsp;|&nbsp;&nbsp;Min: {urun.get("min_stok",5)} adet
+      &nbsp;&nbsp;|&nbsp;&nbsp;Parti: <strong style="color:#f5f5f5">{len(partiler_list)}</strong>
     </div>
     {uyari}
-    <div style="margin-top:14px">
-      <button onclick="sktPanelAc()" class="btn btn-muted" style="width:100%">📅 {skt_btn_label}</button>
-      <div id="skt-panel" style="display:none;margin-top:10px">
-        <form method="POST" action="/skt-guncelle">
-          <input type="hidden" name="barkod" value="{barkod}">
-          <input type="date" name="stt" value="{urun.get('stt','')}" style="margin-bottom:8px">
-          <div style="display:flex;gap:8px">
-            <button type="submit" class="btn btn-green" style="flex:1">Kaydet</button>
-            <button type="button" onclick="sktPanelKapat()" class="btn btn-muted" style="flex:1">Iptal</button>
-          </div>
-        </form>
-      </div>
+
+    <div style="margin-top:16px">
+      <div style="font-family:JetBrains Mono,monospace;font-size:.68rem;color:#a3a3a3;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Partiler</div>
+      <div class="tbl-wrap"><table style="font-size:.85rem">
+        <tr><th>Parti</th><th>SKT</th><th>Durum</th><th>Miktar</th><th></th></tr>
+        {parti_rows or '<tr><td colspan=5 style="text-align:center;color:#525252;padding:12px">Aktif parti yok</td></tr>'}
+      </table></div>
+    </div>
+
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button onclick="partiPanelAc()" class="btn btn-muted" style="flex:1">+ Yeni Parti Ekle</button>
+      <button onclick="cikisPanelAc()" class="btn btn-muted" style="flex:1;border-color:#e05252;color:#e05252">- Stok Cikisi</button>
+    </div>
+
+    <div id="parti-panel" style="display:none;margin-top:10px;padding:14px;background:#0f0f0f;border:1px solid #1a1a1a">
+      <div style="font-family:JetBrains Mono,monospace;font-size:.65rem;color:#a3a3a3;letter-spacing:2px;margin-bottom:10px">YENI PARTI EKLE</div>
+      <form method="POST" action="/parti-ekle">
+        <input type="hidden" name="barkod" value="{barkod}">
+        <label style="font-size:.78rem;color:#a3a3a3">Son Tuketim Tarihi</label>
+        <input type="date" name="stt" style="margin-bottom:8px">
+        <label style="font-size:.78rem;color:#a3a3a3">Miktar (Adet)</label>
+        <input type="number" name="miktar" value="1" min="1" style="margin-bottom:8px">
+        <div style="display:flex;gap:8px">
+          <button type="submit" class="btn btn-green" style="flex:1">Kaydet</button>
+          <button type="button" onclick="partiPanelKapat()" class="btn btn-muted" style="flex:1">Iptal</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="cikis-panel" style="display:none;margin-top:10px;padding:14px;background:#1a0f0f;border:1px solid #3d1a1a">
+      <div style="font-family:JetBrains Mono,monospace;font-size:.65rem;color:#e05252;letter-spacing:2px;margin-bottom:10px">STOK CIKISI</div>
+      <form method="POST" action="/stok-cikis">
+        <input type="hidden" name="barkod" value="{barkod}">
+        <label style="font-size:.78rem;color:#a3a3a3">Sebep</label>
+        <select name="sebep" style="margin-bottom:8px">
+          <option>Raftan Kaldirildi</option>
+          <option>Hasarli Urun</option>
+          <option>Iade</option>
+          <option>SKT Gecmis — Imha</option>
+          <option>Diger</option>
+        </select>
+        <label style="font-size:.78rem;color:#a3a3a3">Parti Secimi</label>
+        <select name="parti_id" style="margin-bottom:8px">{parti_opts}</select>
+        <label style="font-size:.78rem;color:#a3a3a3">Miktar</label>
+        <input type="number" name="miktar" value="1" min="1" style="margin-bottom:8px">
+        <label style="font-size:.78rem;color:#a3a3a3">Aciklama (opsiyonel)</label>
+        <input type="text" name="aciklama" placeholder="Ek not..." style="margin-bottom:8px">
+        <div style="display:flex;gap:8px">
+          <button type="submit" class="btn btn-red" style="flex:1">Cikis Kaydet</button>
+          <button type="button" onclick="cikisPanelKapat()" class="btn btn-muted" style="flex:1">Iptal</button>
+        </div>
+      </form>
     </div>
   </div>
 </div>
 <script>
-function sktPanelAc(){{ document.getElementById('skt-panel').style.display='block'; }}
-function sktPanelKapat(){{ document.getElementById('skt-panel').style.display='none'; }}
+function partiPanelAc(){{ document.getElementById('parti-panel').style.display='block'; document.getElementById('cikis-panel').style.display='none'; }}
+function partiPanelKapat(){{ document.getElementById('parti-panel').style.display='none'; }}
+function cikisPanelAc(){{ document.getElementById('cikis-panel').style.display='block'; document.getElementById('parti-panel').style.display='none'; }}
+function cikisPanelKapat(){{ document.getElementById('cikis-panel').style.display='none'; }}
 </script>"""
+        else:
+            c.close()
 
     # ── Son taranan urunler ──
     son_tarananlar_html = ""
     try:
         c = get_db()
         son_list = c.execute("""
-            SELECT DISTINCT sh.barkod, sh.urun_adi, u.kategori, u.stok_adedi, u.stt,
+            SELECT sh.barkod, sh.urun_adi, u.kategori,
+                   COALESCE((SELECT SUM(miktar) FROM partiler WHERE barkod=sh.barkod), 0) as stok_adedi,
+                   (SELECT MIN(stt) FROM partiler WHERE barkod=sh.barkod AND miktar>0 AND stt IS NOT NULL) as stt,
                    MAX(sh.tarih) as son_tarih
             FROM stok_hareketleri sh
             LEFT JOIN urunler u ON sh.barkod = u.barkod
@@ -825,7 +978,7 @@ function sktPanelKapat(){{ document.getElementById('skt-panel').style.display='n
     try:
         c = get_db()
         toplam = c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0]
-        dusuk = c.execute("SELECT COUNT(*) FROM urunler WHERE stok_adedi <= min_stok").fetchone()[0]
+        dusuk = c.execute("SELECT COUNT(*) FROM urunler u WHERE COALESCE((SELECT SUM(miktar) FROM partiler WHERE barkod=u.barkod), 0) <= u.min_stok").fetchone()[0]
         bugun_scan = c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE hareket_tipi='Okutma' AND date(tarih)=date('now')").fetchone()[0]
         c.close()
         stats_html = f'''
@@ -1162,19 +1315,86 @@ function kameraKapat(){
     return render(content, page="tarama", title="Tarama")
 
 # ═══════════════════════════════════════════════════
-#  SKT GUNCELLE
+#  PARTI ISLEMLERI
 # ═══════════════════════════════════════════════════
-@app.route("/skt-guncelle", methods=["POST"])
+@app.route("/parti-ekle", methods=["POST"])
 @giris_gerekli
-def skt_guncelle():
+def parti_ekle():
     barkod = request.form.get("barkod","").strip()
-    stt    = request.form.get("stt","").strip()
-    if barkod:
+    stt = request.form.get("stt","").strip() or None
+    miktar = int(request.form.get("miktar", 1) or 1)
+    if barkod and miktar > 0:
         c = get_db()
-        c.execute("UPDATE urunler SET stt=?, son_guncelleme=CURRENT_TIMESTAMP WHERE barkod=?",
-                  (stt if stt else None, barkod))
-        c.commit(); c.close()
+        c.execute("INSERT INTO partiler (barkod, stt, miktar, ekleyen) VALUES (?,?,?,?)",
+                  (barkod, stt, miktar, session.get("user","sistem")))
+        c.commit()
+        urun = c.execute("SELECT urun_adi FROM urunler WHERE barkod=?", (barkod,)).fetchone()
+        c.close()
+        urun_adi = urun["urun_adi"] if urun else barkod
+        log_hareket(barkod, urun_adi, "Giris", miktar,
+                    f"Yeni parti eklendi (SKT: {stt or 'Belirtilmemis'})",
+                    session.get("user","misafir"))
     return redirect(f"/tarama?barkod={barkod}&skt_ok=1")
+
+@app.route("/parti-tukendi", methods=["POST"])
+@giris_gerekli
+def parti_tukendi():
+    parti_id = request.form.get("parti_id","").strip()
+    barkod = request.form.get("barkod","").strip()
+    if parti_id:
+        c = get_db()
+        parti = c.execute("SELECT miktar FROM partiler WHERE parti_id=?", (parti_id,)).fetchone()
+        eski_miktar = parti["miktar"] if parti else 0
+        c.execute("UPDATE partiler SET miktar=0 WHERE parti_id=?", (parti_id,))
+        c.commit()
+        urun = c.execute("SELECT urun_adi FROM urunler WHERE barkod=?", (barkod,)).fetchone()
+        c.close()
+        urun_adi = urun["urun_adi"] if urun else barkod
+        log_hareket(barkod, urun_adi, "Cikis", eski_miktar,
+                    f"Parti #{parti_id} tukendi olarak isaretlendi",
+                    session.get("user","misafir"))
+    return redirect(f"/tarama?barkod={barkod}")
+
+@app.route("/stok-cikis", methods=["POST"])
+@giris_gerekli
+def stok_cikis():
+    barkod = request.form.get("barkod","").strip()
+    miktar = int(request.form.get("miktar", 1) or 1)
+    sebep = request.form.get("sebep","Raftan Kaldirildi").strip()
+    aciklama = request.form.get("aciklama","").strip()
+    parti_id = request.form.get("parti_id","").strip()
+    if barkod and miktar > 0:
+        c = get_db()
+        if parti_id and parti_id != "fefo":
+            # Manuel parti secimi
+            p = c.execute("SELECT miktar FROM partiler WHERE parti_id=?", (parti_id,)).fetchone()
+            if p:
+                azalt = min(miktar, p["miktar"])
+                c.execute("UPDATE partiler SET miktar=MAX(0,miktar-?) WHERE parti_id=?", (azalt, parti_id))
+                c.commit()
+        else:
+            # FEFO: en yakin SKT'li partiden dus
+            remaining = miktar
+            partiler_rows = c.execute(
+                "SELECT parti_id, miktar FROM partiler WHERE barkod=? AND miktar>0 ORDER BY CASE WHEN stt IS NULL THEN 1 ELSE 0 END, stt ASC",
+                (barkod,)
+            ).fetchall()
+            for p in partiler_rows:
+                if remaining <= 0: break
+                azalt = min(remaining, p["miktar"])
+                c.execute("UPDATE partiler SET miktar=miktar-? WHERE parti_id=?", (azalt, p["parti_id"]))
+                remaining -= azalt
+            c.commit()
+        urun = c.execute("SELECT urun_adi FROM urunler WHERE barkod=?", (barkod,)).fetchone()
+        urun_adi = urun["urun_adi"] if urun else barkod
+        onceki = get_toplam_stok(c, barkod) + miktar
+        sonraki = get_toplam_stok(c, barkod)
+        c.execute("INSERT INTO stok_hareketleri (barkod,urun_adi,hareket_tipi,miktar,onceki_stok,sonraki_stok,kullanici,aciklama) VALUES (?,?,?,?,?,?,?,?)",
+                  (barkod, urun_adi, "Cikis", miktar, onceki, sonraki, session.get("user","misafir"),
+                   f"{sebep}: {aciklama}" if aciklama else sebep))
+        c.commit()
+        c.close()
+    return redirect(f"/tarama?barkod={barkod}")
 
 # ═══════════════════════════════════════════════════
 #  URUNLER
@@ -1184,12 +1404,24 @@ def skt_guncelle():
 def urunler():
     ara = request.args.get("ara","")
     c = get_db()
-    q = "SELECT * FROM urunler WHERE 1=1"
+    q = """SELECT u.*,
+           COALESCE(ps.toplam, 0) as stok_adedi,
+           ps.en_yakin_stt as stt,
+           COALESCE(ps.parti_sayisi, 0) as parti_sayisi
+    FROM urunler u
+    LEFT JOIN (
+        SELECT barkod,
+               SUM(miktar) as toplam,
+               MIN(CASE WHEN miktar > 0 AND stt IS NOT NULL THEN stt END) as en_yakin_stt,
+               COUNT(CASE WHEN miktar > 0 THEN 1 END) as parti_sayisi
+        FROM partiler GROUP BY barkod
+    ) ps ON u.barkod = ps.barkod
+    WHERE 1=1"""
     p = []
     if ara:
-        q += " AND (urun_adi LIKE ? OR barkod LIKE ?)"
+        q += " AND (u.urun_adi LIKE ? OR u.barkod LIKE ?)"
         p += [f"%{ara}%",f"%{ara}%"]
-    q += " ORDER BY urun_adi"
+    q += " ORDER BY u.urun_adi"
     liste = [dict(r) for r in c.execute(q,p).fetchall()]
     c.close()
 
@@ -1198,7 +1430,7 @@ def urunler():
         gun = kalan_gun(u.get("stt"))
         rc  = stt_renk(gun)
         et  = stt_etiket(gun) if u.get("stt") else "—"
-        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#525252">{u.get("min_stok",5)}</td><td style="color:#ffffff">{float(u.get("fiyat",0)):.2f} TL</td></tr>'
+        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#a3a3a3">{u.get("parti_sayisi",0)}</td><td style="color:#525252">{u.get("min_stok",5)}</td><td style="color:#ffffff">{float(u.get("fiyat",0)):.2f} TL</td></tr>'
 
     content = f"""
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
@@ -1210,8 +1442,8 @@ def urunler():
   </form>
 </div>
 <div class="tbl-wrap"><table>
-  <tr><th>Barkod</th><th>Urun Adi</th><th>Kategori</th><th>SKT</th><th>Durum</th><th>Stok</th><th>Min</th><th>Fiyat</th></tr>
-  {rows or '<tr><td colspan=8 class="muted" style="text-align:center;padding:20px">Urun bulunamadi</td></tr>'}
+  <tr><th>Barkod</th><th>Urun Adi</th><th>Kategori</th><th>SKT</th><th>Durum</th><th>Stok</th><th>Parti</th><th>Min</th><th>Fiyat</th></tr>
+  {rows or '<tr><td colspan=9 class="muted" style="text-align:center;padding:20px">Urun bulunamadi</td></tr>'}
 </table></div>"""
     return render(content, page="urunler", title="Urunler")
 
@@ -1248,10 +1480,10 @@ def raporlar():
     today = date.today().isoformat()
     s = {
         "toplam_urun":   c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0],
-        "toplam_stok":   c.execute("SELECT COALESCE(SUM(stok_adedi),0) FROM urunler").fetchone()[0],
-        "toplam_deger":  c.execute("SELECT COALESCE(SUM(stok_adedi*fiyat),0) FROM urunler").fetchone()[0],
-        "tarihi_gecmis": c.execute("SELECT COUNT(*) FROM urunler WHERE stt IS NOT NULL AND stt<?", (today,)).fetchone()[0],
-        "stoksuz":       c.execute("SELECT COUNT(*) FROM urunler WHERE stok_adedi<=0").fetchone()[0],
+        "toplam_stok":   c.execute("SELECT COALESCE(SUM(miktar),0) FROM partiler").fetchone()[0],
+        "toplam_deger":  c.execute("SELECT COALESCE(SUM(ps.toplam * u.fiyat), 0) FROM urunler u JOIN (SELECT barkod, SUM(miktar) as toplam FROM partiler GROUP BY barkod) ps ON u.barkod = ps.barkod").fetchone()[0],
+        "tarihi_gecmis": c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<? AND miktar>0", (today,)).fetchone()[0],
+        "stoksuz":       c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= 0").fetchone()[0],
         "toplam_islem":  c.execute("SELECT COUNT(*) FROM stok_hareketleri").fetchone()[0],
         "bugun_islem":   c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE DATE(tarih)=DATE('now')").fetchone()[0],
     }
@@ -1320,9 +1552,9 @@ def api_stats():
     today = date.today().isoformat()
     data = {
         "toplam_urun":   c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0],
-        "toplam_stok":   c.execute("SELECT COALESCE(SUM(stok_adedi),0) FROM urunler").fetchone()[0],
-        "tarihi_gecmis": c.execute("SELECT COUNT(*) FROM urunler WHERE stt IS NOT NULL AND stt<?", (today,)).fetchone()[0],
-        "stoksuz":       c.execute("SELECT COUNT(*) FROM urunler WHERE stok_adedi<=0").fetchone()[0],
+        "toplam_stok":   c.execute("SELECT COALESCE(SUM(miktar),0) FROM partiler").fetchone()[0],
+        "tarihi_gecmis": c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<? AND miktar>0", (today,)).fetchone()[0],
+        "stoksuz":       c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= 0").fetchone()[0],
     }
     c.close()
     return jsonify(data)
@@ -1331,7 +1563,18 @@ def api_stats():
 @giris_gerekli
 def api_urunler():
     c = get_db()
-    liste = [dict(r) for r in c.execute("SELECT * FROM urunler ORDER BY urun_adi").fetchall()]
+    liste = [dict(r) for r in c.execute("""
+        SELECT u.*,
+               COALESCE(ps.toplam, 0) as stok_adedi,
+               ps.en_yakin_stt as stt
+        FROM urunler u
+        LEFT JOIN (
+            SELECT barkod, SUM(miktar) as toplam,
+                   MIN(CASE WHEN miktar>0 AND stt IS NOT NULL THEN stt END) as en_yakin_stt
+            FROM partiler GROUP BY barkod
+        ) ps ON u.barkod = ps.barkod
+        ORDER BY u.urun_adi
+    """).fetchall()]
     c.close()
     return jsonify(liste)
 
