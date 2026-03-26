@@ -1,1 +1,0 @@
-# barkod-pro
