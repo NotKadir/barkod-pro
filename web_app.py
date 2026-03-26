@@ -88,7 +88,9 @@ def migrate_to_partiler():
         if r[1] or r[2]:
             c.execute("INSERT INTO partiler (barkod, stt, miktar, ekleyen) VALUES (?,?,?,?)",
                       (r[0], r[1], r[2] if r[2] else 0, "migrasyon"))
-    # Tabloyu yeniden olustur (stt ve stok_adedi olmadan)
+    c.commit()
+    # Tabloyu yeniden olustur — FK kontrol kapaliyken
+    c.execute("PRAGMA foreign_keys=OFF")
     c.execute("""CREATE TABLE urunler_new (
         barkod TEXT PRIMARY KEY,
         urun_adi TEXT NOT NULL,
@@ -103,6 +105,7 @@ def migrate_to_partiler():
     c.execute("DROP TABLE urunler")
     c.execute("ALTER TABLE urunler_new RENAME TO urunler")
     c.commit()
+    c.execute("PRAGMA foreign_keys=ON")
     c.close()
 
 init_db()
