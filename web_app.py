@@ -1061,7 +1061,7 @@ def tarama():
       <div class="scan-urun-adi">{urun["urun_adi"]}</div>
       <div class="scan-meta">Barkod: {barkod}&nbsp;&nbsp;|&nbsp;&nbsp;Kategori: {urun.get("kategori","—")}</div>
     </div>
-    <div style="font-size:1.7rem;font-weight:800;color:#ffffff">{float(urun.get("fiyat",0)):.2f} TL</div>
+    <div style="font-size:1.7rem;font-weight:800;color:#ffffff">{float(urun.get("fiyat") or 0):.2f} TL</div>
   </div>
   <div class="scan-body">
     <span class="scan-skt" style="background:{rc}22;color:{rc};border:1px solid {rc}55">{et}</span>
@@ -1766,7 +1766,7 @@ def urunler():
         gun = kalan_gun(u.get("stt"))
         rc  = stt_renk(gun)
         et  = stt_etiket(gun) if u.get("stt") else "—"
-        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#a3a3a3">{u.get("parti_sayisi",0)}</td><td style="color:#525252">{u.get("min_stok",5)}</td><td style="color:#ffffff">{float(u.get("fiyat",0)):.2f} TL</td></tr>'
+        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#a3a3a3">{u.get("parti_sayisi",0)}</td><td style="color:#525252">{u.get("min_stok",5)}</td><td style="color:#ffffff">{float(u.get("fiyat") or 0):.2f} TL</td></tr>'
 
     content = f"""
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
