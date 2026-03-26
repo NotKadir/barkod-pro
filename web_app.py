@@ -1525,7 +1525,11 @@ function kameraKapat(){
   {sonuc_html}
   {son_tarananlar_html}
 </div>"""
-    return render(content, page="tarama", title="Tarama")
+    try:
+        return render(content, page="tarama", title="Tarama")
+    except Exception as _e:
+        import traceback as _tb
+        return f"<pre style='color:red;background:#111;padding:20px'>{_tb.format_exc()}</pre>", 500
 
 # ═══════════════════════════════════════════════════
 #  PARTI ISLEMLERI
