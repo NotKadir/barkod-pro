@@ -247,6 +247,74 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;
 .main{animation:pageIn .6s cubic-bezier(.16,1,.3,1) both}
 @keyframes pageIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 
+/* ═══ LOADER ═══ */
+#loader{
+  position:fixed;inset:0;z-index:9500;
+  background:#030308;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  overflow:hidden;
+}
+#loader.phase-out{animation:loaderOut 1.2s cubic-bezier(.7,0,.3,1) forwards}
+@keyframes loaderOut{0%{clip-path:inset(0 0 0 0)}100%{clip-path:inset(0 0 100% 0)}}
+#loader-canvas{position:absolute;inset:0;width:100%;height:100%}
+.ld-wrap{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:0}
+.ld-logo{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(3.5rem,9vw,8rem);
+  letter-spacing:20px;text-indent:20px;
+  color:rgba(255,255,255,0);position:relative;overflow:hidden;
+}
+.ld-logo.in{animation:ldReveal 1s .3s cubic-bezier(.16,1,.3,1) forwards}
+@keyframes ldReveal{
+  0%{opacity:0;letter-spacing:40px;filter:blur(12px);color:rgba(255,255,255,0)}
+  60%{filter:blur(0);color:rgba(255,255,255,.9)}
+  100%{opacity:1;letter-spacing:14px;color:rgba(255,255,255,.88)}
+}
+.ld-logo .ld-shine{
+  position:absolute;top:0;left:-100%;width:60%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);
+  animation:ldShine 2s 1.2s ease-in-out forwards;
+}
+@keyframes ldShine{to{left:200%}}
+.ld-rule{
+  width:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);
+  margin:20px 0 24px;
+  animation:ldRule .8s 1s cubic-bezier(.16,1,.3,1) forwards;
+}
+@keyframes ldRule{to{width:260px}}
+.ld-status{display:flex;align-items:center;gap:14px;opacity:0;animation:ldFade .5s 1.2s forwards}
+@keyframes ldFade{to{opacity:1}}
+.ld-pct{
+  font-family:'JetBrains Mono',monospace;
+  font-size:.65rem;letter-spacing:2px;
+  color:rgba(255,255,255,.35);min-width:38px;text-align:right;
+}
+.ld-bar-wrap{width:180px;height:1px;background:rgba(255,255,255,.06);position:relative;overflow:hidden;border-radius:1px}
+.ld-bar{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,var(--accent),#fff,var(--accent));
+  transition:width .08s linear;
+  box-shadow:0 0 12px var(--accent);
+}
+.ld-msg{
+  font-family:'JetBrains Mono',monospace;
+  font-size:.48rem;letter-spacing:3px;text-transform:uppercase;
+  color:rgba(255,255,255,.18);min-width:140px;
+}
+.ld-tag{
+  position:absolute;bottom:28px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:.5rem;letter-spacing:5px;text-transform:uppercase;
+  color:rgba(255,255,255,.08);
+  opacity:0;animation:ldFade .4s 1.4s forwards;
+}
+#loader::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.06) 2px,rgba(0,0,0,.06) 3px);
+  z-index:2;
+}
+
 /* SKT ALARM ANIMATIONS */
 @keyframes sktFlash{0%,100%{opacity:0}50%{opacity:1}}
 @keyframes sktShake{0%,100%{transform:translateX(0)}15%{transform:translateX(-8px)}30%{transform:translateX(8px)}45%{transform:translateX(-6px)}60%{transform:translateX(6px)}75%{transform:translateX(-3px)}90%{transform:translateX(3px)}}
@@ -531,8 +599,102 @@ label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted)
   .nav-user{display:none}
 }
 </style>
+<script>
+/* ═══ LOADER — HEAD (runs before body paints) ═══ */
+document.addEventListener('DOMContentLoaded',function(){
+  var lc=document.getElementById('loader-canvas');
+  if(!lc) return;
+  var lctx=lc.getContext('2d');
+  var W,H,CX,CY;
+  function resize(){W=lc.width=window.innerWidth;H=lc.height=window.innerHeight;CX=W/2;CY=H/2;}
+  resize();
+  window.addEventListener('resize',resize);
+  var particles=[];
+  for(var i=0;i<120;i++){
+    var angle=Math.random()*Math.PI*2;
+    var dist=60+Math.random()*Math.min(W,H)*0.4;
+    particles.push({x:CX+Math.cos(angle)*dist,y:CY+Math.sin(angle)*dist*0.5,r:1+Math.random()*2.5,delay:Math.random()});
+  }
+  var startT=null,running=true;
+  function draw(ts){
+    if(!startT) startT=ts;
+    var prog=Math.min((ts-startT)/2400,1);
+    var eased=1-Math.pow(1-prog,3);
+    lctx.clearRect(0,0,W,H);
+    var bg=lctx.createRadialGradient(CX,CY,0,CX,CY,Math.max(W,H)*.65);
+    bg.addColorStop(0,'#0a0a14'); bg.addColorStop(1,'#030308');
+    lctx.fillStyle=bg; lctx.fillRect(0,0,W,H);
+    var g=lctx.createRadialGradient(CX,CY,0,CX,CY,160+eased*100);
+    g.addColorStop(0,'rgba(165,216,255,'+(eased*.1)+')');
+    g.addColorStop(1,'rgba(165,216,255,0)');
+    lctx.fillStyle=g; lctx.beginPath(); lctx.arc(CX,CY,300,0,Math.PI*2); lctx.fill();
+    for(var i=0;i<particles.length;i++){
+      var p=particles[i];
+      var pp=Math.max(0,Math.min((prog-p.delay*.4)/.6,1));
+      if(pp<=0) continue;
+      lctx.beginPath(); lctx.arc(p.x,p.y,p.r*pp,0,Math.PI*2);
+      lctx.fillStyle='rgba(165,216,255,'+(pp*.6)+')'; lctx.fill();
+    }
+    lctx.strokeStyle='rgba(165,216,255,'+(eased*.06)+')'; lctx.lineWidth=.4;
+    for(var a=0;a<particles.length;a+=2){
+      for(var b=a+1;b<particles.length;b+=3){
+        var dx=particles[a].x-particles[b].x, dy=particles[a].y-particles[b].y;
+        if(dx*dx+dy*dy<8100){
+          lctx.beginPath(); lctx.moveTo(particles[a].x,particles[a].y);
+          lctx.lineTo(particles[b].x,particles[b].y); lctx.stroke();
+        }
+      }
+    }
+    if(running) requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+  window._stopLoaderCanvas=function(){running=false;};
+  setTimeout(function(){
+    var el=document.getElementById('ld-logo');
+    if(el) el.classList.add('in');
+  },100);
+
+  var ldBar=document.getElementById('ld-bar');
+  var ldPct=document.getElementById('ld-pct');
+  var ldMsg=document.getElementById('ld-msg');
+  var loader=document.getElementById('loader');
+  var msgs=['INITIALIZING','LOADING ASSETS','CONNECTING DB','CALIBRATING','SYSTEM READY'];
+  var pct=0;
+  var iv=setInterval(function(){
+    pct+=Math.random()*3+1.5;
+    if(pct>100) pct=100;
+    if(ldBar) ldBar.style.width=pct+'%';
+    if(ldPct) ldPct.textContent=Math.floor(pct)+'%';
+    if(ldMsg) ldMsg.textContent=msgs[Math.min(Math.floor(pct/22),4)];
+    if(pct>=100){
+      clearInterval(iv);
+      if(ldMsg) ldMsg.textContent='SYSTEM READY';
+      if(ldPct) ldPct.textContent='100%';
+      setTimeout(function(){
+        if(loader) loader.classList.add('phase-out');
+        window._stopLoaderCanvas&&window._stopLoaderCanvas();
+        setTimeout(function(){ if(loader) loader.style.display='none'; },1300);
+      },500);
+    }
+  },60);
+});
+</script>
 </head>
 <body>
+<!-- LOADER -->
+<div id="loader">
+  <canvas id="loader-canvas"></canvas>
+  <div class="ld-wrap">
+    <div class="ld-logo" id="ld-logo">NEXSTOCK<span class="ld-shine"></span></div>
+    <div class="ld-rule"></div>
+    <div class="ld-status">
+      <div class="ld-pct" id="ld-pct">0%</div>
+      <div class="ld-bar-wrap"><div class="ld-bar" id="ld-bar"></div></div>
+      <div class="ld-msg" id="ld-msg">INITIALIZING</div>
+    </div>
+  </div>
+  <div class="ld-tag">DFC T&Uuml;RK&Iacute;YE 2026 &mdash; HORTOR</div>
+</div>
 <div class="hdr">
   <a href="https://nextstock-tan-t-m.vercel.app/" class="logo-link" target="_blank">
     <div class="logo">Nex<span>Stock</span></div>
@@ -1014,7 +1176,7 @@ function cikisPanelKapat(){{ document.getElementById('cikis-panel').style.displa
 
     # Kamera JS — siki dogrulama ile
     kamera_js = """
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js" defer></script>
 <script>
 // ── SES SISTEMI ──────────────────────────────
 var _ctx = null;
