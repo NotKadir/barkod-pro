@@ -91,6 +91,8 @@ def migrate_to_partiler():
     c.commit()
     # Tabloyu yeniden olustur — FK kontrol kapaliyken
     c.execute("PRAGMA foreign_keys=OFF")
+    # Yarım kalan önceki migrasyonu temizle
+    c.execute("DROP TABLE IF EXISTS urunler_new")
     c.execute("""CREATE TABLE urunler_new (
         barkod TEXT PRIMARY KEY,
         urun_adi TEXT NOT NULL,
@@ -101,7 +103,10 @@ def migrate_to_partiler():
         eklenme_tarihi DATETIME DEFAULT CURRENT_TIMESTAMP,
         son_guncelleme DATETIME DEFAULT CURRENT_TIMESTAMP
     )""")
-    c.execute("INSERT INTO urunler_new SELECT barkod, urun_adi, kategori, min_stok, fiyat, aciklama, eklenme_tarihi, son_guncelleme FROM urunler")
+    # Sadece mevcut kolonları kopyala, eksik olanları NULL bırak
+    copy_cols = [col for col in ["barkod","urun_adi","kategori","min_stok","fiyat","aciklama","eklenme_tarihi","son_guncelleme"] if col in cols]
+    select_part = ", ".join([col if col in cols else "NULL" for col in ["barkod","urun_adi","kategori","min_stok","fiyat","aciklama","eklenme_tarihi","son_guncelleme"]])
+    c.execute(f"INSERT INTO urunler_new SELECT {select_part} FROM urunler")
     c.execute("DROP TABLE urunler")
     c.execute("ALTER TABLE urunler_new RENAME TO urunler")
     c.commit()
