@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
-import os, hashlib, sqlite3, functools, requests
+import os, hashlib, sqlite3, functools, requests, traceback, sys
 from datetime import datetime, date
 from flask import Flask, render_template_string, request, redirect, session, jsonify
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "nexstock_secret_2024")
 DB_NAME = os.environ.get("DB_PATH", "envanter_pro.db")
+
+@app.errorhandler(Exception)
+def handle_error(e):
+    tb = traceback.format_exc()
+    print(f"[HATA] {e}\n{tb}", file=sys.stderr, flush=True)
+    return f"<pre style='color:red;background:#111;padding:20px;font-size:14px'>{tb}</pre>", 500
 
 # ═══════════════════════════════════════════════════
 #  VERİTABANIrr
