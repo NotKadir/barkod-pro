@@ -118,7 +118,10 @@ def migrate_to_partiler():
     c.close()
 
 init_db()
-migrate_to_partiler()
+try:
+    migrate_to_partiler()
+except Exception as _mig_err:
+    print(f"[MIGRATION] Atlandi: {_mig_err}")
 
 # ═══════════════════════════════════════════════════
 #  YARDIMCI
