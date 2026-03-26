@@ -602,6 +602,17 @@ label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted)
 <script>
 /* ═══ LOADER — HEAD (runs before body paints) ═══ */
 document.addEventListener('DOMContentLoaded',function(){
+  /* Sadece: ilk ziyaret VEYA F5/yenile — link tıklamasında gösterme */
+  var navType=(performance.getEntriesByType('navigation')[0]||{}).type;
+  var isFirst=!sessionStorage.getItem('nx_v');
+  var isReload=navType==='reload';
+  if(!isFirst && !isReload){
+    var lHide=document.getElementById('loader');
+    if(lHide){lHide.style.display='none';}
+    return;
+  }
+  sessionStorage.setItem('nx_v','1');
+
   var lc=document.getElementById('loader-canvas');
   if(!lc) return;
   var lctx=lc.getContext('2d');
