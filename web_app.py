@@ -542,6 +542,7 @@ label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted)
     {% if session.get('rol') not in ['misafir','goruntuleyici'] %}
     <a href="/" class="{{ 'active' if page=='dashboard' }}">Dashboard</a>
     <a href="/urunler" class="{{ 'active' if page=='urunler' }}">Urunler</a>
+    <a href="/partiler" class="{{ 'active' if page=='partiler' }}">Partiler</a>
     <a href="/hareketler" class="{{ 'active' if page=='hareketler' }}">Hareketler</a>
     {% if session.get('rol') in ['admin','mudur'] %}
     <a href="/raporlar" class="{{ 'active' if page=='raporlar' }}">Raporlar</a>
@@ -822,30 +823,48 @@ def tarama():
                 ).fetchall()]
                 c2.close()
 
-            # Parti satirlari
+            # Parti satirlari — sıra numarası P1, P2...
             parti_rows = ""
-            for p in partiler_list:
+            for no, p in enumerate(partiler_list, 1):
                 pgun = kalan_gun(p.get("stt"))
                 prc = stt_renk(pgun)
                 pet = stt_etiket(pgun) if p.get("stt") else "SKT Yok"
                 parti_rows += f'''<tr>
-                  <td style="color:#a3a3a3;font-size:.78rem">#{p["parti_id"]}</td>
-                  <td>{p.get("stt","—")}</td>
+                  <td style="font-family:JetBrains Mono,monospace;font-size:.8rem;color:#a3a3a3;font-weight:700">P{no}</td>
+                  <td>
+                    <div style="display:flex;gap:4px;align-items:center">
+                      <span id="stt-txt-{p["parti_id"]}">{p.get("stt","—")}</span>
+                      <button onclick="document.getElementById('stt-form-{p["parti_id"]}').style.display='block';this.style.display='none';document.getElementById('stt-txt-{p["parti_id"]}').style.display='none'" style="background:none;border:none;color:#a3a3a3;cursor:pointer;font-size:.7rem;padding:2px 4px">✎</button>
+                    </div>
+                    <div id="stt-form-{p["parti_id"]}" style="display:none;margin-top:4px">
+                      <form method="POST" action="/parti-skt-guncelle" style="display:flex;gap:4px;margin:0">
+                        <input type="hidden" name="parti_id" value="{p["parti_id"]}">
+                        <input type="hidden" name="barkod" value="{barkod}">
+                        <input type="date" name="stt" value="{p.get('stt','')}" style="margin:0;padding:3px 6px;font-size:.75rem;width:130px">
+                        <button type="submit" class="btn btn-green" style="padding:3px 8px;font-size:.7rem">✓</button>
+                      </form>
+                    </div>
+                  </td>
                   <td style="color:{prc};font-weight:600;font-size:.82rem">{pet}</td>
                   <td style="font-weight:700">{p["miktar"]} adet</td>
-                  <td>
+                  <td style="display:flex;gap:4px;flex-wrap:wrap">
                     <form method="POST" action="/parti-tukendi" style="margin:0">
                       <input type="hidden" name="parti_id" value="{p["parti_id"]}">
                       <input type="hidden" name="barkod" value="{barkod}">
-                      <button type="submit" class="btn btn-red" style="padding:4px 10px;font-size:.7rem">Tukendi</button>
+                      <button type="submit" class="btn btn-muted" style="padding:3px 8px;font-size:.7rem;border-color:#f0b429;color:#f0b429">Tukendi</button>
+                    </form>
+                    <form method="POST" action="/parti-sil" style="margin:0">
+                      <input type="hidden" name="parti_id" value="{p["parti_id"]}">
+                      <input type="hidden" name="barkod" value="{barkod}">
+                      <button type="submit" class="btn btn-red" style="padding:3px 8px;font-size:.7rem" onclick="return confirm('Parti silinsin mi?')">Sil</button>
                     </form>
                   </td>
                 </tr>'''
 
             # Parti dropdown secenekleri (stok cikisi icin)
             parti_opts = '<option value="fefo">Otomatik (FEFO)</option>'
-            for p in partiler_list:
-                parti_opts += f'<option value="{p["parti_id"]}">#{p["parti_id"]} — {p.get("stt","SKT Yok")} ({p["miktar"]} adet)</option>'
+            for no, p in enumerate(partiler_list, 1):
+                parti_opts += f'<option value="{p["parti_id"]}">P{no} — {p.get("stt","SKT Yok")} ({p["miktar"]} adet)</option>'
 
             skt_gun_data = f'data-gun="{gun}"' if gun is not None else 'data-gun="null"'
             sonuc_html = f"""
@@ -1398,6 +1417,135 @@ def stok_cikis():
         c.commit()
         c.close()
     return redirect(f"/tarama?barkod={barkod}")
+
+@app.route("/parti-sil", methods=["POST"])
+@giris_gerekli
+def parti_sil():
+    parti_id = request.form.get("parti_id","").strip()
+    barkod   = request.form.get("barkod","").strip()
+    redirect_to = request.form.get("redirect_to","tarama")
+    if parti_id:
+        c = get_db()
+        parti = c.execute("SELECT miktar FROM partiler WHERE parti_id=?", (parti_id,)).fetchone()
+        eski_miktar = parti["miktar"] if parti else 0
+        c.execute("DELETE FROM partiler WHERE parti_id=?", (parti_id,))
+        c.commit()
+        urun = c.execute("SELECT urun_adi FROM urunler WHERE barkod=?", (barkod,)).fetchone()
+        c.close()
+        urun_adi = urun["urun_adi"] if urun else barkod
+        if eski_miktar > 0:
+            log_hareket(barkod, urun_adi, "Cikis", eski_miktar,
+                        f"Parti silindi", session.get("user","misafir"))
+    if redirect_to == "partiler":
+        return redirect(f"/partiler?barkod={barkod}")
+    return redirect(f"/tarama?barkod={barkod}")
+
+@app.route("/parti-skt-guncelle", methods=["POST"])
+@giris_gerekli
+def parti_skt_guncelle():
+    parti_id = request.form.get("parti_id","").strip()
+    barkod   = request.form.get("barkod","").strip()
+    stt      = request.form.get("stt","").strip() or None
+    redirect_to = request.form.get("redirect_to","tarama")
+    if parti_id:
+        c = get_db()
+        c.execute("UPDATE partiler SET stt=? WHERE parti_id=?", (stt, parti_id))
+        c.commit()
+        c.close()
+    if redirect_to == "partiler":
+        return redirect(f"/partiler?barkod={barkod}")
+    return redirect(f"/tarama?barkod={barkod}")
+
+@app.route("/partiler")
+@yetkili_giris
+def partiler_sayfasi():
+    ara_barkod = request.args.get("barkod","").strip()
+    c = get_db()
+    if ara_barkod:
+        urunler_list = [dict(r) for r in c.execute(
+            "SELECT * FROM urunler WHERE barkod=?", (ara_barkod,)).fetchall()]
+    else:
+        urunler_list = [dict(r) for r in c.execute(
+            "SELECT DISTINCT u.* FROM urunler u JOIN partiler p ON u.barkod=p.barkod ORDER BY u.urun_adi"
+        ).fetchall()]
+
+    content_rows = ""
+    for u in urunler_list:
+        partiler_list = [dict(r) for r in c.execute(
+            "SELECT * FROM partiler WHERE barkod=? ORDER BY CASE WHEN stt IS NULL THEN 1 ELSE 0 END, stt ASC, eklenme_tarihi ASC",
+            (u["barkod"],)
+        ).fetchall()]
+        toplam = sum(p["miktar"] for p in partiler_list)
+
+        parti_rows = ""
+        for no, p in enumerate(partiler_list, 1):
+            pgun = kalan_gun(p.get("stt"))
+            prc  = stt_renk(pgun)
+            pet  = stt_etiket(pgun) if p.get("stt") else "SKT Yok"
+            dur_cls = "red" if (pgun is not None and pgun < 0) else "yellow" if (pgun is not None and pgun <= 7) else ""
+            parti_rows += f"""<tr>
+              <td style="font-family:JetBrains Mono,monospace;font-size:.8rem;color:#a3a3a3;font-weight:700">P{no}</td>
+              <td>
+                <form method="POST" action="/parti-skt-guncelle" style="display:flex;gap:6px;margin:0;align-items:center">
+                  <input type="hidden" name="parti_id" value="{p["parti_id"]}">
+                  <input type="hidden" name="barkod" value="{u["barkod"]}">
+                  <input type="hidden" name="redirect_to" value="partiler">
+                  <input type="date" name="stt" value="{p.get('stt','')}" style="margin:0;padding:4px 8px;font-size:.78rem;width:140px">
+                  <button type="submit" class="btn btn-muted" style="padding:4px 10px;font-size:.72rem">Kaydet</button>
+                </form>
+              </td>
+              <td class="{dur_cls}" style="color:{prc};font-size:.8rem;font-weight:600">{pet}</td>
+              <td style="font-weight:700">{p["miktar"]} adet</td>
+              <td>
+                <form method="POST" action="/parti-tukendi" style="display:inline;margin:0">
+                  <input type="hidden" name="parti_id" value="{p["parti_id"]}">
+                  <input type="hidden" name="barkod" value="{u["barkod"]}">
+                  <button type="submit" class="btn btn-muted" style="padding:4px 8px;font-size:.7rem;border-color:#f0b429;color:#f0b429">Tukendi</button>
+                </form>
+                <form method="POST" action="/parti-sil" style="display:inline;margin:0 0 0 4px">
+                  <input type="hidden" name="parti_id" value="{p["parti_id"]}">
+                  <input type="hidden" name="barkod" value="{u["barkod"]}">
+                  <input type="hidden" name="redirect_to" value="partiler">
+                  <button type="submit" class="btn btn-red" style="padding:4px 8px;font-size:.7rem" onclick="return confirm('Parti silinsin mi?')">Sil</button>
+                </form>
+              </td>
+            </tr>"""
+
+        content_rows += f"""
+<div class="panel" style="margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+    <div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px">{u["urun_adi"]}</div>
+      <div style="font-family:JetBrains Mono,monospace;font-size:.68rem;color:#a3a3a3;margin-top:2px">{u["barkod"]} &nbsp;|&nbsp; Toplam: {toplam} adet &nbsp;|&nbsp; {len(partiler_list)} parti</div>
+    </div>
+    <button onclick="this.closest('.panel').querySelector('.yeni-form').style.display=this.closest('.panel').querySelector('.yeni-form').style.display=='none'?'block':'none'" class="btn btn-muted" style="font-size:.78rem;padding:6px 14px">+ Yeni Parti</button>
+  </div>
+  <div class="yeni-form" style="display:none;padding:14px;background:#0f0f0f;border:1px solid #1a1a1a;margin-bottom:12px">
+    <form method="POST" action="/parti-ekle" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <input type="hidden" name="barkod" value="{u["barkod"]}">
+      <div><label style="font-size:.72rem;color:#a3a3a3;display:block;margin-bottom:4px">SKT</label><input type="date" name="stt" style="margin:0;width:150px"></div>
+      <div><label style="font-size:.72rem;color:#a3a3a3;display:block;margin-bottom:4px">Miktar</label><input type="number" name="miktar" value="1" min="1" style="margin:0;width:90px"></div>
+      <button type="submit" class="btn btn-green" style="padding:8px 16px">Ekle</button>
+    </form>
+  </div>
+  <div class="tbl-wrap"><table style="font-size:.85rem">
+    <tr><th>Parti No</th><th>SKT</th><th>Durum</th><th>Miktar</th><th>Islemler</th></tr>
+    {parti_rows or '<tr><td colspan=5 style="text-align:center;color:#525252;padding:12px">Parti yok</td></tr>'}
+  </table></div>
+</div>"""
+
+    c.close()
+    content = f"""
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+  <div class="page-title" style="margin:0">Parti Yonetimi</div>
+  <form method="get" style="display:flex;gap:8px">
+    <input name="barkod" value="{ara_barkod}" placeholder="Barkod ile filtrele..." style="width:200px;margin:0">
+    <button type="submit" class="btn btn-muted">Filtrele</button>
+    {'<a href="/partiler" class="btn btn-muted">Temizle</a>' if ara_barkod else ''}
+  </form>
+</div>
+{content_rows or '<div class="panel" style="text-align:center;color:#525252;padding:32px">Hicbir urun icin parti bulunamadi.</div>'}"""
+    return render(content, page="partiler", title="Parti Yonetimi")
 
 # ═══════════════════════════════════════════════════
 #  URUNLER
