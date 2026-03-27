@@ -17,9 +17,10 @@ def handle_error(e):
 #  VERİTABANI
 # ═══════════════════════════════════════════════════
 def get_db():
-    c = sqlite3.connect(DB_NAME)
+    c = sqlite3.connect(DB_NAME, timeout=30)
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA journal_mode=WAL")
+    c.execute("PRAGMA busy_timeout=10000")
     c.execute("PRAGMA foreign_keys=ON")
     return c
 
@@ -147,11 +148,36 @@ def migrate_to_partiler():
     finally:
         c.close()
 
+def migrate_stok_hareketleri():
+    """stok_hareketleri tablosuna eksik kolonlari ekle"""
+    c = get_db()
+    cols = [r[1] for r in c.execute("PRAGMA table_info(stok_hareketleri)").fetchall()]
+    eksik = {
+        "urun_adi":     "TEXT",
+        "onceki_stok":  "INTEGER",
+        "sonraki_stok": "INTEGER",
+        "kullanici":    "TEXT DEFAULT 'sistem'",
+        "aciklama":     "TEXT",
+    }
+    for kolon, tip in eksik.items():
+        if kolon not in cols:
+            try:
+                c.execute(f"ALTER TABLE stok_hareketleri ADD COLUMN {kolon} {tip}")
+                print(f"[MIGRATE] stok_hareketleri.{kolon} eklendi", flush=True)
+            except Exception as e:
+                print(f"[MIGRATE] {kolon} eklenemedi: {e}", flush=True)
+    c.commit()
+    c.close()
+
 init_db()
 try:
     migrate_to_partiler()
 except Exception as _mig_err:
-    print(f"[MIGRATION] Atlandi: {_mig_err}")
+    print(f"[MIGRATION] Atlandi: {_mig_err}", flush=True)
+try:
+    migrate_stok_hareketleri()
+except Exception as _mig_err2:
+    print(f"[MIGRATION2] Atlandi: {_mig_err2}", flush=True)
 
 # ═══════════════════════════════════════════════════
 #  YARDIMCI
