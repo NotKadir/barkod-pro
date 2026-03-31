@@ -1081,8 +1081,8 @@ def tarama():
                 hdr_bg = "background:#3d2800"
                 uyari  = f'<div class="alert alert-yellow" style="margin-top:12px">⚠ {gun} gun kaldi — Dikkat!</div>'
             else:
-                hdr_bg = "background:#0f0f0f"
-                uyari  = ""
+                hdr_bg = "background:#0a1f12"
+                uyari  = '<div class="alert alert-green" style="margin-top:12px">✓ Stok durumu iyi</div>'
 
             # Parti rows
             parti_rows = ""
