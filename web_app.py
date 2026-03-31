@@ -213,7 +213,7 @@ def stt_renk(gun):
         return "#f0b429"
     if gun <= 7:
         return "#fb923c"
-    return "#ffffff"
+    return "#4ade80"
 
 def openfoodfacts(barkod):
     """
