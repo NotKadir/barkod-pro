@@ -766,7 +766,7 @@ document.addEventListener('DOMContentLoaded',function(){
   <div class="ld-tag">DFC T&Uuml;RK&Iacute;YE 2026 &mdash; HORTOR</div>
 </div>
 <div class="hdr">
-  <a href="https://nextstock-tan-t-m.vercel.app/" class="logo-link" target="_blank">
+  <a href="https://nexstock.net" class="logo-link" target="_blank">
     <div class="logo">Nex<span>Stock</span></div>
   </a>
   <div class="nav">
