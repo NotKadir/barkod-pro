@@ -74,6 +74,16 @@ def init_db():
     );
     """)
     c.commit()
+    # ── Migration: eski DB'lerde eksik kolonları ekle ──
+    for _sql in [
+        "ALTER TABLE stok_hareketleri ADD COLUMN onceki_stok INTEGER",
+        "ALTER TABLE stok_hareketleri ADD COLUMN sonraki_stok INTEGER",
+    ]:
+        try:
+            c.execute(_sql)
+            c.commit()
+        except Exception:
+            pass  # kolon zaten varsa hata ver, geç
     h = hashlib.sha256("admin123".encode()).hexdigest()
     try:
         c.execute("INSERT INTO kullanicilar (kullanici_adi,sifre_hash,tam_ad,rol) VALUES (?,?,?,?)",
