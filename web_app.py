@@ -17,10 +17,9 @@ def handle_error(e):
 #  VERİTABANI
 # ═══════════════════════════════════════════════════
 def get_db():
-    c = sqlite3.connect(DB_NAME, timeout=30)
+    c = sqlite3.connect(DB_NAME)
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA journal_mode=WAL")
-    c.execute("PRAGMA busy_timeout=10000")
     c.execute("PRAGMA foreign_keys=ON")
     return c
 
@@ -148,36 +147,11 @@ def migrate_to_partiler():
     finally:
         c.close()
 
-def migrate_stok_hareketleri():
-    """stok_hareketleri tablosuna eksik kolonlari ekle"""
-    c = get_db()
-    cols = [r[1] for r in c.execute("PRAGMA table_info(stok_hareketleri)").fetchall()]
-    eksik = {
-        "urun_adi":     "TEXT",
-        "onceki_stok":  "INTEGER",
-        "sonraki_stok": "INTEGER",
-        "kullanici":    "TEXT DEFAULT 'sistem'",
-        "aciklama":     "TEXT",
-    }
-    for kolon, tip in eksik.items():
-        if kolon not in cols:
-            try:
-                c.execute(f"ALTER TABLE stok_hareketleri ADD COLUMN {kolon} {tip}")
-                print(f"[MIGRATE] stok_hareketleri.{kolon} eklendi", flush=True)
-            except Exception as e:
-                print(f"[MIGRATE] {kolon} eklenemedi: {e}", flush=True)
-    c.commit()
-    c.close()
-
 init_db()
 try:
     migrate_to_partiler()
 except Exception as _mig_err:
-    print(f"[MIGRATION] Atlandi: {_mig_err}", flush=True)
-try:
-    migrate_stok_hareketleri()
-except Exception as _mig_err2:
-    print(f"[MIGRATION2] Atlandi: {_mig_err2}", flush=True)
+    print(f"[MIGRATION] Atlandi: {_mig_err}")
 
 # ═══════════════════════════════════════════════════
 #  YARDIMCI
@@ -213,7 +187,7 @@ def stt_renk(gun):
         return "#f0b429"
     if gun <= 7:
         return "#fb923c"
-    return "#4ade80"
+    return "#ffffff"
 
 def openfoodfacts(barkod):
     """
@@ -227,7 +201,7 @@ def openfoodfacts(barkod):
     headers = {"User-Agent": "NexStock/3.0 (github.com/nexstock)"}
     for url in urls:
         try:
-            r = requests.get(url, headers=headers, timeout=5)  # FIX: reduced to 5s per URL
+            r = requests.get(url, headers=headers, timeout=3)
             if r.status_code != 200:
                 continue
             data = r.json()
@@ -247,6 +221,75 @@ def openfoodfacts(barkod):
             continue
     return None, None
 
+
+def off_allerjen(barkod):
+    """Misafir görünümü için OFF'tan alerjen, besin ve Nutri-Score bilgisi çeker."""
+    ALLERJEN_TR = {
+        "gluten": "Gluten", "wheat": "Buğday (Gluten)", "rye": "Çavdar (Gluten)",
+        "barley": "Arpa (Gluten)", "oats": "Yulaf (Gluten)",
+        "milk": "Süt / Laktoz", "eggs": "Yumurta",
+        "peanuts": "Yer Fıstığı", "nuts": "Kabuklu Yemiş",
+        "almonds": "Badem", "hazelnuts": "Fındık", "walnuts": "Ceviz",
+        "cashews": "Kaju", "pistachios": "Antep Fıstığı",
+        "fish": "Balık", "shellfish": "Kabuklu Deniz Ürünleri",
+        "crustaceans": "Kabuklular", "molluscs": "Yumuşakçalar",
+        "soybeans": "Soya", "celery": "Kereviz",
+        "mustard": "Hardal", "sesame-seeds": "Susam", "sesame": "Susam",
+        "sulphur-dioxide": "Sülfür Dioksit", "sulphites": "Sülfit",
+        "lupin": "Acı Bakla",
+    }
+    LABEL_TR = {
+        "en:gluten-free": "Glutensiz", "en:vegan": "Vegan",
+        "en:vegetarian": "Vejeteryan", "en:organic": "Organik",
+        "en:fair-trade": "Adil Ticaret", "en:no-additives": "Katkısız",
+        "en:no-preservatives": "Koruyucusuz", "en:lactose-free": "Laktozsuz",
+        "en:low-fat": "Az Yağlı", "en:low-sugar": "Az Şekerli",
+    }
+    url = (f"https://world.openfoodfacts.org/api/v2/product/{barkod}"
+           "?fields=allergens_tags,traces_tags,nutriments,nutriscore_grade,"
+           "nova_group,labels_tags,ingredients_text_tr,ingredients_text")
+    headers = {"User-Agent": "NexStock/3.0 (github.com/nexstock)"}
+    try:
+        r = requests.get(url, headers=headers, timeout=4)
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        if data.get("status") != 1 or "product" not in data:
+            return None
+        p = data["product"]
+        def tag_tr(tag):
+            key = tag.split(":", 1)[-1].lower()
+            return ALLERJEN_TR.get(key, key.replace("-", " ").title())
+        allerjenler = [tag_tr(t) for t in p.get("allergens_tags", []) if ":" in t]
+        izler       = [tag_tr(t) for t in p.get("traces_tags",   []) if ":" in t]
+        etiketler   = [LABEL_TR[lb] for lb in p.get("labels_tags", []) if lb in LABEL_TR]
+        n = p.get("nutriments", {})
+        beslenme = {
+            "enerji":       n.get("energy-kcal_100g"),
+            "yag":          n.get("fat_100g"),
+            "doymus_yag":   n.get("saturated-fat_100g"),
+            "karbonhidrat": n.get("carbohydrates_100g"),
+            "seker":        n.get("sugars_100g"),
+            "protein":      n.get("proteins_100g"),
+            "tuz":          n.get("salt_100g"),
+            "lif":          n.get("fiber_100g"),
+        }
+        icerik = (p.get("ingredients_text_tr") or p.get("ingredients_text") or "").strip()
+        if len(icerik) > 500:
+            icerik = icerik[:500] + "…"
+        return {
+            "allerjenler": allerjenler,
+            "izler":       izler,
+            "etiketler":   etiketler,
+            "nutriscore":  (p.get("nutriscore_grade") or "").upper(),
+            "nova":        p.get("nova_group"),
+            "beslenme":    beslenme,
+            "icerik":      icerik,
+        }
+    except Exception:
+        return None
+
+
 def get_toplam_stok(c, barkod):
     row = c.execute("SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=?", (barkod,)).fetchone()
     return row[0]
@@ -258,21 +301,19 @@ def get_en_yakin_stt(c, barkod):
     ).fetchone()
     return row[0] if row else None
 
-def log_hareket(barkod, urun_adi, tip, miktar, aciklama, kullanici):
+def log_hareket(barkod, urun_adi, tip, miktar, aciklama, kullanici, onceki_override=None):
     """
-    FIX: Opens and closes its own DB connection cleanly.
+    Opens and closes its own DB connection cleanly.
     Does NOT touch partiler for Cikis/Okutma here — that's handled by the callers.
-    This function only logs the movement record.
+    onceki_override: pass pre-deduction stock to get accurate log entries.
     """
     c = get_db()
     try:
-        onceki = get_toplam_stok(c, barkod)
+        onceki = onceki_override if onceki_override is not None else get_toplam_stok(c, barkod)
 
         if tip == "Giris":
             sonraki = onceki + miktar
         elif tip in ("Cikis", "Okutma"):
-            # FIX: For Okutma from the scan page, stok deduction happens via FEFO
-            # in the caller. We just record current stock as sonraki.
             sonraki = max(0, onceki - miktar)
         else:
             sonraki = onceki
@@ -763,10 +804,10 @@ document.addEventListener('DOMContentLoaded',function(){
       <div class="ld-msg" id="ld-msg">INITIALIZING</div>
     </div>
   </div>
-  <div class="ld-tag">DFC T&Uuml;RK&Iacute;YE 2026 &mdash; HORTOR</div>
+  <div class="ld-tag">DFC TÜRKİYE 2026 &mdash; HORTOR</div>
 </div>
 <div class="hdr">
-  <a href="https://nexstock.net" class="logo-link" target="_blank">
+  <a href="/" class="logo-link">
     <div class="logo">Nex<span>Stock</span></div>
   </a>
   <div class="nav">
@@ -1028,7 +1069,34 @@ def tarama():
                 finally:
                     c.close()
             else:
-                alert_html = f'<div class="alert alert-red">✗ Barkod bulunamadi: <strong>{barkod}</strong></div>'
+                alert_html = f'<div class="alert alert-red">✗ Barkod veritabaninda bulunamadi: <strong>{barkod}</strong></div>'
+                sonuc_html = f"""
+<div class="scan-result">
+  <div class="scan-header" style="background:#1a1000">
+    <div>
+      <div class="scan-urun-adi" style="font-size:1.2rem;color:#f0b429">Yeni Urun Ekle</div>
+      <div class="scan-meta">Barkod: {barkod}</div>
+    </div>
+  </div>
+  <div class="scan-body">
+    <form method="POST" action="/urun-hizli-ekle">
+      <input type="hidden" name="barkod" value="{barkod}">
+      <label>URUN ADI</label>
+      <input type="text" name="urun_adi" placeholder="Urun adi girin..." required autofocus>
+      <label>KATEGORİ</label>
+      <input type="text" name="kategori" placeholder="Genel" value="Genel">
+      <label>FIYAT (TL)</label>
+      <input type="number" name="fiyat" value="0.00" min="0" step="0.01">
+      <label>MIN. STOK</label>
+      <input type="number" name="min_stok" value="5" min="0">
+      <label>ILK STOK MİKTARI</label>
+      <input type="number" name="miktar" value="1" min="0">
+      <label>SON TUKETİM TARİHİ (opsiyonel)</label>
+      <input type="date" name="stt">
+      <button type="submit" class="btn btn-green" style="width:100%;margin-top:4px">KAYDET ve TARA</button>
+    </form>
+  </div>
+</div>"""
 
         if urun:
             # ── Step 2: Log scan (Okutma) on POST ──
@@ -1036,6 +1104,7 @@ def tarama():
                 # FEFO deduction for Okutma
                 c = get_db()
                 try:
+                    onceki_stok = get_toplam_stok(c, barkod)  # read BEFORE deduction
                     remaining = 1
                     rows = c.execute(
                         "SELECT parti_id, miktar FROM partiler WHERE barkod=? AND miktar>0 "
@@ -1052,7 +1121,8 @@ def tarama():
                 finally:
                     c.close()
                 log_hareket(barkod, urun["urun_adi"], "Okutma", 1,
-                            "Web tarama", session.get("user", "misafir"))
+                            "Web tarama", session.get("user", "misafir"),
+                            onceki_override=onceki_stok)
 
             # ── Step 3: Read current state for display ──
             c = get_db()
@@ -1081,8 +1151,8 @@ def tarama():
                 hdr_bg = "background:#3d2800"
                 uyari  = f'<div class="alert alert-yellow" style="margin-top:12px">⚠ {gun} gun kaldi — Dikkat!</div>'
             else:
-                hdr_bg = "background:#0a1f12"
-                uyari  = '<div class="alert alert-green" style="margin-top:12px">✓ Stok durumu iyi</div>'
+                hdr_bg = "background:#0f0f0f"
+                uyari  = ""
 
             # Parti rows
             parti_rows = ""
@@ -1125,6 +1195,100 @@ def tarama():
             parti_opts = '<option value="fefo">Otomatik (FEFO)</option>'
             for no, p in enumerate(partiler_list, 1):
                 parti_opts += f'<option value="{p["parti_id"]}">P{no} — {p.get("stt","SKT Yok")} ({p["miktar"]} adet)</option>'
+
+            # ── Allerjen & Besin Bilgileri (sadece misafir rolü) ──
+            allerjen_section = ""
+            if session.get("rol") == "misafir":
+                _off = off_allerjen(barkod)
+                if _off:
+                    def _badge(nm, col="#e05252", ico="⚠"):
+                        return (f'<span style="display:inline-flex;align-items:center;gap:3px;'
+                                f'padding:3px 9px;background:{col}18;color:{col};border:1px solid {col}44;'
+                                f'border-radius:3px;font-size:.72rem;font-weight:700;margin:2px;'
+                                f'font-family:JetBrains Mono,monospace">{ico}&nbsp;{nm}</span>')
+                    def _fmt(v, u="g"):
+                        return f"{v:.1f}&nbsp;{u}" if v is not None else "—"
+
+                    al_html = ("".join(_badge(a) for a in _off["allerjenler"])
+                               or '<span style="color:#4ade80;font-size:.78rem">✓ Bilinen alerjen tespit edilmedi</span>')
+                    iz_html = "".join(_badge(z, "#f0b429", "◦") for z in _off["izler"])
+                    et_html = "".join(_badge(e, "#4ade80", "✓") for e in _off["etiketler"])
+
+                    NS_C = {"A": "#038141", "B": "#85bb2f", "C": "#fecb02", "D": "#ee8100", "E": "#e63312"}
+                    ns = _off["nutriscore"]
+                    ns_badge = (f'<span style="background:{NS_C[ns]};color:#fff;font-size:.88rem;'
+                                f'font-weight:900;padding:4px 16px;border-radius:3px;letter-spacing:.5px;'
+                                f'font-family:JetBrains Mono,monospace">NUTRI-SCORE&nbsp;{ns}</span>'
+                                if ns in NS_C else "")
+
+                    NOVA_L = {1: ("İşlenmemiş", "#4ade80"), 2: ("Mutfak Maddesi", "#86efac"),
+                              3: ("İşlenmiş", "#fbbf24"),   4: ("Ultra İşlenmiş", "#e05252")}
+                    nv = _off.get("nova")
+                    nova_badge = ""
+                    if isinstance(nv, int) and nv in NOVA_L:
+                        nl, nc = NOVA_L[nv]
+                        nova_badge = (f'<span style="background:{nc}22;color:{nc};border:1px solid {nc}44;'
+                                      f'font-size:.7rem;font-weight:700;padding:4px 12px;border-radius:3px;'
+                                      f'font-family:JetBrains Mono,monospace">NOVA&nbsp;{nv}&nbsp;–&nbsp;{nl}</span>')
+
+                    b = _off["beslenme"]
+                    lf_row = (f'<tr><td style="color:#a3a3a3">Lif</td>'
+                              f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["lif"])}</td></tr>'
+                              if b["lif"] is not None else "")
+                    ic = _off["icerik"]
+                    ic_html = (f'<div style="margin-top:12px;padding-top:10px;border-top:1px solid #1e1e2e">'
+                               f'<div style="font-family:JetBrains Mono,monospace;font-size:.6rem;'
+                               f'color:#525252;letter-spacing:2px;margin-bottom:4px">İÇERİK</div>'
+                               f'<div style="font-size:.73rem;color:#8a8a8a;line-height:1.6">{ic}</div></div>'
+                               if ic else "")
+                    iz_sec = (f'<div style="margin-bottom:10px"><div style="font-family:JetBrains Mono,monospace;'
+                              f'font-size:.6rem;color:#a3a3a3;letter-spacing:2px;margin-bottom:6px">'
+                              f'İZ MİKTARINDA İÇEREBİLİR</div>{iz_html}</div>'
+                              if iz_html else "")
+                    et_sec = (f'<div style="margin-bottom:12px"><div style="font-family:JetBrains Mono,monospace;'
+                              f'font-size:.6rem;color:#a3a3a3;letter-spacing:2px;margin-bottom:6px">'
+                              f'ETİKETLER</div>{et_html}</div>'
+                              if et_html else "")
+
+                    allerjen_section = "".join([
+                        '<div style="margin-top:16px;padding:14px;background:#0d0d12;'
+                        'border:1px solid #1e1e2e;border-radius:4px">',
+                        '<div style="font-family:JetBrains Mono,monospace;font-size:.65rem;'
+                        'color:#6d7aff;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px">'
+                        '🧬 Alerjen &amp; Besin Bilgileri</div>',
+                        '<div style="margin-bottom:10px">',
+                        '<div style="font-family:JetBrains Mono,monospace;font-size:.6rem;'
+                        'color:#a3a3a3;letter-spacing:2px;margin-bottom:6px">ALERJENLER</div>',
+                        al_html, '</div>',
+                        iz_sec, et_sec,
+                        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">',
+                        ns_badge, ("&nbsp;" if ns_badge and nova_badge else ""), nova_badge, '</div>',
+                        '<div style="font-family:JetBrains Mono,monospace;font-size:.6rem;'
+                        'color:#525252;letter-spacing:2px;margin-bottom:6px">'
+                        'BESİN DEĞERLERİ (100 g/ml başına)</div>',
+                        '<div class="tbl-wrap"><table style="font-size:.82rem;width:100%">',
+                        '<tr><th style="text-align:left;font-weight:500;color:#a3a3a3">Besin Ögesi</th>',
+                        '<th style="text-align:right;font-weight:500;color:#a3a3a3">Miktar</th></tr>',
+                        f'<tr><td style="color:#a3a3a3">Enerji</td>'
+                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["enerji"], "kcal")}</td></tr>',
+                        f'<tr><td style="color:#a3a3a3">Yağ</td>'
+                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["yag"])}</td></tr>',
+                        f'<tr><td style="color:#6a6a6a;font-size:.78rem;padding-left:12px">— doymuş</td>'
+                        f'<td style="text-align:right;color:#6a6a6a;font-size:.78rem">{_fmt(b["doymus_yag"])}</td></tr>',
+                        f'<tr><td style="color:#a3a3a3">Karbonhidrat</td>'
+                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["karbonhidrat"])}</td></tr>',
+                        f'<tr><td style="color:#6a6a6a;font-size:.78rem;padding-left:12px">— şeker</td>'
+                        f'<td style="text-align:right;color:#6a6a6a;font-size:.78rem">{_fmt(b["seker"])}</td></tr>',
+                        f'<tr><td style="color:#a3a3a3">Protein</td>'
+                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["protein"])}</td></tr>',
+                        f'<tr><td style="color:#a3a3a3">Tuz</td>'
+                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["tuz"])}</td></tr>',
+                        lf_row, '</table></div>',
+                        ic_html,
+                        '<div style="margin-top:8px;font-size:.6rem;color:#2d2d2d;text-align:right">'
+                        'Kaynak: OpenFoodFacts.org</div>',
+                        '</div>',
+                    ])
 
             skt_gun_data = f'data-gun="{gun}"' if gun is not None else 'data-gun="null"'
             sonuc_html = f"""
@@ -1195,6 +1359,7 @@ def tarama():
         </div>
       </form>
     </div>
+    {allerjen_section}
   </div>
 </div>
 <script>
@@ -1559,6 +1724,45 @@ function kameraKapat(){
     return render(content, page="tarama", title="Tarama")
 
 # ═══════════════════════════════════════════════════
+#  HIZLI URUN EKLEME (manual add when barcode not found)
+# ═══════════════════════════════════════════════════
+@app.route("/urun-hizli-ekle", methods=["POST"])
+@giris_gerekli
+def urun_hizli_ekle():
+    barkod   = request.form.get("barkod", "").strip()
+    urun_adi = request.form.get("urun_adi", "").strip()
+    kategori = request.form.get("kategori", "Genel").strip() or "Genel"
+    fiyat    = float(request.form.get("fiyat", 0) or 0)
+    min_stok = int(request.form.get("min_stok", 5) or 5)
+    miktar   = int(request.form.get("miktar", 1) or 1)
+    stt      = request.form.get("stt", "").strip() or None
+
+    if not barkod or not urun_adi:
+        return redirect("/tarama")
+
+    c = get_db()
+    try:
+        c.execute(
+            "INSERT OR IGNORE INTO urunler (barkod,urun_adi,kategori,min_stok,fiyat) VALUES (?,?,?,?,?)",
+            (barkod, urun_adi, kategori, min_stok, fiyat)
+        )
+        if miktar > 0:
+            c.execute(
+                "INSERT INTO partiler (barkod, stt, miktar, ekleyen) VALUES (?,?,?,?)",
+                (barkod, stt, miktar, session.get("user", "sistem"))
+            )
+        c.commit()
+    finally:
+        c.close()
+
+    if miktar > 0:
+        log_hareket(barkod, urun_adi, "Giris", miktar,
+                    f"Manuel ekleme (SKT: {stt or 'Belirtilmemis'})",
+                    session.get("user", "misafir"))
+
+    return redirect(f"/tarama?barkod={barkod}&skt_ok=1")
+
+# ═══════════════════════════════════════════════════
 #  PARTI ISLEMLERI  — FIX: all use try/finally
 # ═══════════════════════════════════════════════════
 @app.route("/parti-ekle", methods=["POST"])
@@ -1785,7 +1989,7 @@ def partiler_sayfasi():
     {'<a href="/partiler" class="btn btn-muted">Temizle</a>' if ara_barkod else ''}
   </form>
 </div>
-{content_rows or '<div class="panel" style="text-align:center;color:#525252;padding:32px">Hicbir urun icin parti bulunamadi.</div>'}"""
+{content_rows or '<div class="panel" style="text-align:center;color:#525252;padding:32px">Hicbir Urun icin parti bulunamadi.</div>'}"""
     return render(content, page="partiler", title="Parti Yonetimi")
 
 # ═══════════════════════════════════════════════════
@@ -2003,4 +2207,5 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 if __name__ == "__main__":
-    app.run(debug=False)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=False, host="0.0.0.0", port=port, threaded=True)
