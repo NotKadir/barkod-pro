@@ -74,11 +74,17 @@ def init_db():
     );
     """)
     c.commit()
-    # ── Migration: eski DB'lerde eksik kolonları ekle (PRAGMA ile güvenli) ──
-    existing_cols = {row[1] for row in c.execute("PRAGMA table_info(stok_hareketleri)")}
-    for col, typ in [("onceki_stok", "INTEGER"), ("sonraki_stok", "INTEGER")]:
-        if col not in existing_cols:
-            c.execute(f"ALTER TABLE stok_hareketleri ADD COLUMN {col} {typ}")
+    # ── Migration: eski DB'lerde eksik kolonları ekle ──
+    _mig_cols = [
+        ("kullanici",   "TEXT    DEFAULT 'sistem'"),
+        ("aciklama",    "TEXT"),
+        ("onceki_stok", "INTEGER"),
+        ("sonraki_stok","INTEGER"),
+    ]
+    _existing = {row[1] for row in c.execute("PRAGMA table_info(stok_hareketleri)")}
+    for _col, _typ in _mig_cols:
+        if _col not in _existing:
+            c.execute(f"ALTER TABLE stok_hareketleri ADD COLUMN {_col} {_typ}")
     c.commit()
     h = hashlib.sha256("admin123".encode()).hexdigest()
     try:
@@ -332,12 +338,12 @@ def log_hareket(barkod, urun_adi, tip, miktar, aciklama, kullanici, onceki_overr
                 (barkod, urun_adi, tip, miktar, onceki, sonraki, kullanici, aciklama)
             )
         except Exception:
-            # Eski şema fallback: onceki_stok/sonraki_stok kolonu henüz yoksa
+            # Eski şema fallback: sadece garantili temel kolonlar
             c.execute(
                 "INSERT INTO stok_hareketleri "
-                "(barkod,urun_adi,hareket_tipi,miktar,kullanici,aciklama) "
-                "VALUES (?,?,?,?,?,?)",
-                (barkod, urun_adi, tip, miktar, kullanici, aciklama)
+                "(barkod,urun_adi,hareket_tipi,miktar) "
+                "VALUES (?,?,?,?)",
+                (barkod, urun_adi, tip, miktar)
             )
         c.commit()
     finally:
