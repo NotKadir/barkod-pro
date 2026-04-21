@@ -74,16 +74,12 @@ def init_db():
     );
     """)
     c.commit()
-    # ── Migration: eski DB'lerde eksik kolonları ekle ──
-    for _sql in [
-        "ALTER TABLE stok_hareketleri ADD COLUMN onceki_stok INTEGER",
-        "ALTER TABLE stok_hareketleri ADD COLUMN sonraki_stok INTEGER",
-    ]:
-        try:
-            c.execute(_sql)
-            c.commit()
-        except Exception:
-            pass  # kolon zaten varsa hata ver, geç
+    # ── Migration: eski DB'lerde eksik kolonları ekle (PRAGMA ile güvenli) ──
+    existing_cols = {row[1] for row in c.execute("PRAGMA table_info(stok_hareketleri)")}
+    for col, typ in [("onceki_stok", "INTEGER"), ("sonraki_stok", "INTEGER")]:
+        if col not in existing_cols:
+            c.execute(f"ALTER TABLE stok_hareketleri ADD COLUMN {col} {typ}")
+    c.commit()
     h = hashlib.sha256("admin123".encode()).hexdigest()
     try:
         c.execute("INSERT INTO kullanicilar (kullanici_adi,sifre_hash,tam_ad,rol) VALUES (?,?,?,?)",
@@ -328,15 +324,24 @@ def log_hareket(barkod, urun_adi, tip, miktar, aciklama, kullanici, onceki_overr
         else:
             sonraki = onceki
 
-        c.execute(
-            "INSERT INTO stok_hareketleri "
-            "(barkod,urun_adi,hareket_tipi,miktar,onceki_stok,sonraki_stok,kullanici,aciklama) "
-            "VALUES (?,?,?,?,?,?,?,?)",
-            (barkod, urun_adi, tip, miktar, onceki, sonraki, kullanici, aciklama)
-        )
+        try:
+            c.execute(
+                "INSERT INTO stok_hareketleri "
+                "(barkod,urun_adi,hareket_tipi,miktar,onceki_stok,sonraki_stok,kullanici,aciklama) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                (barkod, urun_adi, tip, miktar, onceki, sonraki, kullanici, aciklama)
+            )
+        except Exception:
+            # Eski şema fallback: onceki_stok/sonraki_stok kolonu henüz yoksa
+            c.execute(
+                "INSERT INTO stok_hareketleri "
+                "(barkod,urun_adi,hareket_tipi,miktar,kullanici,aciklama) "
+                "VALUES (?,?,?,?,?,?)",
+                (barkod, urun_adi, tip, miktar, kullanici, aciklama)
+            )
         c.commit()
     finally:
-        c.close()  # FIX: Always close, even on error
+        c.close()
 
 # ═══════════════════════════════════════════════════
 #  AUTH
