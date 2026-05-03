@@ -2185,42 +2185,67 @@ def api_hareketler():
 
 
 # ═══════════════════════════════════════════════════
-#  AI OKUYUCU (Görev-2)
+#  AI OKUYUCU — Claude Haiku Vision
 # ═══════════════════════════════════════════════════
-import base64 as _b64
+import anthropic as _anthropic
+import json as _json
 
 @app.route("/api/ai-scan", methods=["POST"])
 @yetkili_giris
 def api_ai_scan():
     if session.get("rol") != "admin":
         return jsonify({"error": "Sadece admin kullanabilir"}), 403
+
     payload = request.get_json(force=True) or {}
     img_data = payload.get("image", "")
     if not img_data:
         return jsonify({"error": "Görüntü eksik"}), 400
+
+    media_type = "image/jpeg"
     if "," in img_data:
-        img_data = img_data.split(",", 1)[1]
+        header, img_data = img_data.split(",", 1)
+        if "png" in header:
+            media_type = "image/png"
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return jsonify({"error": "ANTHROPIC_API_KEY Render'da ayarlanmamış."}), 500
+
     try:
-        img_bytes = _b64.b64decode(img_data)
-    except Exception:
-        return jsonify({"error": "Base64 decode hatası"}), 400
-    hf_token = os.environ.get("HF_TOKEN")
-    if not hf_token:
-        return jsonify({"error": "HF_TOKEN ayarlanmamış."}), 500
-    try:
-        r = requests.post(
-            "https://api-inference.huggingface.co/models/openfoodfacts/nutrition-extractor",
-            headers={"Authorization": f"Bearer {hf_token}", "Content-Type": "application/octet-stream"},
-            data=img_bytes,
-            timeout=20,
+        client = _anthropic.Anthropic(api_key=api_key)
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=512,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": media_type, "data": img_data},
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "Bu ürün etiketindeki besin değerlerini çıkar. "
+                            "SADECE şu JSON formatında yanıt ver, başka hiçbir şey yazma:\n"
+                            "{\"kalori\": sayı_veya_null, \"protein\": sayı_veya_null, "
+                            "\"yag\": sayı_veya_null, \"karbonhidrat\": sayı_veya_null, "
+                            "\"seker\": sayı_veya_null, \"tuz\": sayı_veya_null, "
+                            "\"lif\": sayı_veya_null}\n"
+                            "Değer etiket üzerinde yoksa null yaz. Tüm değerler 100g/ml başına olsun."
+                        ),
+                    },
+                ],
+            }],
         )
-        if r.status_code == 503:
-            return jsonify({"error": "Model yükleniyor (cold start). 20 sn bekleyip tekrar deneyin."}), 503
-        if r.status_code != 200:
-            return jsonify({"error": f"HF API hatası: {r.status_code}", "detail": r.text[:300]}), 500
-        return jsonify({"success": True, "data": r.json()})
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "HF API zaman aşımı. Tekrar deneyin."}), 504
+        text = msg.content[0].text.strip()
+        # JSON bloğu varsa çıkar
+        if "```" in text:
+            text = text.split("```")[1].replace("json","").strip()
+        data = _json.loads(text)
+        return jsonify({"success": True, "data": data})
+    except _json.JSONDecodeError:
+        return jsonify({"success": True, "data": {"ham_yanit": text}})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -2269,7 +2294,7 @@ def ai_okuyucu():
 <script>
 var stream=null;
 function kameraAc(){
-  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}})
     .then(function(s){
       stream=s;
       var v=document.getElementById('ai-video');
@@ -2317,22 +2342,22 @@ function gosterSonuc(d){
   if(d.error){gosterHata(d.error);return;}
   var data=d.data;
   var html='<div class="panel" style="margin-top:0"><h2>🧠 AI Analiz Sonucu</h2>';
-  if(Array.isArray(data)){
-    html+='<div class="tbl-wrap"><table style="font-size:.85rem;width:100%"><tr><th>Besin Değeri</th><th style="text-align:right">Güven</th></tr>';
-    data.forEach(function(item){
-      var pct=Math.round((item.score||0)*100);
-      html+='<tr><td style="font-weight:600">'+(item.label||item.entity||'—')+'</td>';
-      html+='<td style="text-align:right;color:#a3a3a3">'+pct+'%</td></tr>';
-    });
-    html+='</table></div>';
-  } else if(typeof data==='object'&&data!==null){
-    var LABELS={energy_kcal:'Enerji (kcal)',proteins:'Protein (g)',fat:'Yağ (g)',carbohydrates:'Karbonhidrat (g)',sugars:'Şeker (g)',fiber:'Lif (g)',salt:'Tuz (g)',saturated_fat:'Doymuş Yağ (g)'};
-    html+='<div class="tbl-wrap"><table style="font-size:.85rem;width:100%"><tr><th>Besin Değeri</th><th style="text-align:right">Miktar</th></tr>';
+  var LABELS={kalori:'Kalori (kcal)',protein:'Protein (g)',yag:'Yağ (g)',karbonhidrat:'Karbonhidrat (g)',seker:'Şeker (g)',tuz:'Tuz (g)',lif:'Lif (g)',ham_yanit:'Ham Yanıt'};
+  var ICONS={kalori:'🔥',protein:'💪',yag:'🫙',karbonhidrat:'🌾',seker:'🍬',tuz:'🧂',lif:'🌿'};
+  if(typeof data==='object'&&data!==null&&!Array.isArray(data)){
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:var(--border);margin-bottom:16px">';
     Object.keys(data).forEach(function(k){
-      var v=data[k]; if(v===null||v===undefined) return;
-      html+='<tr><td>'+(LABELS[k]||k)+'</td><td style="text-align:right;font-weight:700;color:#f5f5f5">'+v+'</td></tr>';
+      var v=data[k];
+      if(v===null||v===undefined) return;
+      var ico=ICONS[k]||'📊';
+      var lbl=LABELS[k]||k;
+      html+='<div style="background:var(--card);padding:16px;text-align:center">';
+      html+='<div style="font-size:1.4rem;margin-bottom:4px">'+ico+'</div>';
+      html+='<div style="font-family:Bebas Neue,sans-serif;font-size:1.8rem;color:#f5f5f5;line-height:1">'+v+'</div>';
+      html+='<div style="font-family:JetBrains Mono,monospace;font-size:.58rem;color:#525252;letter-spacing:1px;margin-top:4px">'+lbl+'</div>';
+      html+='</div>';
     });
-    html+='</table></div>';
+    html+='</div>';
   } else {
     html+='<pre style="color:#a3a3a3;font-size:.8rem;white-space:pre-wrap">'+JSON.stringify(data,null,2)+'</pre>';
   }
