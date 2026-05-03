@@ -854,13 +854,17 @@ document.addEventListener('DOMContentLoaded',function(){
 CONTENT_BLOCK
 </div>
 <script>
+var _mobOpen=false;
 function mobMenu(){
   var nav=document.getElementById('mob-nav');
   var btn=document.getElementById('mob-btn');
-  var open=nav.style.display==='flex';
-  nav.style.display=open?'none':'flex';
-  nav.style.flexDirection='column';
-  btn.textContent=open?'☰':'✕';
+  _mobOpen=!_mobOpen;
+  if(_mobOpen){
+    nav.style.cssText='display:flex!important;flex-direction:column!important;position:fixed!important;top:64px!important;left:0!important;right:0!important;bottom:0!important;background:rgba(6,6,6,.97)!important;padding:16px!important;gap:4px!important;z-index:9999!important;overflow-y:auto!important;';
+  } else {
+    nav.style.cssText='';
+  }
+  btn.textContent=_mobOpen?'✕':'☰';
 }
 document.addEventListener('DOMContentLoaded',function(){
   document.querySelectorAll('#mob-nav a').forEach(function(a){
