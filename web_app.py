@@ -2243,30 +2243,26 @@ def ai_okuyucu():
     content = r"""
 <div class="page-title">AI Okuyucu</div>
 <div style="max-width:680px;margin:0 auto">
-  <div class="panel" style="padding:0;overflow:hidden">
-    <div style="position:relative;background:#000;aspect-ratio:4/3;max-height:420px">
-      <video id="ai-video" autoplay playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video>
-      <canvas id="ai-canvas" style="display:none"></canvas>
-      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
-        <div style="width:72%;height:44%;border:2px solid rgba(165,216,255,.7);box-shadow:0 0 0 9999px rgba(0,0,0,.45),0 0 24px rgba(165,216,255,.2) inset;position:relative">
-          <div style="position:absolute;left:4px;right:4px;height:2px;top:50%;background:linear-gradient(90deg,transparent,rgba(165,216,255,.8),transparent);box-shadow:0 0 8px rgba(165,216,255,.6);animation:scanLaser 2s ease-in-out infinite"></div>
-        </div>
-      </div>
-      <div id="ai-placeholder" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0a0a;gap:12px">
-        <div style="font-size:3rem;opacity:.3">📷</div>
-        <div style="font-family:JetBrains Mono,monospace;font-size:.65rem;letter-spacing:2px;color:#525252;text-transform:uppercase">Kamera için aşağıdaki butona basın</div>
-      </div>
+
+  <div class="panel">
+    <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">
+      Ürünün arka etiketini fotoğrafla — AI kalori ve besin değerlerini okur
     </div>
-    <div style="padding:16px;display:flex;gap:10px;background:#0e0e0e;border-top:1px solid #1a1a1a">
-      <button id="btn-kamera" onclick="kameraAc()" class="btn btn-muted" style="flex:1">📷 Kamera Aç</button>
-      <button id="btn-cek" onclick="fotoCek()" class="btn btn-green" style="flex:1;display:none">⚡ Çek &amp; Analiz Et</button>
-      <button id="btn-tekrar" onclick="tekrar()" class="btn btn-muted" style="flex:1;display:none">🔄 Tekrar Çek</button>
-    </div>
+    <input type="file" id="ai-file" accept="image/*" capture="environment"
+           style="display:none" onchange="dosyaSecildi(this)">
+    <button onclick="document.getElementById('ai-file').click()"
+            class="btn btn-green" style="width:100%;font-size:1rem;padding:16px">
+      📷 Etiketi Fotoğrafla
+    </button>
   </div>
+
   <div id="preview-wrap" style="display:none;margin-bottom:16px">
-    <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">YAKALANAN GÖRÜNTÜ</div>
+    <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">ÇEKILEN FOTOĞRAF</div>
     <img id="ai-preview" style="width:100%;border:1px solid #1a1a1a;display:block">
+    <button onclick="document.getElementById('ai-file').click()"
+            class="btn btn-muted" style="width:100%;margin-top:8px">🔄 Tekrar Çek</button>
   </div>
+
   <div id="ai-loading" style="display:none;text-align:center;padding:32px">
     <div style="font-family:JetBrains Mono,monospace;font-size:.72rem;color:#525252;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px">MODEL ANALİZ EDİYOR…</div>
     <div style="width:200px;height:2px;background:#1a1a1a;margin:0 auto;overflow:hidden;border-radius:1px">
@@ -2274,48 +2270,31 @@ def ai_okuyucu():
     </div>
     <style>@keyframes loadSlide{from{transform:translateX(-100%)}to{transform:translateX(350%)}}</style>
   </div>
+
   <div id="ai-sonuc" style="display:none"></div>
 </div>
 <script>
-var stream=null;
-function kameraAc(){
-  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{min:1280,ideal:1920},height:{min:720,ideal:1080}}})
-    .then(function(s){
-      stream=s;
-      var v=document.getElementById('ai-video');
-      v.srcObject=s;
-      document.getElementById('ai-placeholder').style.display='none';
-      document.getElementById('btn-kamera').style.display='none';
-      document.getElementById('btn-cek').style.display='flex';
-    }).catch(function(e){alert('Kamera açılamadı: '+e.message);});
-}
-function fotoCek(){
-  var v=document.getElementById('ai-video');
-  var c=document.getElementById('ai-canvas');
-  c.width=v.videoWidth; c.height=v.videoHeight;
-  console.log('Çözünürlük: '+v.videoWidth+'x'+v.videoHeight);
-  c.getContext('2d').drawImage(v,0,0);
-  var dataUrl=c.toDataURL('image/jpeg',0.97);
-  document.getElementById('ai-preview').src=dataUrl;
-  document.getElementById('preview-wrap').style.display='block';
-  document.getElementById('btn-cek').style.display='none';
-  document.getElementById('btn-tekrar').style.display='flex';
-  if(stream) stream.getTracks().forEach(function(t){t.stop();});
-  document.getElementById('ai-loading').style.display='block';
-  document.getElementById('ai-sonuc').style.display='none';
-  fetch('/api/ai-scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:dataUrl})})
-    .then(function(r){return r.json();})
-    .then(function(d){gosterSonuc(d);})
-    .catch(function(e){document.getElementById('ai-loading').style.display='none';gosterHata('Bağlantı hatası: '+e.message);});
-}
-function tekrar(){
-  document.getElementById('preview-wrap').style.display='none';
-  document.getElementById('ai-sonuc').style.display='none';
-  document.getElementById('ai-loading').style.display='none';
-  document.getElementById('btn-tekrar').style.display='none';
-  document.getElementById('ai-placeholder').style.display='flex';
-  document.getElementById('btn-kamera').style.display='flex';
-  stream=null; kameraAc();
+function dosyaSecildi(input){
+  if(!input.files||!input.files[0]) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var dataUrl=e.target.result;
+    document.getElementById('ai-preview').src=dataUrl;
+    document.getElementById('preview-wrap').style.display='block';
+    document.getElementById('ai-loading').style.display='block';
+    document.getElementById('ai-sonuc').style.display='none';
+    fetch('/api/ai-scan',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:dataUrl})
+    }).then(function(r){return r.json();})
+      .then(function(d){gosterSonuc(d);})
+      .catch(function(e){
+        document.getElementById('ai-loading').style.display='none';
+        gosterHata('Bağlantı hatası: '+e.message);
+      });
+  };
+  reader.readAsDataURL(input.files[0]);
 }
 function gosterHata(msg){
   var el=document.getElementById('ai-sonuc');
