@@ -175,6 +175,31 @@ def openfoodfacts(barkod):
     return None, None
 
 
+def go_upc(barkod):
+    """
+    Görev-4: go-upc.com API – ikinci barkod kaynağı.
+    GO_UPC_KEY env variable yoksa sessizce atlanır.
+    """
+    api_key = os.environ.get("GO_UPC_KEY", "")
+    if not api_key:
+        return None, None
+    try:
+        r = requests.get(
+            f"https://go-upc.com/api/v1/code/{barkod}",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=4,
+        )
+        if r.status_code != 200:
+            return None, None
+        data = r.json()
+        product = data.get("product") or {}
+        name = (product.get("name") or "").strip()
+        cat  = (product.get("category") or "Genel").strip() or "Genel"
+        return (name or None), cat
+    except Exception:
+        return None, None
+
+
 def off_allerjen(barkod):
     """Misafir görünümü için OFF'tan alerjen, besin ve Nutri-Score bilgisi çeker."""
     ALLERJEN_TR = {
@@ -775,6 +800,7 @@ document.addEventListener('DOMContentLoaded',function(){
     {% endif %}
     {% if session.get('rol') == 'admin' %}
     <a href="/kullanicilar" class="{{ 'active' if page=='kullanicilar' }}">Kullanicilar</a>
+    <a href="/ai-okuyucu" class="{{ 'active' if page=='ai-okuyucu' }}">AI Okuyucu</a>
     {% endif %}
     <div class="nav-divider"></div>
     <span class="rol-badge">{{ session.get('rol','') }}</span>
@@ -1004,6 +1030,8 @@ def tarama():
         if not urun:
             # FIX: OFF lookup happens OUTSIDE any open DB connection
             urun_adi, kategori = openfoodfacts(barkod)
+            if not urun_adi:                          # Görev-4: go-upc fallback
+                urun_adi, kategori = go_upc(barkod)
             if urun_adi:
                 c = get_db()
                 try:
@@ -1149,9 +1177,9 @@ def tarama():
             for no, p in enumerate(partiler_list, 1):
                 parti_opts += f'<option value="{p["parti_id"]}">P{no} — {p.get("stt","SKT Yok")} ({p["miktar"]} adet)</option>'
 
-            # ── Allerjen & Besin Bilgileri (sadece misafir rolü) ──
+            # ── Allerjen & Besin Bilgileri (tüm kullanıcılar) ──
             allerjen_section = ""
-            if session.get("rol") == "misafir":
+            if True:  # Görev-3: tüm roller için göster
                 _off = off_allerjen(barkod)
                 if _off:
                     def _badge(nm, col="#e05252", ico="⚠"):
@@ -2153,6 +2181,166 @@ def api_hareketler():
     finally:
         c.close()
     return jsonify(liste)
+
+
+# ═══════════════════════════════════════════════════
+#  AI OKUYUCU (Görev-2)
+# ═══════════════════════════════════════════════════
+import base64 as _b64
+
+@app.route("/api/ai-scan", methods=["POST"])
+@yetkili_giris
+def api_ai_scan():
+    if session.get("rol") != "admin":
+        return jsonify({"error": "Sadece admin kullanabilir"}), 403
+    payload = request.get_json(force=True) or {}
+    img_data = payload.get("image", "")
+    if not img_data:
+        return jsonify({"error": "Görüntü eksik"}), 400
+    if "," in img_data:
+        img_data = img_data.split(",", 1)[1]
+    try:
+        img_bytes = _b64.b64decode(img_data)
+    except Exception:
+        return jsonify({"error": "Base64 decode hatası"}), 400
+    hf_token = os.environ.get("HF_TOKEN")
+    if not hf_token:
+        return jsonify({"error": "HF_TOKEN ayarlanmamış."}), 500
+    try:
+        r = requests.post(
+            "https://api-inference.huggingface.co/models/openfoodfacts/nutrition-extractor",
+            headers={"Authorization": f"Bearer {hf_token}", "Content-Type": "application/octet-stream"},
+            data=img_bytes,
+            timeout=20,
+        )
+        if r.status_code == 503:
+            return jsonify({"error": "Model yükleniyor (cold start). 20 sn bekleyip tekrar deneyin."}), 503
+        if r.status_code != 200:
+            return jsonify({"error": f"HF API hatası: {r.status_code}", "detail": r.text[:300]}), 500
+        return jsonify({"success": True, "data": r.json()})
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "HF API zaman aşımı. Tekrar deneyin."}), 504
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/ai-okuyucu")
+@yetkili_giris
+def ai_okuyucu():
+    if session.get("rol") != "admin":
+        return redirect("/")
+    content = r"""
+<div class="page-title">AI Okuyucu</div>
+<div style="max-width:680px;margin:0 auto">
+  <div class="panel" style="padding:0;overflow:hidden">
+    <div style="position:relative;background:#000;aspect-ratio:4/3;max-height:420px">
+      <video id="ai-video" autoplay playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video>
+      <canvas id="ai-canvas" style="display:none"></canvas>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+        <div style="width:72%;height:44%;border:2px solid rgba(165,216,255,.7);box-shadow:0 0 0 9999px rgba(0,0,0,.45),0 0 24px rgba(165,216,255,.2) inset;position:relative">
+          <div style="position:absolute;left:4px;right:4px;height:2px;top:50%;background:linear-gradient(90deg,transparent,rgba(165,216,255,.8),transparent);box-shadow:0 0 8px rgba(165,216,255,.6);animation:scanLaser 2s ease-in-out infinite"></div>
+        </div>
+      </div>
+      <div id="ai-placeholder" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0a0a;gap:12px">
+        <div style="font-size:3rem;opacity:.3">📷</div>
+        <div style="font-family:JetBrains Mono,monospace;font-size:.65rem;letter-spacing:2px;color:#525252;text-transform:uppercase">Kamera için aşağıdaki butona basın</div>
+      </div>
+    </div>
+    <div style="padding:16px;display:flex;gap:10px;background:#0e0e0e;border-top:1px solid #1a1a1a">
+      <button id="btn-kamera" onclick="kameraAc()" class="btn btn-muted" style="flex:1">📷 Kamera Aç</button>
+      <button id="btn-cek" onclick="fotoCek()" class="btn btn-green" style="flex:1;display:none">⚡ Çek &amp; Analiz Et</button>
+      <button id="btn-tekrar" onclick="tekrar()" class="btn btn-muted" style="flex:1;display:none">🔄 Tekrar Çek</button>
+    </div>
+  </div>
+  <div id="preview-wrap" style="display:none;margin-bottom:16px">
+    <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">YAKALANAN GÖRÜNTÜ</div>
+    <img id="ai-preview" style="width:100%;border:1px solid #1a1a1a;display:block">
+  </div>
+  <div id="ai-loading" style="display:none;text-align:center;padding:32px">
+    <div style="font-family:JetBrains Mono,monospace;font-size:.72rem;color:#525252;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px">MODEL ANALİZ EDİYOR…</div>
+    <div style="width:200px;height:2px;background:#1a1a1a;margin:0 auto;overflow:hidden;border-radius:1px">
+      <div style="width:40%;height:100%;background:var(--accent);animation:loadSlide 1.2s ease-in-out infinite alternate;box-shadow:0 0 8px var(--accent)"></div>
+    </div>
+    <style>@keyframes loadSlide{from{transform:translateX(-100%)}to{transform:translateX(350%)}}</style>
+  </div>
+  <div id="ai-sonuc" style="display:none"></div>
+</div>
+<script>
+var stream=null;
+function kameraAc(){
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
+    .then(function(s){
+      stream=s;
+      var v=document.getElementById('ai-video');
+      v.srcObject=s;
+      document.getElementById('ai-placeholder').style.display='none';
+      document.getElementById('btn-kamera').style.display='none';
+      document.getElementById('btn-cek').style.display='flex';
+    }).catch(function(e){alert('Kamera açılamadı: '+e.message);});
+}
+function fotoCek(){
+  var v=document.getElementById('ai-video');
+  var c=document.getElementById('ai-canvas');
+  c.width=v.videoWidth; c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  var dataUrl=c.toDataURL('image/jpeg',0.92);
+  document.getElementById('ai-preview').src=dataUrl;
+  document.getElementById('preview-wrap').style.display='block';
+  document.getElementById('btn-cek').style.display='none';
+  document.getElementById('btn-tekrar').style.display='flex';
+  if(stream) stream.getTracks().forEach(function(t){t.stop();});
+  document.getElementById('ai-loading').style.display='block';
+  document.getElementById('ai-sonuc').style.display='none';
+  fetch('/api/ai-scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:dataUrl})})
+    .then(function(r){return r.json();})
+    .then(function(d){gosterSonuc(d);})
+    .catch(function(e){document.getElementById('ai-loading').style.display='none';gosterHata('Bağlantı hatası: '+e.message);});
+}
+function tekrar(){
+  document.getElementById('preview-wrap').style.display='none';
+  document.getElementById('ai-sonuc').style.display='none';
+  document.getElementById('ai-loading').style.display='none';
+  document.getElementById('btn-tekrar').style.display='none';
+  document.getElementById('ai-placeholder').style.display='flex';
+  document.getElementById('btn-kamera').style.display='flex';
+  stream=null; kameraAc();
+}
+function gosterHata(msg){
+  var el=document.getElementById('ai-sonuc');
+  el.innerHTML='<div class="alert alert-red" style="margin-top:8px">⚠ '+msg+'</div>';
+  el.style.display='block';
+}
+function gosterSonuc(d){
+  document.getElementById('ai-loading').style.display='none';
+  var el=document.getElementById('ai-sonuc');
+  if(d.error){gosterHata(d.error);return;}
+  var data=d.data;
+  var html='<div class="panel" style="margin-top:0"><h2>🧠 AI Analiz Sonucu</h2>';
+  if(Array.isArray(data)){
+    html+='<div class="tbl-wrap"><table style="font-size:.85rem;width:100%"><tr><th>Besin Değeri</th><th style="text-align:right">Güven</th></tr>';
+    data.forEach(function(item){
+      var pct=Math.round((item.score||0)*100);
+      html+='<tr><td style="font-weight:600">'+(item.label||item.entity||'—')+'</td>';
+      html+='<td style="text-align:right;color:#a3a3a3">'+pct+'%</td></tr>';
+    });
+    html+='</table></div>';
+  } else if(typeof data==='object'&&data!==null){
+    var LABELS={energy_kcal:'Enerji (kcal)',proteins:'Protein (g)',fat:'Yağ (g)',carbohydrates:'Karbonhidrat (g)',sugars:'Şeker (g)',fiber:'Lif (g)',salt:'Tuz (g)',saturated_fat:'Doymuş Yağ (g)'};
+    html+='<div class="tbl-wrap"><table style="font-size:.85rem;width:100%"><tr><th>Besin Değeri</th><th style="text-align:right">Miktar</th></tr>';
+    Object.keys(data).forEach(function(k){
+      var v=data[k]; if(v===null||v===undefined) return;
+      html+='<tr><td>'+(LABELS[k]||k)+'</td><td style="text-align:right;font-weight:700;color:#f5f5f5">'+v+'</td></tr>';
+    });
+    html+='</table></div>';
+  } else {
+    html+='<pre style="color:#a3a3a3;font-size:.8rem;white-space:pre-wrap">'+JSON.stringify(data,null,2)+'</pre>';
+  }
+  html+='<div style="margin-top:12px;font-size:.6rem;color:#2d2d2d;text-align:right">Kaynak: Hugging Face · openfoodfacts/nutrition-extractor</div></div>';
+  el.innerHTML=html; el.style.display='block';
+}
+</script>
+"""
+    return render(content, page="ai-okuyucu", title="AI Okuyucu")
 
 # Health check endpoint for Railway
 @app.route("/health")
