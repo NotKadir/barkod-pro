@@ -673,13 +673,50 @@ label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted)
 .login-logo{font-family:'Bebas Neue',sans-serif;font-size:2.5rem;letter-spacing:4px;text-align:center;margin-bottom:6px}
 .login-sub{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted);text-align:center;letter-spacing:2px;text-transform:uppercase;margin-bottom:32px}
 
+/* ── MOBİL ── */
+html,body{overflow-x:hidden}
+.hamburger{
+  display:none;background:none;border:none;
+  color:var(--text);font-size:1.4rem;cursor:pointer;
+  padding:8px;line-height:1;
+}
 @media(max-width:900px){
+  html,body{overflow-x:hidden}
   .hdr{padding:0 16px}
-  .main{padding:20px 16px}
+  .main{padding:16px 12px;max-width:100%}
   .grid2{grid-template-columns:1fr}
   .stat-grid{grid-template-columns:repeat(2,1fr)}
-  .nav a{padding:6px 8px;font-size:.7rem}
-  .nav-user{display:none}
+  .nav-user,.rol-badge{display:none}
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  /* Nav hamburger */
+  .hamburger{display:flex;align-items:center;justify-content:center}
+  .nav{
+    display:none;
+    position:fixed;top:64px;left:0;right:0;bottom:0;
+    background:rgba(6,6,6,.97);
+    backdrop-filter:blur(24px);
+    flex-direction:column;
+    padding:16px;gap:4px;
+    z-index:200;overflow-y:auto;
+  }
+  .nav.mob-open{display:flex}
+  .nav a{
+    padding:14px 16px;font-size:.85rem;
+    border-bottom:1px solid var(--border);
+    width:100%;
+  }
+  .nav a::after{display:none}
+  .nav-divider{width:100%;height:1px;margin:8px 0}
+  .btn-login,.btn-logout{
+    width:100%;text-align:center;
+    padding:14px 16px!important;
+    border-bottom:1px solid var(--border);
+  }
+
+  /* Sayfa başlığı taşmasın */
+  .page-title{font-size:2rem}
+  .scan-wrap{padding:0}
 }
 </style>
 <script>
@@ -788,7 +825,8 @@ document.addEventListener('DOMContentLoaded',function(){
   <a href="/" class="logo-link">
     <div class="logo">Nex<span>Stock</span></div>
   </a>
-  <div class="nav">
+  <button class="hamburger" id="mob-btn" onclick="mobMenu()" aria-label="Menu">☰</button>
+  <div class="nav" id="mob-nav">
     <a href="/tarama" class="{{ 'active' if page=='tarama' }}">Tarama</a>
     {% if session.get('rol') not in ['misafir','goruntuleyici'] %}
     <a href="/" class="{{ 'active' if page=='dashboard' }}">Dashboard</a>
@@ -816,6 +854,21 @@ document.addEventListener('DOMContentLoaded',function(){
 CONTENT_BLOCK
 </div>
 <script>
+function mobMenu(){
+  var nav=document.getElementById('mob-nav');
+  var btn=document.getElementById('mob-btn');
+  nav.classList.toggle('mob-open');
+  btn.textContent=nav.classList.contains('mob-open')?'✕':'☰';
+}
+// Nav linkine tıklayınca menüyü kapat
+document.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('#mob-nav a').forEach(function(a){
+    a.addEventListener('click',function(){
+      document.getElementById('mob-nav').classList.remove('mob-open');
+      document.getElementById('mob-btn').textContent='☰';
+    });
+  });
+});
 document.querySelectorAll('.btn-green,.btn-login').forEach(function(btn){
   btn.addEventListener('mousemove',function(e){
     var r=btn.getBoundingClientRect();
