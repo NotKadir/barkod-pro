@@ -2281,19 +2281,22 @@ def api_ai_scan():
     if not api_key:
         return jsonify({"error": "GROQ_API_KEY Render'da ayarlanmamis."}), 500
 
-    prompt = (
-        "Bu fotograftaki beslenme tablosunu dikkatli oku. "
-        "Tablodaki her satiri tek tek incele: soldaki ISIM ile sagdaki SAYI'yi dogru eslestir. "
-        "Isimler Turkce olabilir: Enerji=kalori, Yag=yag, Karbonhidrat=karbonhidrat, "
-        "Sekerler/Seker=seker, Protein=protein, Tuz=tuz, Lif=lif. "
-        "SADECE su JSON formatinda yanit ver, baska hicbir sey yazma:\n"
-        '{"kalori": sayi_veya_null, "protein": sayi_veya_null, '
-        '"yag": sayi_veya_null, "karbonhidrat": sayi_veya_null, '
-        '"seker": sayi_veya_null, "tuz": sayi_veya_null, "lif": sayi_veya_null}\n'
-        "Her deger 100g/ml basina olsun. Etiket uzerinde yoksa null yaz. "
-        "ONEMLI: Hangi sayi hangi besine ait oldugunu tablodaki satir sirasiyla eslestireceksin, "
-        "kendi tahminlerinle degil."
-    )
+    prompt = """Sen bir besin etiketi OCR uzmanisин. Asagidaki kurallari KESINLIKLE uy:
+
+KURAL 1: Tablodaki her satiri bul. Soldaki ETIKET ile sagdaki SAYI'yi eslesir.
+KURAL 2: Su eslestirmeleri kullan (baska bir sey degil):
+  - "Enerji" satirindaki kJ/kcal degeri -> kalori (sadece kcal al, kJ alma)
+  - "Yag" ANA satiri -> yag  (DIKKAT: "Doymus yag", "Tekli doymamis" alt satirlari degil!)
+  - "Karbonhidrat" ANA satiri -> karbonhidrat  (alt satirlar degil)
+  - "Sekerler" veya "Seker" -> seker
+  - "Lif" veya "Posa" -> lif
+  - "Protein" -> protein
+  - "Tuz" -> tuz
+KURAL 3: Alt satirlari (girintili olanlar) ANA satirlarla karistirma.
+KURAL 4: Sadece asagidaki JSON formatinda yanit ver, hicbir aciklama yapma:
+{"kalori":null,"protein":null,"yag":null,"karbonhidrat":null,"seker":null,"tuz":null,"lif":null}
+KURAL 5: Deger yoksa null, varsa sadece sayiyi yaz (birim yazma).
+"""
 
     try:
         client = _Groq(api_key=api_key)
@@ -2418,7 +2421,12 @@ def ai_okuyucu():
 <div id="step1" class="panel">
   <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">BARKOD NUMARASI</div>
   <input type="text" id="barkod-input" placeholder="Barkod numarasini girin..." inputmode="numeric"
-         style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:14px;font-family:JetBrains Mono,monospace;font-size:1rem;margin-bottom:12px">
+         style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:14px;font-family:JetBrains Mono,monospace;font-size:1rem;margin-bottom:8px">
+  <input type="file" id="barkod-file" accept="image/*" capture="environment" style="display:none" onchange="barkodFotoScan(this)">
+  <button onclick="document.getElementById('barkod-file').click()" class="btn btn-muted" style="width:100%;padding:11px;font-size:.82rem;margin-bottom:12px">
+    📷 Barkodu Fotoğrafla (opsiyonel)
+  </button>
+  <div id="barkod-loading" style="display:none;text-align:center;padding:12px;font-family:JetBrains Mono,monospace;font-size:.65rem;color:#525252;letter-spacing:2px">BARKOD OKUNUYOR…</div>
   <div id="barkod-err" style="display:none;color:#e05252;font-size:.75rem;margin-bottom:8px"></div>
   <button onclick="step1Next()" class="btn btn-green" style="width:100%;padding:14px">DEVAM ET →</button>
 </div>
@@ -2500,6 +2508,30 @@ function showStep(n){
 }
 
 // STEP 1
+function barkodFotoScan(input){
+  if(!input.files||!input.files[0]) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    document.getElementById('barkod-loading').style.display='block';
+    document.getElementById('barkod-err').style.display='none';
+    fetch('/api/ai-barcode',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:e.target.result})
+    }).then(function(r){return r.json();}).then(function(d){
+      document.getElementById('barkod-loading').style.display='none';
+      if(d.error){
+        var err=document.getElementById('barkod-err');
+        err.textContent=d.error; err.style.display='block';
+        return;
+      }
+      document.getElementById('barkod-input').value=d.barkod;
+      document.getElementById('barkod-input').style.borderColor='var(--g)';
+    }).catch(function(e){
+      document.getElementById('barkod-loading').style.display='none';
+      alert('Hata: '+e.message);
+    });
+  };
+  reader.readAsDataURL(input.files[0]);
+}
 function step1Next(){
   var b = document.getElementById('barkod-input').value.trim();
   var err = document.getElementById('barkod-err');
@@ -2642,3 +2674,41 @@ def health():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=False, host="0.0.0.0", port=port, threaded=True)
+@app.route("/api/ai-barcode", methods=["POST"])
+@yetkili_giris
+def api_ai_barcode():
+    if session.get("rol") != "admin":
+        return jsonify({"error": "Sadece admin"}), 403
+    payload = request.get_json(force=True) or {}
+    img_data = payload.get("image", "")
+    if not img_data:
+        return jsonify({"error": "Goruntu eksik"}), 400
+    raw_b64 = img_data.split(",", 1)[1] if "," in img_data else img_data
+    data_url = "data:image/jpeg;base64," + raw_b64
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return jsonify({"error": "GROQ_API_KEY ayarlanmamis"}), 500
+    prompt = (
+        "Bu fotograftaki barkodun numarasini oku ve sadece rakami yaz. "
+        "Hicbir aciklama, hicbir baska karakter yazma. Sadece barkod numarasi."
+    )
+    try:
+        client = _Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": data_url}},
+                {"type": "text", "text": prompt}
+            ]}],
+            max_tokens=64,
+        )
+        text = response.choices[0].message.content.strip()
+        # sadece rakamları al
+        import re as _re
+        numbers = _re.sub(r"[^0-9]", "", text)
+        if not numbers:
+            return jsonify({"error": "Barkod okunamadi, tekrar dene"}), 400
+        return jsonify({"success": True, "barkod": numbers})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
