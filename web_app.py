@@ -2281,22 +2281,48 @@ def api_ai_scan():
     if not api_key:
         return jsonify({"error": "GROQ_API_KEY Render'da ayarlanmamis."}), 500
 
-    prompt = """Sen bir besin etiketi OCR uzmanisин. Asagidaki kurallari KESINLIKLE uy:
+    ocr_prompt = (
+        "Bu fotograftaki beslenme tablosunun her satirini oku. "
+        "Her satir icin tam olarak su formati kullan: ETIKET: DEGER\n"
+        "Ornek: Enerji (kJ/kcal): 2613/565\nYag (g): 51.8\nProtein (g): 27.2\n"
+        "Tablodaki TUM satirlari yaz, hicbirini atlama. Baska hicbir sey yazma."
+    )
 
-KURAL 1: Tablodaki her satiri bul. Soldaki ETIKET ile sagdaki SAYI'yi eslesir.
-KURAL 2: Su eslestirmeleri kullan (baska bir sey degil):
-  - "Enerji" satirindaki kJ/kcal degeri -> kalori (sadece kcal al, kJ alma)
-  - "Yag" ANA satiri -> yag  (DIKKAT: "Doymus yag", "Tekli doymamis" alt satirlari degil!)
-  - "Karbonhidrat" ANA satiri -> karbonhidrat  (alt satirlar degil)
-  - "Sekerler" veya "Seker" -> seker
-  - "Lif" veya "Posa" -> lif
-  - "Protein" -> protein
-  - "Tuz" -> tuz
-KURAL 3: Alt satirlari (girintili olanlar) ANA satirlarla karistirma.
-KURAL 4: Sadece asagidaki JSON formatinda yanit ver, hicbir aciklama yapma:
-{"kalori":null,"protein":null,"yag":null,"karbonhidrat":null,"seker":null,"tuz":null,"lif":null}
-KURAL 5: Deger yoksa null, varsa sadece sayiyi yaz (birim yazma).
-"""
+    import re as _re
+
+    def _parse_ocr(ocr_text):
+        result = {"kalori": None, "protein": None, "yag": None,
+                  "karbonhidrat": None, "seker": None, "tuz": None, "lif": None}
+        for line in ocr_text.splitlines():
+            if ":" not in line:
+                continue
+            parts = line.split(":", 1)
+            lbl = parts[0].strip().lower()
+            val_str = parts[1].strip()
+            if "/" in val_str:
+                val_str = val_str.split("/")[-1].strip()
+            val_str = _re.sub(r"[^0-9,.]", "", val_str).replace(",", ".")
+            try:
+                val = float(val_str)
+            except ValueError:
+                continue
+            if any(x in lbl for x in ["enerji", "energy", "kalori", "calori"]):
+                result["kalori"] = val
+            elif any(x in lbl for x in ["protein"]):
+                result["protein"] = val
+            elif any(x in lbl for x in ["doymu", "tekli", "coklu", "polyun", "monoun"]):
+                pass
+            elif any(x in lbl for x in ["yag", "yağ", "fat", "lipid"]):
+                result["yag"] = val
+            elif any(x in lbl for x in ["seker", "şeker", "sugar"]):
+                result["seker"] = val
+            elif any(x in lbl for x in ["lif", "posa", "fiber", "fibre"]):
+                result["lif"] = val
+            elif any(x in lbl for x in ["karbonhidrat", "carbohydr"]):
+                result["karbonhidrat"] = val
+            elif any(x in lbl for x in ["tuz", "salt", "sodyum", "sodium"]):
+                result["tuz"] = val
+        return result
 
     try:
         client = _Groq(api_key=api_key)
@@ -2306,18 +2332,14 @@ KURAL 5: Deger yoksa null, varsa sadece sayiyi yaz (birim yazma).
                 "role": "user",
                 "content": [
                     {"type": "image_url", "image_url": {"url": data_url}},
-                    {"type": "text", "text": prompt}
+                    {"type": "text", "text": ocr_prompt}
                 ]
             }],
             max_tokens=512,
         )
-        text = response.choices[0].message.content.strip()
-        if "```" in text:
-            text = text.split("```")[1].replace("json", "").strip()
-        data = _json.loads(text)
-        return jsonify({"success": True, "data": data})
-    except _json.JSONDecodeError:
-        return jsonify({"success": True, "data": {"ham_yanit": text}})
+        ocr_text = response.choices[0].message.content.strip()
+        data = _parse_ocr(ocr_text)
+        return jsonify({"success": True, "data": data, "ocr_raw": ocr_text})
     except Exception as e:
         err = str(e)
         if "429" in err or "rate" in err.lower():
