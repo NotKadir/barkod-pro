@@ -461,7 +461,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;
 }
 @keyframes logoSweep{0%,80%,100%{left:-100%}40%{left:200%}}
 
-.nav{display:flex;align-items:center;gap:2px;position:fixed;top:0;right:40px;height:64px;z-index:101}
+.nav{display:flex;align-items:center;gap:2px;position:fixed;top:0;right:40px;z-index:101;padding:0 0;line-height:64px}
 .nav a{
   color:var(--muted);text-decoration:none;
   font-size:.72rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
@@ -693,6 +693,7 @@ html,body{overflow-x:hidden}
   .hamburger{display:flex;align-items:center;justify-content:center}
   .nav{
     display:none;
+    height:auto;
     position:fixed;top:64px;left:0;right:0;bottom:0;
     background:rgba(6,6,6,.97);
     backdrop-filter:blur(24px);
