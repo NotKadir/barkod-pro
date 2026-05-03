@@ -2294,7 +2294,7 @@ def ai_okuyucu():
 <script>
 var stream=null;
 function kameraAc(){
-  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}})
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{min:1280,ideal:1920},height:{min:720,ideal:1080}}})
     .then(function(s){
       stream=s;
       var v=document.getElementById('ai-video');
@@ -2308,8 +2308,9 @@ function fotoCek(){
   var v=document.getElementById('ai-video');
   var c=document.getElementById('ai-canvas');
   c.width=v.videoWidth; c.height=v.videoHeight;
+  console.log('Çözünürlük: '+v.videoWidth+'x'+v.videoHeight);
   c.getContext('2d').drawImage(v,0,0);
-  var dataUrl=c.toDataURL('image/jpeg',0.92);
+  var dataUrl=c.toDataURL('image/jpeg',0.97);
   document.getElementById('ai-preview').src=dataUrl;
   document.getElementById('preview-wrap').style.display='block';
   document.getElementById('btn-cek').style.display='none';
