@@ -857,14 +857,15 @@ CONTENT_BLOCK
 function mobMenu(){
   var nav=document.getElementById('mob-nav');
   var btn=document.getElementById('mob-btn');
-  nav.classList.toggle('mob-open');
-  btn.textContent=nav.classList.contains('mob-open')?'✕':'☰';
+  var open=nav.style.display==='flex';
+  nav.style.display=open?'none':'flex';
+  nav.style.flexDirection='column';
+  btn.textContent=open?'☰':'✕';
 }
-// Nav linkine tıklayınca menüyü kapat
 document.addEventListener('DOMContentLoaded',function(){
   document.querySelectorAll('#mob-nav a').forEach(function(a){
     a.addEventListener('click',function(){
-      document.getElementById('mob-nav').classList.remove('mob-open');
+      document.getElementById('mob-nav').style.display='none';
       document.getElementById('mob-btn').textContent='☰';
     });
   });
