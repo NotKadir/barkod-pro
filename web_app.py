@@ -2022,6 +2022,25 @@ def stok_cikis():
             c.close()
     return redirect(f"/tarama?barkod={barkod}")
 
+@app.route("/urun-sil", methods=["POST"])
+@yetkili_giris
+def urun_sil():
+    if session.get("rol") != "admin":
+        return jsonify({"error": "Sadece admin"}), 403
+    barkod = (request.form.get("barkod") or "").strip()
+    if not barkod:
+        return redirect("/urunler")
+    c = get_db()
+    try:
+        c.execute("DELETE FROM partiler WHERE barkod=%s", (barkod,))
+        c.execute("DELETE FROM stok_hareketleri WHERE barkod=%s", (barkod,))
+        c.execute("DELETE FROM urunler WHERE barkod=%s", (barkod,))
+        c.commit()
+    finally:
+        c.close()
+    return redirect("/urunler")
+
+
 @app.route("/parti-sil", methods=["POST"])
 @giris_gerekli
 def parti_sil():
@@ -2193,7 +2212,10 @@ def urunler():
         gun = kalan_gun(u.get("stt"))
         rc  = stt_renk(gun)
         et  = stt_etiket(gun) if u.get("stt") else "—"
-        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#a3a3a3">{u.get("parti_sayisi",0)}</td><td style="color:#525252">{u.get("min_stok",5)}</td><td style="color:#ffffff">{float(u.get("fiyat") or 0):.2f} TL</td></tr>'
+        sil_btn = (f'<form method="POST" action="/urun-sil" style="display:inline" onsubmit="return confirm(\'{u["urun_adi"]} silinsin mi? Tüm parti ve hareketler de silinir!\')">'
+                   f'<input type="hidden" name="barkod" value="{u["barkod"]}">'
+                   f'<button type="submit" class="btn btn-muted" style="padding:3px 10px;font-size:.7rem;border-color:#e05252;color:#e05252">SİL</button></form>')
+        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#a3a3a3">{u.get("parti_sayisi",0)}</td><td style="color:#525252">{u.get("min_stok",5)}</td><td style="color:#ffffff">{float(u.get("fiyat") or 0):.2f} TL</td><td>{sil_btn}</td></tr>'
 
     content = f"""
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
