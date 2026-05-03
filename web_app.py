@@ -97,7 +97,8 @@ def init_db():
         for col, typ in [
             ("kalori","REAL"), ("protein","REAL"), ("yag","REAL"),
             ("karbonhidrat","REAL"), ("seker","REAL"), ("tuz","REAL"),
-            ("lif","REAL"), ("icindekiler","TEXT")
+            ("lif","REAL"), ("icindekiler","TEXT"),
+            ("allerjenler","TEXT"), ("katki_maddeleri","TEXT")
         ]:
             try:
                 c.execute(f"ALTER TABLE urunler ADD COLUMN IF NOT EXISTS {col} {typ}")
@@ -1265,6 +1266,8 @@ def tarama():
                 }
                 _has_local = any(v is not None for v in _local_nut.values())
                 _local_ic = urun.get("icindekiler") or ""
+                _local_allerjenler = urun.get("allerjenler") or ""
+                _local_katki = urun.get("katki_maddeleri") or ""
 
                 _off = off_allerjen(barkod)
                 if _off or _has_local:
@@ -1287,8 +1290,14 @@ def tarama():
                     def _fmt(v, u="g"):
                         return f"{v:.1f}&nbsp;{u}" if v is not None else "—"
 
-                    al_html = ("".join(_badge(a) for a in (_off["allerjenler"] if _off else []))
-                               or '<span style="color:#4ade80;font-size:.78rem">✓ Bilinen alerjen tespit edilmedi</span>')
+                    # Önce lokal DB allerjenlerini kullan
+                    if _local_allerjenler:
+                        _al_list = [x.strip() for x in _local_allerjenler.split(',') if x.strip()]
+                        al_html = ("".join(_badge(a) for a in _al_list)
+                                   or '<span style="color:#4ade80;font-size:.78rem">✓ Bilinen alerjen tespit edilmedi</span>')
+                    else:
+                        al_html = ("".join(_badge(a) for a in (_off["allerjenler"] if _off else []))
+                                   or '<span style="color:#4ade80;font-size:.78rem">✓ Bilinen alerjen tespit edilmedi</span>')
                     iz_html = "".join(_badge(z, "#f0b429", "◦") for z in (_off["izler"] if _off else []))
                     et_html = "".join(_badge(e, "#4ade80", "✓") for e in (_off["etiketler"] if _off else []))
 
@@ -1314,10 +1323,17 @@ def tarama():
                               f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["lif"])}</td></tr>'
                               if b.get("lif") is not None else "")
                     ic = _ic_final
+                    katki_html = ""
+                    if _local_katki:
+                        katki_html = (f'<div style="margin-top:8px;padding-top:8px;border-top:1px solid #1e1e2e">'
+                                     f'<div style="font-family:JetBrains Mono,monospace;font-size:.58rem;'
+                                     f'color:#525252;letter-spacing:2px;margin-bottom:4px">KATKI MADDELERİ</div>'
+                                     f'<div style="font-size:.72rem;color:#8a8a8a">{_local_katki}</div></div>')
                     ic_html = (f'<div style="margin-top:12px;padding-top:10px;border-top:1px solid #1e1e2e">'
                                f'<div style="font-family:JetBrains Mono,monospace;font-size:.6rem;'
                                f'color:#525252;letter-spacing:2px;margin-bottom:4px">İÇERİK</div>'
-                               f'<div style="font-size:.73rem;color:#8a8a8a;line-height:1.6">{ic}</div></div>'
+                               f'<div style="font-size:.73rem;color:#8a8a8a;line-height:1.6">{ic}</div>'
+                               f'{katki_html}</div>'
                                if ic else "")
                     iz_sec = (f'<div style="margin-bottom:10px"><div style="font-family:JetBrains Mono,monospace;'
                               f'font-size:.6rem;color:#a3a3a3;letter-spacing:2px;margin-bottom:6px">'
@@ -2485,11 +2501,13 @@ def api_urun_ai_ekle():
     if session.get("rol") != "admin":
         return jsonify({"error": "Sadece admin"}), 403
     data = request.get_json(force=True) or {}
-    barkod      = (data.get("barkod") or "").strip()
-    urun_adi    = (data.get("urun_adi") or "").strip()
-    kategori    = (data.get("kategori") or "Genel").strip()
-    nutrition   = data.get("nutrition") or {}
-    icindekiler = (data.get("icindekiler") or "").strip()
+    barkod          = (data.get("barkod") or "").strip()
+    urun_adi        = (data.get("urun_adi") or "").strip()
+    kategori        = (data.get("kategori") or "Genel").strip()
+    nutrition       = data.get("nutrition") or {}
+    icindekiler     = (data.get("icindekiler") or "").strip()
+    allerjenler     = (data.get("allerjenler") or "").strip()
+    katki_maddeleri = (data.get("katki_maddeleri") or "").strip()
     if not barkod or not urun_adi:
         return jsonify({"error": "Barkod ve urun adi zorunlu"}), 400
     c = get_db()
@@ -2497,19 +2515,22 @@ def api_urun_ai_ekle():
         c.execute(
             """INSERT INTO urunler
                (barkod, urun_adi, kategori, kalori, protein, yag, karbonhidrat,
-                seker, tuz, lif, icindekiler)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                seker, tuz, lif, icindekiler, allerjenler, katki_maddeleri)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                ON CONFLICT (barkod) DO UPDATE SET
                  urun_adi=EXCLUDED.urun_adi, kategori=EXCLUDED.kategori,
                  kalori=EXCLUDED.kalori, protein=EXCLUDED.protein,
                  yag=EXCLUDED.yag, karbonhidrat=EXCLUDED.karbonhidrat,
                  seker=EXCLUDED.seker, tuz=EXCLUDED.tuz,
                  lif=EXCLUDED.lif, icindekiler=EXCLUDED.icindekiler,
+                 allerjenler=EXCLUDED.allerjenler,
+                 katki_maddeleri=EXCLUDED.katki_maddeleri,
                  son_guncelleme=NOW()""",
             (barkod, urun_adi, kategori,
              nutrition.get("kalori"), nutrition.get("protein"), nutrition.get("yag"),
              nutrition.get("karbonhidrat"), nutrition.get("seker"),
-             nutrition.get("tuz"), nutrition.get("lif"), icindekiler or None)
+             nutrition.get("tuz"), nutrition.get("lif"), icindekiler or None,
+             allerjenler or None, katki_maddeleri or None)
         )
         c.commit()
         return jsonify({"success": True, "barkod": barkod})
@@ -2583,8 +2604,17 @@ def ai_okuyucu():
   <div id="ic-loading" style="display:none;text-align:center;padding:24px;font-family:JetBrains Mono,monospace;font-size:.7rem;color:#525252;letter-spacing:2px">İÇİNDEKİLER OKUNUYOR…</div>
   <div id="ic-sonuc" style="display:none" class="panel" style="margin-top:0">
     <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">İÇİNDEKİLER (düzenleyebilirsin)</div>
-    <textarea id="ic-text" rows="5" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-size:.82rem;resize:vertical"></textarea>
-    <button onclick="step3Next()" class="btn btn-green" style="width:100%;padding:14px;margin-top:8px">DEVAM ET →</button>
+    <textarea id="ic-text" rows="4" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-size:.82rem;resize:vertical"></textarea>
+    <div id="analiz-loading" style="display:none;text-align:center;padding:12px;font-family:JetBrains Mono,monospace;font-size:.65rem;color:#525252;letter-spacing:2px">ALERJENLER ANALİZ EDİLİYOR…</div>
+    <div id="analiz-sonuc" style="display:none;margin-top:12px">
+      <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#e05252;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">⚠ ALERJENLER</div>
+      <div id="analiz-allerjenler" style="margin-bottom:10px;font-size:.8rem"></div>
+      <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#f0b429;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">◦ İZ MİKTARINDA İÇEREBİLİR</div>
+      <div id="analiz-izler" style="margin-bottom:10px;font-size:.8rem"></div>
+      <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">KATKI MADDELERİ</div>
+      <div id="analiz-katki" style="font-size:.78rem;color:#a3a3a3"></div>
+    </div>
+    <button onclick="step3Next()" class="btn btn-green" style="width:100%;padding:14px;margin-top:12px">DEVAM ET →</button>
   </div>
 </div>
 
@@ -2612,7 +2642,7 @@ def ai_okuyucu():
 .step-tab.active{color:var(--g)!important;background:rgba(16,185,129,.06)}
 </style>
 <script>
-var _state = {barkod:'', nutrition:{}, icindekiler:''};
+var _state = {barkod:'', nutrition:{}, icindekiler:'', allerjenler:'', katki_maddeleri:''};
 var NUT_KEYS = ['kalori','protein','yag','karbonhidrat','seker','tuz','lif'];
 var NUT_LABELS = {kalori:'Kalori (kcal)',protein:'Protein (g)',yag:'Yağ (g)',karbonhidrat:'Karbonhidrat (g)',seker:'Şeker (g)',tuz:'Tuz (g)',lif:'Lif (g)'};
 
@@ -2745,8 +2775,37 @@ function icindekilerScan(input){
     }).then(function(r){return r.json();}).then(function(d){
       document.getElementById('ic-loading').style.display='none';
       if(d.error){alert('Hata: '+d.error);return;}
-      document.getElementById('ic-text').value = d.icindekiler || '';
+      var metin = d.icindekiler || '';
+      document.getElementById('ic-text').value = metin;
       document.getElementById('ic-sonuc').style.display='block';
+      // Otomatik alerjen analizi
+      if(metin){
+        document.getElementById('analiz-loading').style.display='block';
+        fetch('/api/ai-analyze-ingredients',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({metin:metin})
+        }).then(function(r){return r.json();}).then(function(a){
+          document.getElementById('analiz-loading').style.display='none';
+          if(a.error||!a.data) return;
+          var data=a.data;
+          _state._analiz=data;
+          // Alerjenler
+          var al=data.allerjenler||[];
+          document.getElementById('analiz-allerjenler').innerHTML = al.length
+            ? al.map(function(x){return '<span style="display:inline-block;background:#e0525222;color:#e05252;border:1px solid #e0525244;padding:2px 10px;border-radius:3px;font-size:.75rem;margin:2px;font-family:JetBrains Mono,monospace">⚠ '+x+'</span>';}).join('')
+            : '<span style="color:#4ade80;font-size:.78rem">✓ Tespit edilmedi</span>';
+          // İzler
+          var iz=data.izler||[];
+          document.getElementById('analiz-izler').innerHTML = iz.length
+            ? iz.map(function(x){return '<span style="display:inline-block;background:#f0b42922;color:#f0b429;border:1px solid #f0b42944;padding:2px 10px;border-radius:3px;font-size:.75rem;margin:2px;font-family:JetBrains Mono,monospace">◦ '+x+'</span>';}).join('')
+            : '<span style="color:#525252;font-size:.78rem">—</span>';
+          // Katkı maddeleri
+          var kor=(data.koruyucular||[]).concat(data.tatlandiricilar||[]).concat(data.diger_katkilar||[]);
+          document.getElementById('analiz-katki').textContent = kor.length ? kor.join(', ') : '—';
+          document.getElementById('analiz-sonuc').style.display='block';
+        }).catch(function(){
+          document.getElementById('analiz-loading').style.display='none';
+        });
+      }
     }).catch(function(e){
       document.getElementById('ic-loading').style.display='none';
       alert('Bağlantı hatası: '+e.message);
@@ -2756,10 +2815,19 @@ function icindekilerScan(input){
 }
 function step3Next(){
   _state.icindekiler = document.getElementById('ic-text').value.trim();
+  if(_state._analiz){
+    var a=_state._analiz;
+    var al=(a.allerjenler||[]).concat(a.izler&&a.izler.length?['İz: '+a.izler.join(', ')]:[]);
+    _state.allerjenler = al.join(', ');
+    var kor=(a.koruyucular||[]).concat(a.tatlandiricilar||[]).concat(a.diger_katkilar||[]);
+    _state.katki_maddeleri = kor.join(', ');
+  }
   showStep4();
 }
 function step3Skip(){
   _state.icindekiler = '';
+  _state.allerjenler = '';
+  _state.katki_maddeleri = '';
   showStep4();
 }
 
@@ -2799,7 +2867,9 @@ function kaydet(){
       urun_adi: urun_adi,
       kategori: kategori,
       nutrition: _state.nutrition,
-      icindekiler: _state.icindekiler
+      icindekiler: _state.icindekiler,
+      allerjenler: _state.allerjenler,
+      katki_maddeleri: _state.katki_maddeleri
     })
   }).then(function(r){return r.json();}).then(function(d){
     if(d.error){err.textContent=d.error;err.style.display='block';btn.textContent='💾 VERİTABANINA EKLE';btn.disabled=false;return;}
@@ -2870,6 +2940,58 @@ def api_ai_barcode():
         if not barkod:
             return jsonify({"error": "Barkod okunamadi — net bir fotograf dene"}), 400
         return jsonify({"success": True, "barkod": barkod})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/ai-analyze-ingredients", methods=["POST"])
+@yetkili_giris
+def api_ai_analyze_ingredients():
+    if session.get("rol") != "admin":
+        return jsonify({"error": "Sadece admin"}), 403
+    payload = request.get_json(force=True) or {}
+    metin = (payload.get("metin") or "").strip()
+    if not metin:
+        return jsonify({"error": "Metin eksik"}), 400
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return jsonify({"error": "GROQ_API_KEY ayarlanmamis"}), 500
+
+    prompt = f"""Asagidaki urun icindekiler listesini analiz et.
+SADECE asagidaki JSON formatinda yanit ver, baska hicbir sey yazma:
+{{
+  "allerjenler": ["madde1", "madde2"],
+  "izler": ["madde1"],
+  "koruyucular": ["E200", "benzoat..."],
+  "tatlandiricilar": ["sukroz", "E951..."],
+  "diger_katkilar": ["E471", "lesitin..."]
+}}
+
+Kurallar:
+- allerjenler: gluten, sut, yumurta, fistik, kuruyemis, soya, balik, kabuklu deniz urunleri, susam — icindekiler listesinde DIREKT gecentler
+- izler: "icerebilir", "iz miktarda" ifadesinden sonra gelenler
+- koruyucular: E2xx kodlari veya bilinen koruyucular (sorbat, benzoat, nitrit vb.)
+- tatlandiricilar: seker disindaki tatlandiricilar (E9xx, stevia, aspartam vb.)
+- diger_katkilar: emulgatörler, stabilizerler, aroma maddesi, renk maddesi vb.
+- Liste bossa bos array yaz: []
+- Turkce yaz
+
+Icindekiler listesi:
+{metin}"""
+
+    try:
+        client = _Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=512,
+        )
+        text = response.choices[0].message.content.strip()
+        if "```" in text:
+            text = text.split("```")[1].replace("json","").strip()
+        data = _json.loads(text)
+        return jsonify({"success": True, "data": data})
+    except _json.JSONDecodeError:
+        return jsonify({"error": "AI yaniti parse edilemedi", "raw": text}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
