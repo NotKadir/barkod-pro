@@ -1655,6 +1655,39 @@ function kameraKapat(){
   var idleEl = document.getElementById('idle-hero');
   if(idleEl) idleEl.style.display='';
 }
+
+function sayiOkuScan(input){
+  if(!input.files||!input.files[0]) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    document.getElementById('sayiOku-loading').style.display='block';
+    document.getElementById('sayiOku-err').style.display='none';
+    fetch('/api/ai-barcode',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:e.target.result})
+    }).then(function(r){return r.json();}).then(function(d){
+      document.getElementById('sayiOku-loading').style.display='none';
+      if(d.error){
+        var err=document.getElementById('sayiOku-err');
+        err.textContent=d.error; err.style.display='block';
+        return;
+      }
+      var inp=document.getElementById('barkod-input');
+      inp.value=d.barkod;
+      inp.style.borderColor='var(--g)';
+      inp.style.color='var(--g)';
+      setTimeout(function(){
+        document.getElementById('barkod-form').submit();
+      }, 400);
+    }).catch(function(e){
+      document.getElementById('sayiOku-loading').style.display='none';
+      var err=document.getElementById('sayiOku-err');
+      err.textContent='Hata: '+e.message; err.style.display='block';
+    });
+  };
+  reader.readAsDataURL(input.files[0]);
+}
 </script>"""
 
     idle_hero = "" if sonuc_html else """
@@ -1767,7 +1800,17 @@ function kameraKapat(){
       <input name="barkod" id="barkod-input" placeholder="Barkod numarasi..." autofocus autocomplete="off">
       <button type="submit" class="btn btn-green" style="white-space:nowrap;padding:9px 18px">OKUT</button>
     </div>
-    <button type="button" onclick="kameraAc()" class="btn btn-muted" style="width:100%">Kamera ile Tara</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:0">
+      <button type="button" onclick="kameraAc()" class="btn btn-muted" style="width:100%;font-size:.8rem;padding:11px 6px">
+        📷 Şekil Okuma
+      </button>
+      <button type="button" onclick="document.getElementById('sayiOkuInput').click()" class="btn btn-muted" style="width:100%;font-size:.8rem;padding:11px 6px">
+        🔢 Sayı Okuma
+      </button>
+    </div>
+    <input type="file" id="sayiOkuInput" accept="image/*" capture="environment" style="display:none" onchange="sayiOkuScan(this)">
+    <div id="sayiOku-loading" style="display:none;text-align:center;padding:10px;font-family:JetBrains Mono,monospace;font-size:.65rem;color:#525252;letter-spacing:2px">BARKOD OKUNUYOR…</div>
+    <div id="sayiOku-err" style="display:none;color:#e05252;font-size:.75rem;margin-top:4px;text-align:center"></div>
   </form>
 
   {idle_hero}
@@ -2710,26 +2753,36 @@ def api_ai_barcode():
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         return jsonify({"error": "GROQ_API_KEY ayarlanmamis"}), 500
-    prompt = (
-        "Bu fotograftaki barkodun numarasini oku ve sadece rakami yaz. "
-        "Hicbir aciklama, hicbir baska karakter yazma. Sadece barkod numarasi."
+    # Step 1: AI sadece gördügü sayıları listele
+    ocr_prompt = (
+        "Bu fotograftaki barkodun altindaki rakamları oku. "
+        "SADECE rakamlari yaz, baska hicbir sey yazma. "
+        "Ornek cikti: 8690526430124"
     )
+    import re as _re
     try:
         client = _Groq(api_key=api_key)
         response = client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": data_url}},
-                {"type": "text", "text": prompt}
+                {"type": "text", "text": ocr_prompt}
             ]}],
             max_tokens=64,
         )
-        text = response.choices[0].message.content.strip()
-        # sadece rakamları al
-        import re as _re
-        numbers = _re.sub(r"[^0-9]", "", text)
+        raw = response.choices[0].message.content.strip()
+        # Python tarafinda temizle: sadece rakamlar, bosluklar ve tireler kaldir
+        numbers = _re.sub(r"[^0-9]", "", raw)
         if not numbers:
             return jsonify({"error": "Barkod okunamadi, tekrar dene"}), 400
+        # EAN/UPC uzunluk kontrolu (6-14 rakam arasi gecerli)
+        if len(numbers) < 6 or len(numbers) > 14:
+            # AI fazla/az karakter okumus olabilir, en uzun uygun parcayi al
+            matches = _re.findall(r"[0-9]{6,14}", raw)
+            if matches:
+                numbers = max(matches, key=len)
+            else:
+                return jsonify({"error": f"Gecersiz barkod uzunlugu ({len(numbers)}), tekrar dene"}), 400
         return jsonify({"success": True, "barkod": numbers})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
