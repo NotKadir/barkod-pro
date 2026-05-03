@@ -1658,35 +1658,61 @@ function kameraKapat(){
 
 function sayiOkuScan(input){
   if(!input.files||!input.files[0]) return;
-  var reader=new FileReader();
-  reader.onload=function(e){
-    document.getElementById('sayiOku-loading').style.display='block';
-    document.getElementById('sayiOku-err').style.display='none';
-    fetch('/api/ai-barcode',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({image:e.target.result})
+  var file=input.files[0];
+  var loadEl=document.getElementById('sayiOku-loading');
+  var errEl=document.getElementById('sayiOku-err');
+  loadEl.style.display='block';
+  errEl.style.display='none';
+
+  function submitBarkod(num){
+    loadEl.style.display='none';
+    var inp=document.getElementById('barkod-input');
+    inp.value=num;
+    inp.style.borderColor='var(--g)';
+    inp.style.color='var(--g)';
+    setTimeout(function(){ document.getElementById('barkod-form').submit(); }, 350);
+  }
+
+  function fallbackAI(dataUrl){
+    fetch('/api/ai-barcode',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:dataUrl})
     }).then(function(r){return r.json();}).then(function(d){
-      document.getElementById('sayiOku-loading').style.display='none';
-      if(d.error){
-        var err=document.getElementById('sayiOku-err');
-        err.textContent=d.error; err.style.display='block';
-        return;
-      }
-      var inp=document.getElementById('barkod-input');
-      inp.value=d.barkod;
-      inp.style.borderColor='var(--g)';
-      inp.style.color='var(--g)';
-      setTimeout(function(){
-        document.getElementById('barkod-form').submit();
-      }, 400);
+      loadEl.style.display='none';
+      if(d.error){errEl.textContent=d.error;errEl.style.display='block';return;}
+      submitBarkod(d.barkod);
     }).catch(function(e){
-      document.getElementById('sayiOku-loading').style.display='none';
-      var err=document.getElementById('sayiOku-err');
-      err.textContent='Hata: '+e.message; err.style.display='block';
+      loadEl.style.display='none';
+      errEl.textContent='Hata: '+e.message;errEl.style.display='block';
     });
-  };
-  reader.readAsDataURL(input.files[0]);
+  }
+
+  // Once BarcodeDetector API dene (Android Chrome native - %100 dogru)
+  if('BarcodeDetector' in window){
+    var img=new Image();
+    img.onload=function(){
+      var bd=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39']});
+      bd.detect(img).then(function(codes){
+        loadEl.style.display='none';
+        if(codes&&codes.length>0){
+          submitBarkod(codes[0].rawValue);
+        } else {
+          errEl.textContent='Barkod bulunamadi — barkodu cerceveleyerek tekrar dene';
+          errEl.style.display='block';
+        }
+      }).catch(function(){
+        // BarcodeDetector basarisiz, AI fallback
+        var reader=new FileReader();
+        reader.onload=function(e){fallbackAI(e.target.result);};
+        reader.readAsDataURL(file);
+      });
+    };
+    img.src=URL.createObjectURL(file);
+  } else {
+    // BarcodeDetector yok, AI kullan
+    var reader=new FileReader();
+    reader.onload=function(e){fallbackAI(e.target.result);};
+    reader.readAsDataURL(file);
+  }
 }
 </script>"""
 
@@ -2575,27 +2601,55 @@ function showStep(n){
 // STEP 1
 function barkodFotoScan(input){
   if(!input.files||!input.files[0]) return;
-  var reader=new FileReader();
-  reader.onload=function(e){
-    document.getElementById('barkod-loading').style.display='block';
-    document.getElementById('barkod-err').style.display='none';
+  var file=input.files[0];
+  var loadEl=document.getElementById('barkod-loading');
+  var errEl=document.getElementById('barkod-err');
+  loadEl.style.display='block';
+  errEl.style.display='none';
+
+  function setBarkod(num){
+    loadEl.style.display='none';
+    var inp=document.getElementById('barkod-input');
+    inp.value=num;
+    inp.style.borderColor='var(--g)';
+  }
+  function fallbackAI(dataUrl){
     fetch('/api/ai-barcode',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({image:e.target.result})
+      body:JSON.stringify({image:dataUrl})
     }).then(function(r){return r.json();}).then(function(d){
-      document.getElementById('barkod-loading').style.display='none';
-      if(d.error){
-        var err=document.getElementById('barkod-err');
-        err.textContent=d.error; err.style.display='block';
-        return;
-      }
-      document.getElementById('barkod-input').value=d.barkod;
-      document.getElementById('barkod-input').style.borderColor='var(--g)';
+      loadEl.style.display='none';
+      if(d.error){errEl.textContent=d.error;errEl.style.display='block';return;}
+      setBarkod(d.barkod);
     }).catch(function(e){
-      document.getElementById('barkod-loading').style.display='none';
-      alert('Hata: '+e.message);
+      loadEl.style.display='none';
+      errEl.textContent='Hata: '+e.message;errEl.style.display='block';
     });
-  };
-  reader.readAsDataURL(input.files[0]);
+  }
+
+  if('BarcodeDetector' in window){
+    var img=new Image();
+    img.onload=function(){
+      var bd=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39']});
+      bd.detect(img).then(function(codes){
+        loadEl.style.display='none';
+        if(codes&&codes.length>0){
+          setBarkod(codes[0].rawValue);
+        } else {
+          errEl.textContent='Barkod bulunamadi — net fotograf dene';
+          errEl.style.display='block';
+        }
+      }).catch(function(){
+        var reader=new FileReader();
+        reader.onload=function(e){fallbackAI(e.target.result);};
+        reader.readAsDataURL(file);
+      });
+    };
+    img.src=URL.createObjectURL(file);
+  } else {
+    var reader=new FileReader();
+    reader.onload=function(e){fallbackAI(e.target.result);};
+    reader.readAsDataURL(file);
+  }
 }
 function step1Next(){
   var b = document.getElementById('barkod-input').value.trim();
