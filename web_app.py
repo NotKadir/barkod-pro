@@ -2213,7 +2213,7 @@ def api_ai_scan():
     try:
         img_bytes = _b64.b64decode(img_data)
         _genai.configure(api_key=api_key)
-        model = _genai.GenerativeModel("gemini-1.5-flash")
+        model = _genai.GenerativeModel("gemini-2.0-flash")
         img_part = {"mime_type": "image/jpeg", "data": img_bytes}
         prompt = (
             "Bu ürün etiketindeki besin değerlerini çıkar. "
