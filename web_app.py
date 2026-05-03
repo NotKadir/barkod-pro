@@ -2273,7 +2273,7 @@ def api_ai_scan():
     try:
         img_bytes = _b64.b64decode(img_data)
         _genai.configure(api_key=api_key)
-        model = _genai.GenerativeModel("gemini-2.0-flash")
+        model = _genai.GenerativeModel("gemini-2.0-flash-lite")
         img_part = {"mime_type": "image/jpeg", "data": img_bytes}
         prompt = (
             "Bu ürün etiketindeki besin değerlerini çıkar. "
@@ -2292,7 +2292,10 @@ def api_ai_scan():
     except _json.JSONDecodeError:
         return jsonify({"success": True, "data": {"ham_yanit": text}})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        err = str(e)
+        if "429" in err or "quota" in err.lower() or "rate" in err.lower():
+            return jsonify({"error": "Gemini dakika limiti aşıldı (15 istek/dk). 30 saniye bekleyip tekrar dene."}), 429
+        return jsonify({"error": err}), 500
 
 
 @app.route("/ai-okuyucu")
