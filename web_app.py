@@ -2245,12 +2245,12 @@ def api_hareketler():
 
 
 # ═══════════════════════════════════════════════════
-#  AI OKUYUCU — Gemini Flash Vision
+#  AI OKUYUCU — Groq Llama 4 Vision
 # ═══════════════════════════════════════════════════
-import google.generativeai as _genai
 import json as _json
 import base64 as _b64
 import io as _io
+from groq import Groq as _Groq
 
 @app.route("/api/ai-scan", methods=["POST"])
 @yetkili_giris
@@ -2261,30 +2261,38 @@ def api_ai_scan():
     payload = request.get_json(force=True) or {}
     img_data = payload.get("image", "")
     if not img_data:
-        return jsonify({"error": "Görüntü eksik"}), 400
+        return jsonify({"error": "Goruntu eksik"}), 400
 
-    if "," in img_data:
-        img_data = img_data.split(",", 1)[1]
+    raw_b64 = img_data.split(",", 1)[1] if "," in img_data else img_data
+    data_url = "data:image/jpeg;base64," + raw_b64
 
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
-        return jsonify({"error": "GEMINI_API_KEY Render'da ayarlanmamış."}), 500
+        return jsonify({"error": "GROQ_API_KEY Render'da ayarlanmamis."}), 500
+
+    prompt = (
+        "Bu urun etiketindeki besin degerlerini cikar. "
+        "SADECE asagidaki JSON formatinda yanit ver, baska hicbir sey yazma:\n"
+        '{"kalori": sayi_veya_null, "protein": sayi_veya_null, '
+        '"yag": sayi_veya_null, "karbonhidrat": sayi_veya_null, '
+        '"seker": sayi_veya_null, "tuz": sayi_veya_null, "lif": sayi_veya_null}\n'
+        "Deger etiket uzerinde yoksa null yaz. Tum degerler 100g/ml basina olsun."
+    )
 
     try:
-        img_bytes = _b64.b64decode(img_data)
-        _genai.configure(api_key=api_key)
-        model = _genai.GenerativeModel("gemini-1.5-flash")
-        img_part = {"mime_type": "image/jpeg", "data": img_bytes}
-        prompt = (
-            "Bu ürün etiketindeki besin değerlerini çıkar. "
-            "SADECE aşağıdaki JSON formatında yanıt ver, başka hiçbir şey yazma:\n"
-            '{"kalori": sayı_veya_null, "protein": sayı_veya_null, '
-            '"yag": sayı_veya_null, "karbonhidrat": sayı_veya_null, '
-            '"seker": sayı_veya_null, "tuz": sayı_veya_null, "lif": sayı_veya_null}\n'
-            "Değer etiket üzerinde yoksa null yaz. Tüm değerler 100g/ml başına olsun."
+        client = _Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                    {"type": "text", "text": prompt}
+                ]
+            }],
+            max_tokens=512,
         )
-        response = model.generate_content([prompt, img_part])
-        text = response.text.strip()
+        text = response.choices[0].message.content.strip()
         if "```" in text:
             text = text.split("```")[1].replace("json", "").strip()
         data = _json.loads(text)
@@ -2293,8 +2301,8 @@ def api_ai_scan():
         return jsonify({"success": True, "data": {"ham_yanit": text}})
     except Exception as e:
         err = str(e)
-        if "429" in err or "quota" in err.lower() or "rate" in err.lower():
-            return jsonify({"error": "Gemini dakika limiti aşıldı (15 istek/dk). 30 saniye bekleyip tekrar dene."}), 429
+        if "429" in err or "rate" in err.lower():
+            return jsonify({"error": "Groq rate limit asildi. 10 saniye bekleyip tekrar dene."}), 429
         return jsonify({"error": err}), 500
 
 
