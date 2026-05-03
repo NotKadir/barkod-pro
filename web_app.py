@@ -2185,10 +2185,12 @@ def api_hareketler():
 
 
 # ═══════════════════════════════════════════════════
-#  AI OKUYUCU — Claude Haiku Vision
+#  AI OKUYUCU — Gemini Flash Vision
 # ═══════════════════════════════════════════════════
-import anthropic as _anthropic
+import google.generativeai as _genai
 import json as _json
+import base64 as _b64
+import io as _io
 
 @app.route("/api/ai-scan", methods=["POST"])
 @yetkili_giris
@@ -2201,47 +2203,30 @@ def api_ai_scan():
     if not img_data:
         return jsonify({"error": "Görüntü eksik"}), 400
 
-    media_type = "image/jpeg"
     if "," in img_data:
-        header, img_data = img_data.split(",", 1)
-        if "png" in header:
-            media_type = "image/png"
+        img_data = img_data.split(",", 1)[1]
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        return jsonify({"error": "ANTHROPIC_API_KEY Render'da ayarlanmamış."}), 500
+        return jsonify({"error": "GEMINI_API_KEY Render'da ayarlanmamış."}), 500
 
     try:
-        client = _anthropic.Anthropic(api_key=api_key)
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=512,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {"type": "base64", "media_type": media_type, "data": img_data},
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            "Bu ürün etiketindeki besin değerlerini çıkar. "
-                            "SADECE şu JSON formatında yanıt ver, başka hiçbir şey yazma:\n"
-                            "{\"kalori\": sayı_veya_null, \"protein\": sayı_veya_null, "
-                            "\"yag\": sayı_veya_null, \"karbonhidrat\": sayı_veya_null, "
-                            "\"seker\": sayı_veya_null, \"tuz\": sayı_veya_null, "
-                            "\"lif\": sayı_veya_null}\n"
-                            "Değer etiket üzerinde yoksa null yaz. Tüm değerler 100g/ml başına olsun."
-                        ),
-                    },
-                ],
-            }],
+        img_bytes = _b64.b64decode(img_data)
+        _genai.configure(api_key=api_key)
+        model = _genai.GenerativeModel("gemini-1.5-flash")
+        img_part = {"mime_type": "image/jpeg", "data": img_bytes}
+        prompt = (
+            "Bu ürün etiketindeki besin değerlerini çıkar. "
+            "SADECE aşağıdaki JSON formatında yanıt ver, başka hiçbir şey yazma:\n"
+            '{"kalori": sayı_veya_null, "protein": sayı_veya_null, '
+            '"yag": sayı_veya_null, "karbonhidrat": sayı_veya_null, '
+            '"seker": sayı_veya_null, "tuz": sayı_veya_null, "lif": sayı_veya_null}\n'
+            "Değer etiket üzerinde yoksa null yaz. Tüm değerler 100g/ml başına olsun."
         )
-        text = msg.content[0].text.strip()
-        # JSON bloğu varsa çıkar
+        response = model.generate_content([prompt, img_part])
+        text = response.text.strip()
         if "```" in text:
-            text = text.split("```")[1].replace("json","").strip()
+            text = text.split("```")[1].replace("json", "").strip()
         data = _json.loads(text)
         return jsonify({"success": True, "data": data})
     except _json.JSONDecodeError:
