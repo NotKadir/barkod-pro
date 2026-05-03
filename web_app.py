@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-import os, hashlib, sqlite3, functools, requests, traceback, sys
+import os, hashlib, functools, requests, traceback, sys
+import psycopg2, psycopg2.extras
 from datetime import datetime, date
 from flask import Flask, render_template_string, request, redirect, session, jsonify
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "nexstock_secret_2024")
-DB_NAME = os.environ.get("DB_PATH", "envanter_pro.db")
 
 @app.errorhandler(Exception)
 def handle_error(e):
@@ -14,156 +14,97 @@ def handle_error(e):
     return f"<pre style='color:red;background:#111;padding:20px;font-size:14px'>{tb}</pre>", 500
 
 # ═══════════════════════════════════════════════════
-#  VERİTABANI
+#  VERİTABANI  (PostgreSQL / Supabase)
 # ═══════════════════════════════════════════════════
+class _PGConn:
+    """sqlite3-compatible thin wrapper around a psycopg2 connection."""
+    def __init__(self, conn):
+        self._conn = conn
+        self._cur  = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+    def execute(self, sql, params=()):
+        self._cur.execute(sql, params)
+        return self._cur
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        try: self._cur.close()
+        except Exception: pass
+        try: self._conn.close()
+        except Exception: pass
+
 def get_db():
-    c = sqlite3.connect(DB_NAME)
-    c.row_factory = sqlite3.Row
-    c.execute("PRAGMA journal_mode=WAL")
-    c.execute("PRAGMA foreign_keys=ON")
-    return c
+    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    return _PGConn(conn)
 
 def init_db():
     c = get_db()
-    c.executescript("""
-    CREATE TABLE IF NOT EXISTS kullanicilar (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        kullanici_adi TEXT UNIQUE NOT NULL,
-        sifre_hash TEXT NOT NULL,
-        tam_ad TEXT,
-        rol TEXT NOT NULL DEFAULT 'kasiyer',
-        aktif INTEGER DEFAULT 1,
-        son_giris DATETIME
-    );
-    CREATE TABLE IF NOT EXISTS urunler (
-        barkod TEXT PRIMARY KEY,
-        urun_adi TEXT NOT NULL,
-        kategori TEXT DEFAULT 'Genel',
-        min_stok INTEGER DEFAULT 5,
-        fiyat REAL DEFAULT 0.0,
-        aciklama TEXT,
-        eklenme_tarihi DATETIME DEFAULT CURRENT_TIMESTAMP,
-        son_guncelleme DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS partiler (
-        parti_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        barkod TEXT NOT NULL,
-        stt DATE,
-        miktar INTEGER DEFAULT 0,
-        eklenme_tarihi DATETIME DEFAULT CURRENT_TIMESTAMP,
-        ekleyen TEXT DEFAULT 'sistem',
-        FOREIGN KEY (barkod) REFERENCES urunler(barkod)
-    );
-    CREATE TABLE IF NOT EXISTS stok_hareketleri (
-        hareket_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        barkod TEXT,
-        urun_adi TEXT,
-        hareket_tipi TEXT NOT NULL,
-        miktar INTEGER NOT NULL,
-        onceki_stok INTEGER,
-        sonraki_stok INTEGER,
-        tarih DATETIME DEFAULT CURRENT_TIMESTAMP,
-        kullanici TEXT DEFAULT 'sistem',
-        aciklama TEXT
-    );
-    CREATE TABLE IF NOT EXISTS tedarikciler (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ad TEXT NOT NULL,
-        telefon TEXT, email TEXT, adres TEXT, not_ TEXT,
-        aktif INTEGER DEFAULT 1
-    );
-    """)
-    c.commit()
-    # ── Migration: eski DB'lerde eksik kolonları ekle ──
-    _mig_cols = [
-        ("kullanici",   "TEXT    DEFAULT 'sistem'"),
-        ("aciklama",    "TEXT"),
-        ("onceki_stok", "INTEGER"),
-        ("sonraki_stok","INTEGER"),
-    ]
-    _existing = {row[1] for row in c.execute("PRAGMA table_info(stok_hareketleri)")}
-    for _col, _typ in _mig_cols:
-        if _col not in _existing:
-            c.execute(f"ALTER TABLE stok_hareketleri ADD COLUMN {_col} {_typ}")
-    c.commit()
-    h = hashlib.sha256("admin123".encode()).hexdigest()
     try:
-        c.execute("INSERT INTO kullanicilar (kullanici_adi,sifre_hash,tam_ad,rol) VALUES (?,?,?,?)",
-                  ("admin", h, "Sistem Yoneticisi", "admin"))
-        c.commit()
-    except:
-        pass
-    c.close()
-
-def migrate_to_partiler():
-    """Safely migrate old schema (with stt/stok_adedi on urunler) to parti-based schema."""
-    c = get_db()
-    try:
-        cols = [r[1] for r in c.execute("PRAGMA table_info(urunler)").fetchall()]
-        # Only migrate if the old columns still exist
-        if "stt" not in cols and "stok_adedi" not in cols:
-            c.close()
-            return
-
-        # Clean up any previous half-migration
-        c.execute("DELETE FROM partiler WHERE ekleyen='migrasyon'")
-
-        has_stok = "stok_adedi" in cols
-        has_stt  = "stt" in cols
-        select_extra = ""
-        if has_stt:
-            select_extra += ", stt"
-        if has_stok:
-            select_extra += ", stok_adedi"
-
-        rows = c.execute(f"SELECT barkod{select_extra} FROM urunler").fetchall()
-        for r in rows:
-            stt_val = None
-            mik_val = 0
-            idx = 1
-            if has_stt:
-                stt_val = r[idx]; idx += 1
-            if has_stok:
-                mik_val = r[idx] or 0
-
-            if stt_val or mik_val:
-                c.execute(
-                    "INSERT INTO partiler (barkod, stt, miktar, ekleyen) VALUES (?,?,?,?)",
-                    (r[0], stt_val, mik_val, "migrasyon")
-                )
-        c.commit()
-
-        # Rebuild urunler without the old columns
-        c.execute("PRAGMA foreign_keys=OFF")
-        c.execute("DROP TABLE IF EXISTS urunler_new")
-        c.execute("""CREATE TABLE urunler_new (
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS kullanicilar (
+            id SERIAL PRIMARY KEY,
+            kullanici_adi TEXT UNIQUE NOT NULL,
+            sifre_hash TEXT NOT NULL,
+            tam_ad TEXT,
+            rol TEXT NOT NULL DEFAULT 'kasiyer',
+            aktif INTEGER DEFAULT 1,
+            son_giris TIMESTAMPTZ
+        )""")
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS urunler (
             barkod TEXT PRIMARY KEY,
             urun_adi TEXT NOT NULL,
             kategori TEXT DEFAULT 'Genel',
             min_stok INTEGER DEFAULT 5,
             fiyat REAL DEFAULT 0.0,
             aciklama TEXT,
-            eklenme_tarihi DATETIME DEFAULT CURRENT_TIMESTAMP,
-            son_guncelleme DATETIME DEFAULT CURRENT_TIMESTAMP
+            eklenme_tarihi TIMESTAMPTZ DEFAULT NOW(),
+            son_guncelleme TIMESTAMPTZ DEFAULT NOW()
         )""")
-        target_cols = ["barkod","urun_adi","kategori","min_stok","fiyat","aciklama","eklenme_tarihi","son_guncelleme"]
-        select_part = ", ".join([col if col in cols else "NULL" for col in target_cols])
-        c.execute(f"INSERT INTO urunler_new SELECT {select_part} FROM urunler")
-        c.execute("DROP TABLE urunler")
-        c.execute("ALTER TABLE urunler_new RENAME TO urunler")
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS partiler (
+            parti_id SERIAL PRIMARY KEY,
+            barkod TEXT NOT NULL,
+            stt DATE,
+            miktar INTEGER DEFAULT 0,
+            eklenme_tarihi TIMESTAMPTZ DEFAULT NOW(),
+            ekleyen TEXT DEFAULT 'sistem',
+            FOREIGN KEY (barkod) REFERENCES urunler(barkod)
+        )""")
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS stok_hareketleri (
+            hareket_id SERIAL PRIMARY KEY,
+            barkod TEXT,
+            urun_adi TEXT,
+            hareket_tipi TEXT NOT NULL,
+            miktar INTEGER NOT NULL,
+            onceki_stok INTEGER,
+            sonraki_stok INTEGER,
+            tarih TIMESTAMPTZ DEFAULT NOW(),
+            kullanici TEXT DEFAULT 'sistem',
+            aciklama TEXT
+        )""")
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS tedarikciler (
+            id SERIAL PRIMARY KEY,
+            ad TEXT NOT NULL,
+            telefon TEXT, email TEXT, adres TEXT, not_ TEXT,
+            aktif INTEGER DEFAULT 1
+        )""")
         c.commit()
-        c.execute("PRAGMA foreign_keys=ON")
-        print("[MIGRATION] Basariyla tamamlandi.", flush=True)
-    except Exception as e:
-        print(f"[MIGRATION] Hata: {e}", flush=True)
+        h = hashlib.sha256("admin123".encode()).hexdigest()
+        c.execute(
+            "INSERT INTO kullanicilar (kullanici_adi,sifre_hash,tam_ad,rol) VALUES (%s,%s,%s,%s)"
+            " ON CONFLICT DO NOTHING",
+            ("admin", h, "Sistem Yoneticisi", "admin")
+        )
+        c.commit()
     finally:
         c.close()
 
 init_db()
-try:
-    migrate_to_partiler()
-except Exception as _mig_err:
-    print(f"[MIGRATION] Atlandi: {_mig_err}")
 
 # ═══════════════════════════════════════════════════
 #  YARDIMCI
@@ -303,15 +244,15 @@ def off_allerjen(barkod):
 
 
 def get_toplam_stok(c, barkod):
-    row = c.execute("SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=?", (barkod,)).fetchone()
-    return row[0]
+    row = c.execute("SELECT COALESCE(SUM(miktar),0) AS total FROM partiler WHERE barkod=%s", (barkod,)).fetchone()
+    return row["total"]
 
 def get_en_yakin_stt(c, barkod):
     row = c.execute(
-        "SELECT MIN(stt) FROM partiler WHERE barkod=? AND miktar>0 AND stt IS NOT NULL",
+        "SELECT MIN(stt) AS mstt FROM partiler WHERE barkod=%s AND miktar>0 AND stt IS NOT NULL",
         (barkod,)
     ).fetchone()
-    return row[0] if row else None
+    return row["mstt"] if row else None
 
 def log_hareket(barkod, urun_adi, tip, miktar, aciklama, kullanici, onceki_override=None):
     """
@@ -330,21 +271,12 @@ def log_hareket(barkod, urun_adi, tip, miktar, aciklama, kullanici, onceki_overr
         else:
             sonraki = onceki
 
-        try:
-            c.execute(
-                "INSERT INTO stok_hareketleri "
-                "(barkod,urun_adi,hareket_tipi,miktar,onceki_stok,sonraki_stok,kullanici,aciklama) "
-                "VALUES (?,?,?,?,?,?,?,?)",
-                (barkod, urun_adi, tip, miktar, onceki, sonraki, kullanici, aciklama)
-            )
-        except Exception:
-            # Eski şema fallback: sadece garantili temel kolonlar
-            c.execute(
-                "INSERT INTO stok_hareketleri "
-                "(barkod,urun_adi,hareket_tipi,miktar) "
-                "VALUES (?,?,?,?)",
-                (barkod, urun_adi, tip, miktar)
-            )
+        c.execute(
+            "INSERT INTO stok_hareketleri "
+            "(barkod,urun_adi,hareket_tipi,miktar,onceki_stok,sonraki_stok,kullanici,aciklama) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+            (barkod, urun_adi, tip, miktar, onceki, sonraki, kullanici, aciklama)
+        )
         c.commit()
     finally:
         c.close()
@@ -825,7 +757,7 @@ document.addEventListener('DOMContentLoaded',function(){
       <div class="ld-msg" id="ld-msg">INITIALIZING</div>
     </div>
   </div>
-  <div class="ld-tag">DFC TÜRKİYE 2026 &mdash; HORTOR</div>
+  <div class="ld-tag">DFC T&Uuml;RK&Iacute;YE 2026 &mdash; HORTOR</div>
 </div>
 <div class="hdr">
   <a href="/" class="logo-link">
@@ -904,7 +836,7 @@ def giris():
         s = request.form.get("s", "").strip()
         c = get_db()
         row = c.execute(
-            "SELECT * FROM kullanicilar WHERE kullanici_adi=? AND sifre_hash=? AND aktif=1",
+            "SELECT * FROM kullanicilar WHERE kullanici_adi=%s AND sifre_hash=%s AND aktif=1",
             (k, sh(s))
         ).fetchone()
         c.close()
@@ -913,7 +845,7 @@ def giris():
             session["rol"]    = row["rol"]
             session["tam_ad"] = row["tam_ad"] or ""
             c2 = get_db()
-            c2.execute("UPDATE kullanicilar SET son_giris=CURRENT_TIMESTAMP WHERE kullanici_adi=?", (k,))
+            c2.execute("UPDATE kullanicilar SET son_giris=NOW() WHERE kullanici_adi=%s", (k,))
             c2.commit()
             c2.close()
             return redirect("/")
@@ -958,18 +890,18 @@ def index():
         s = {
             "toplam_urun":   c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0],
             "toplam_stok":   c.execute("SELECT COALESCE(SUM(miktar),0) FROM partiler").fetchone()[0],
-            "tarihi_gecmis": c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<? AND miktar>0", (today,)).fetchone()[0],
-            "yaklasan":      c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt>=? AND stt<=date(?,'+'||7||' days') AND miktar>0", (today, today)).fetchone()[0],
+            "tarihi_gecmis": c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<%s AND miktar>0", (today,)).fetchone()[0],
+            "yaklasan":      c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt>=%s AND stt<=%s::date + interval '7 days' AND miktar>0", (today, today)).fetchone()[0],
             "kritik":        c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) > 0 AND (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= u.min_stok").fetchone()[0],
             "stoksuz":       c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= 0").fetchone()[0],
-            "bugun":         c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE DATE(tarih)=DATE('now')").fetchone()[0],
+            "bugun":         c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE DATE(tarih)=CURRENT_DATE").fetchone()[0],
             "tedarikci":     c.execute("SELECT COUNT(*) FROM tedarikciler WHERE aktif=1").fetchone()[0],
         }
         skt_list = [dict(r) for r in c.execute("""
             SELECT u.barkod, u.urun_adi, u.kategori, p.stt,
                    COALESCE((SELECT SUM(miktar) FROM partiler WHERE barkod=u.barkod), 0) as stok_adedi
             FROM partiler p JOIN urunler u ON p.barkod = u.barkod
-            WHERE p.stt IS NOT NULL AND p.stt <= date(?,'+'||7||' days') AND p.miktar > 0
+            WHERE p.stt IS NOT NULL AND p.stt <= %s::date + interval '7 days' AND p.miktar > 0
             GROUP BY p.barkod ORDER BY p.stt
         """, (today,)).fetchall()]
         dusuk = [dict(r) for r in c.execute("""
@@ -1064,7 +996,7 @@ def tarama():
         # ── Step 1: Look up product, auto-add from OFF if missing ──
         c = get_db()
         try:
-            urun = c.execute("SELECT * FROM urunler WHERE barkod=?", (barkod,)).fetchone()
+            urun = c.execute("SELECT * FROM urunler WHERE barkod=%s", (barkod,)).fetchone()
             urun = dict(urun) if urun else None
         finally:
             c.close()
@@ -1076,11 +1008,11 @@ def tarama():
                 c = get_db()
                 try:
                     c.execute(
-                        "INSERT OR REPLACE INTO urunler (barkod,urun_adi,kategori) VALUES (?,?,?)",
+                        "INSERT INTO urunler (barkod,urun_adi,kategori) VALUES (%s,%s,%s) ON CONFLICT (barkod) DO UPDATE SET urun_adi=EXCLUDED.urun_adi, kategori=EXCLUDED.kategori",
                         (barkod, urun_adi, kategori or "Genel")
                     )
                     c.execute(
-                        "INSERT INTO partiler (barkod, miktar, ekleyen) VALUES (?,?,?)",
+                        "INSERT INTO partiler (barkod, miktar, ekleyen) VALUES (%s,%s,%s)",
                         (barkod, 30, "sistem")
                     )
                     c.commit()
@@ -1128,7 +1060,7 @@ def tarama():
                     onceki_stok = get_toplam_stok(c, barkod)  # read BEFORE deduction
                     remaining = 1
                     rows = c.execute(
-                        "SELECT parti_id, miktar FROM partiler WHERE barkod=? AND miktar>0 "
+                        "SELECT parti_id, miktar FROM partiler WHERE barkod=%s AND miktar>0 "
                         "ORDER BY CASE WHEN stt IS NULL THEN 1 ELSE 0 END, stt ASC, eklenme_tarihi ASC",
                         (barkod,)
                     ).fetchall()
@@ -1136,7 +1068,7 @@ def tarama():
                         if remaining <= 0:
                             break
                         azalt = min(remaining, p["miktar"])
-                        c.execute("UPDATE partiler SET miktar=miktar-? WHERE parti_id=?", (azalt, p["parti_id"]))
+                        c.execute("UPDATE partiler SET miktar=miktar-%s WHERE parti_id=%s", (azalt, p["parti_id"]))
                         remaining -= azalt
                     c.commit()
                 finally:
@@ -1151,7 +1083,7 @@ def tarama():
                 toplam_stok   = get_toplam_stok(c, barkod)
                 en_yakin      = get_en_yakin_stt(c, barkod)
                 partiler_list = [dict(r) for r in c.execute(
-                    "SELECT * FROM partiler WHERE barkod=? AND miktar>0 "
+                    "SELECT * FROM partiler WHERE barkod=%s AND miktar>0 "
                     "ORDER BY CASE WHEN stt IS NULL THEN 1 ELSE 0 END, stt ASC",
                     (barkod,)
                 ).fetchall()]
@@ -1445,7 +1377,7 @@ function cikisPanelKapat(){{ document.getElementById('cikis-panel').style.displa
         try:
             toplam     = c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0]
             dusuk_sayisi = c.execute("SELECT COUNT(*) FROM urunler u WHERE COALESCE((SELECT SUM(miktar) FROM partiler WHERE barkod=u.barkod), 0) <= u.min_stok").fetchone()[0]
-            bugun_scan = c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE hareket_tipi='Okutma' AND date(tarih)=date('now')").fetchone()[0]
+            bugun_scan = c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE hareket_tipi='Okutma' AND date(tarih)=CURRENT_DATE").fetchone()[0]
         finally:
             c.close()
         stats_html = f'''
@@ -1764,12 +1696,12 @@ def urun_hizli_ekle():
     c = get_db()
     try:
         c.execute(
-            "INSERT OR IGNORE INTO urunler (barkod,urun_adi,kategori,min_stok,fiyat) VALUES (?,?,?,?,?)",
+            "INSERT INTO urunler (barkod,urun_adi,kategori,min_stok,fiyat) VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING",
             (barkod, urun_adi, kategori, min_stok, fiyat)
         )
         if miktar > 0:
             c.execute(
-                "INSERT INTO partiler (barkod, stt, miktar, ekleyen) VALUES (?,?,?,?)",
+                "INSERT INTO partiler (barkod, stt, miktar, ekleyen) VALUES (%s,%s,%s,%s)",
                 (barkod, stt, miktar, session.get("user", "sistem"))
             )
         c.commit()
@@ -1796,11 +1728,11 @@ def parti_ekle():
         c = get_db()
         try:
             c.execute(
-                "INSERT INTO partiler (barkod, stt, miktar, ekleyen) VALUES (?,?,?,?)",
+                "INSERT INTO partiler (barkod, stt, miktar, ekleyen) VALUES (%s,%s,%s,%s)",
                 (barkod, stt, miktar, session.get("user", "sistem"))
             )
             c.commit()
-            urun = c.execute("SELECT urun_adi FROM urunler WHERE barkod=?", (barkod,)).fetchone()
+            urun = c.execute("SELECT urun_adi FROM urunler WHERE barkod=%s", (barkod,)).fetchone()
             urun_adi = urun["urun_adi"] if urun else barkod
         finally:
             c.close()
@@ -1817,11 +1749,11 @@ def parti_tukendi():
     if parti_id:
         c = get_db()
         try:
-            parti = c.execute("SELECT miktar FROM partiler WHERE parti_id=?", (parti_id,)).fetchone()
+            parti = c.execute("SELECT miktar FROM partiler WHERE parti_id=%s", (parti_id,)).fetchone()
             eski_miktar = parti["miktar"] if parti else 0
-            c.execute("UPDATE partiler SET miktar=0 WHERE parti_id=?", (parti_id,))
+            c.execute("UPDATE partiler SET miktar=0 WHERE parti_id=%s", (parti_id,))
             c.commit()
-            urun = c.execute("SELECT urun_adi FROM urunler WHERE barkod=?", (barkod,)).fetchone()
+            urun = c.execute("SELECT urun_adi FROM urunler WHERE barkod=%s", (barkod,)).fetchone()
             urun_adi = urun["urun_adi"] if urun else barkod
         finally:
             c.close()
@@ -1842,15 +1774,15 @@ def stok_cikis():
         c = get_db()
         try:
             if parti_id and parti_id != "fefo":
-                p = c.execute("SELECT miktar FROM partiler WHERE parti_id=?", (parti_id,)).fetchone()
+                p = c.execute("SELECT miktar FROM partiler WHERE parti_id=%s", (parti_id,)).fetchone()
                 if p:
                     azalt = min(miktar, p["miktar"])
-                    c.execute("UPDATE partiler SET miktar=MAX(0,miktar-?) WHERE parti_id=?", (azalt, parti_id))
+                    c.execute("UPDATE partiler SET miktar=GREATEST(0,miktar-%s) WHERE parti_id=%s", (azalt, parti_id))
                     c.commit()
             else:
                 remaining = miktar
                 rows = c.execute(
-                    "SELECT parti_id, miktar FROM partiler WHERE barkod=? AND miktar>0 "
+                    "SELECT parti_id, miktar FROM partiler WHERE barkod=%s AND miktar>0 "
                     "ORDER BY CASE WHEN stt IS NULL THEN 1 ELSE 0 END, stt ASC",
                     (barkod,)
                 ).fetchall()
@@ -1858,17 +1790,17 @@ def stok_cikis():
                     if remaining <= 0:
                         break
                     azalt = min(remaining, p["miktar"])
-                    c.execute("UPDATE partiler SET miktar=miktar-? WHERE parti_id=?", (azalt, p["parti_id"]))
+                    c.execute("UPDATE partiler SET miktar=miktar-%s WHERE parti_id=%s", (azalt, p["parti_id"]))
                     remaining -= azalt
                 c.commit()
-            urun = c.execute("SELECT urun_adi FROM urunler WHERE barkod=?", (barkod,)).fetchone()
+            urun = c.execute("SELECT urun_adi FROM urunler WHERE barkod=%s", (barkod,)).fetchone()
             urun_adi = urun["urun_adi"] if urun else barkod
             onceki   = get_toplam_stok(c, barkod) + miktar
             sonraki  = get_toplam_stok(c, barkod)
             c.execute(
                 "INSERT INTO stok_hareketleri "
                 "(barkod,urun_adi,hareket_tipi,miktar,onceki_stok,sonraki_stok,kullanici,aciklama) "
-                "VALUES (?,?,?,?,?,?,?,?)",
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
                 (barkod, urun_adi, "Cikis", miktar, onceki, sonraki,
                  session.get("user", "misafir"),
                  f"{sebep}: {aciklama}" if aciklama else sebep)
@@ -1887,11 +1819,11 @@ def parti_sil():
     if parti_id:
         c = get_db()
         try:
-            parti = c.execute("SELECT miktar FROM partiler WHERE parti_id=?", (parti_id,)).fetchone()
+            parti = c.execute("SELECT miktar FROM partiler WHERE parti_id=%s", (parti_id,)).fetchone()
             eski_miktar = parti["miktar"] if parti else 0
-            c.execute("DELETE FROM partiler WHERE parti_id=?", (parti_id,))
+            c.execute("DELETE FROM partiler WHERE parti_id=%s", (parti_id,))
             c.commit()
-            urun = c.execute("SELECT urun_adi FROM urunler WHERE barkod=?", (barkod,)).fetchone()
+            urun = c.execute("SELECT urun_adi FROM urunler WHERE barkod=%s", (barkod,)).fetchone()
             urun_adi = urun["urun_adi"] if urun else barkod
         finally:
             c.close()
@@ -1912,7 +1844,7 @@ def parti_skt_guncelle():
     if parti_id:
         c = get_db()
         try:
-            c.execute("UPDATE partiler SET stt=? WHERE parti_id=?", (stt, parti_id))
+            c.execute("UPDATE partiler SET stt=%s WHERE parti_id=%s", (stt, parti_id))
             c.commit()
         finally:
             c.close()
@@ -1928,7 +1860,7 @@ def partiler_sayfasi():
     try:
         if ara_barkod:
             urunler_list = [dict(r) for r in c.execute(
-                "SELECT * FROM urunler WHERE barkod=?", (ara_barkod,)).fetchall()]
+                "SELECT * FROM urunler WHERE barkod=%s", (ara_barkod,)).fetchall()]
         else:
             urunler_list = [dict(r) for r in c.execute(
                 "SELECT DISTINCT u.* FROM urunler u JOIN partiler p ON u.barkod=p.barkod ORDER BY u.urun_adi"
@@ -1937,7 +1869,7 @@ def partiler_sayfasi():
         content_rows = ""
         for u in urunler_list:
             partiler_list = [dict(r) for r in c.execute(
-                "SELECT * FROM partiler WHERE barkod=? ORDER BY CASE WHEN stt IS NULL THEN 1 ELSE 0 END, stt ASC, eklenme_tarihi ASC",
+                "SELECT * FROM partiler WHERE barkod=%s ORDER BY CASE WHEN stt IS NULL THEN 1 ELSE 0 END, stt ASC, eklenme_tarihi ASC",
                 (u["barkod"],)
             ).fetchall()]
             toplam = sum(p["miktar"] for p in partiler_list)
@@ -2010,7 +1942,7 @@ def partiler_sayfasi():
     {'<a href="/partiler" class="btn btn-muted">Temizle</a>' if ara_barkod else ''}
   </form>
 </div>
-{content_rows or '<div class="panel" style="text-align:center;color:#525252;padding:32px">Hicbir Urun icin parti bulunamadi.</div>'}"""
+{content_rows or '<div class="panel" style="text-align:center;color:#525252;padding:32px">Hicbir urun icin parti bulunamadi.</div>'}"""
     return render(content, page="partiler", title="Parti Yonetimi")
 
 # ═══════════════════════════════════════════════════
@@ -2037,7 +1969,7 @@ def urunler():
         WHERE 1=1"""
         p = []
         if ara:
-            q += " AND (u.urun_adi LIKE ? OR u.barkod LIKE ?)"
+            q += " AND (u.urun_adi LIKE %s OR u.barkod LIKE %s)"
             p += [f"%{ara}%", f"%{ara}%"]
         q += " ORDER BY u.urun_adi"
         liste = [dict(r) for r in c.execute(q, p).fetchall()]
@@ -2105,10 +2037,10 @@ def raporlar():
             "toplam_urun":   c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0],
             "toplam_stok":   c.execute("SELECT COALESCE(SUM(miktar),0) FROM partiler").fetchone()[0],
             "toplam_deger":  c.execute("SELECT COALESCE(SUM(ps.toplam * u.fiyat), 0) FROM urunler u JOIN (SELECT barkod, SUM(miktar) as toplam FROM partiler GROUP BY barkod) ps ON u.barkod = ps.barkod").fetchone()[0],
-            "tarihi_gecmis": c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<? AND miktar>0", (today,)).fetchone()[0],
+            "tarihi_gecmis": c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<%s AND miktar>0", (today,)).fetchone()[0],
             "stoksuz":       c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= 0").fetchone()[0],
             "toplam_islem":  c.execute("SELECT COUNT(*) FROM stok_hareketleri").fetchone()[0],
-            "bugun_islem":   c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE DATE(tarih)=DATE('now')").fetchone()[0],
+            "bugun_islem":   c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE DATE(tarih)=CURRENT_DATE").fetchone()[0],
         }
     finally:
         c.close()
@@ -2182,7 +2114,7 @@ def api_stats():
         data  = {
             "toplam_urun":   c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0],
             "toplam_stok":   c.execute("SELECT COALESCE(SUM(miktar),0) FROM partiler").fetchone()[0],
-            "tarihi_gecmis": c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<? AND miktar>0", (today,)).fetchone()[0],
+            "tarihi_gecmis": c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<%s AND miktar>0", (today,)).fetchone()[0],
             "stoksuz":       c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= 0").fetchone()[0],
         }
     finally:
