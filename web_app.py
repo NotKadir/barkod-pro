@@ -700,7 +700,7 @@ html,body{overflow-x:hidden}
     padding:16px;gap:4px;
     z-index:200;overflow-y:auto;
   }
-  .nav.mob-open{display:flex}
+  .nav.mob-open{display:flex!important;flex-direction:column!important}
   .nav a{
     padding:14px 16px;font-size:.85rem;
     border-bottom:1px solid var(--border);
@@ -860,9 +860,10 @@ function mobMenu(){
   var btn=document.getElementById('mob-btn');
   _mobOpen=!_mobOpen;
   if(_mobOpen){
-    nav.style.cssText='display:flex!important;flex-direction:column!important;position:fixed!important;top:64px!important;left:0!important;right:0!important;bottom:0!important;background:rgba(6,6,6,.97)!important;padding:16px!important;gap:4px!important;z-index:9999!important;overflow-y:auto!important;';
+    nav.classList.add('mob-open');
+    nav.style.removeProperty('display');
   } else {
-    nav.style.cssText='';
+    nav.classList.remove('mob-open');
   }
   btn.textContent=_mobOpen?'✕':'☰';
 }
