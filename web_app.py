@@ -2753,13 +2753,27 @@ def api_ai_barcode():
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         return jsonify({"error": "GROQ_API_KEY ayarlanmamis"}), 500
-    # Step 1: AI sadece gördügü sayıları listele
-    ocr_prompt = (
-        "Bu fotograftaki barkodun altindaki rakamları oku. "
-        "SADECE rakamlari yaz, baska hicbir sey yazma. "
-        "Ornek cikti: 8690526430124"
-    )
     import re as _re
+
+    def _pick_barcode(raw):
+        """AI ciktisindaki ham metinden en mantikli barkod numarasini sec."""
+        # Once tam olarak 8, 12 veya 13 haneli gruplari bul (standart EAN/UPC)
+        for length in [13, 12, 8]:
+            hits = _re.findall(r"(?<![0-9])[0-9]{" + str(length) + r"}(?![0-9])", raw)
+            if hits:
+                return hits[0]
+        # Bulamazsa 7-14 arasi en uzun grubu al
+        hits = _re.findall(r"[0-9]{7,14}", raw)
+        if hits:
+            return max(hits, key=len)
+        return None
+
+    ocr_prompt = (
+        "Fotograftaki barkodun ALTINDA yazili insan okunakli rakamlari bul ve yaz. "
+        "Bu rakamlar genellikle 8, 12 veya 13 haneli olur. "
+        "Sadece o rakam grubunu yaz, baska hicbir sey yazma, bosluk koyma. "
+        "Ornek: 8690526430124"
+    )
     try:
         client = _Groq(api_key=api_key)
         response = client.chat.completions.create(
@@ -2768,22 +2782,13 @@ def api_ai_barcode():
                 {"type": "image_url", "image_url": {"url": data_url}},
                 {"type": "text", "text": ocr_prompt}
             ]}],
-            max_tokens=64,
+            max_tokens=32,
         )
         raw = response.choices[0].message.content.strip()
-        # Python tarafinda temizle: sadece rakamlar, bosluklar ve tireler kaldir
-        numbers = _re.sub(r"[^0-9]", "", raw)
-        if not numbers:
-            return jsonify({"error": "Barkod okunamadi, tekrar dene"}), 400
-        # EAN/UPC uzunluk kontrolu (6-14 rakam arasi gecerli)
-        if len(numbers) < 6 or len(numbers) > 14:
-            # AI fazla/az karakter okumus olabilir, en uzun uygun parcayi al
-            matches = _re.findall(r"[0-9]{6,14}", raw)
-            if matches:
-                numbers = max(matches, key=len)
-            else:
-                return jsonify({"error": f"Gecersiz barkod uzunlugu ({len(numbers)}), tekrar dene"}), 400
-        return jsonify({"success": True, "barkod": numbers})
+        barkod = _pick_barcode(raw)
+        if not barkod:
+            return jsonify({"error": "Barkod okunamadi — net bir fotograf dene"}), 400
+        return jsonify({"success": True, "barkod": barkod})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
