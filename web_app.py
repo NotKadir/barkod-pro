@@ -924,11 +924,12 @@ def index():
             "tedarikci":     c.execute("SELECT COUNT(*) FROM tedarikciler WHERE aktif=1").fetchone()[0],
         }
         skt_list = [dict(r) for r in c.execute("""
-            SELECT u.barkod, u.urun_adi, u.kategori, p.stt,
-                   COALESCE((SELECT SUM(miktar) FROM partiler WHERE barkod=u.barkod), 0) as stok_adedi
+            SELECT u.barkod, u.urun_adi, u.kategori,
+                   MIN(p.stt) as stt,
+                   COALESCE(SUM(p.miktar), 0) as stok_adedi
             FROM partiler p JOIN urunler u ON p.barkod = u.barkod
             WHERE p.stt IS NOT NULL AND p.stt <= %s::date + interval '7 days' AND p.miktar > 0
-            GROUP BY p.barkod ORDER BY p.stt
+            GROUP BY u.barkod, u.urun_adi, u.kategori ORDER BY MIN(p.stt)
         """, (today,)).fetchall()]
         dusuk = [dict(r) for r in c.execute("""
             SELECT u.*, COALESCE(ps.toplam, 0) as stok_adedi
