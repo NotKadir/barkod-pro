@@ -2271,12 +2271,17 @@ def api_ai_scan():
         return jsonify({"error": "GROQ_API_KEY Render'da ayarlanmamis."}), 500
 
     prompt = (
-        "Bu urun etiketindeki besin degerlerini cikar. "
-        "SADECE asagidaki JSON formatinda yanit ver, baska hicbir sey yazma:\n"
+        "Bu fotograftaki beslenme tablosunu dikkatli oku. "
+        "Tablodaki her satiri tek tek incele: soldaki ISIM ile sagdaki SAYI'yi dogru eslestir. "
+        "Isimler Turkce olabilir: Enerji=kalori, Yag=yag, Karbonhidrat=karbonhidrat, "
+        "Sekerler/Seker=seker, Protein=protein, Tuz=tuz, Lif=lif. "
+        "SADECE su JSON formatinda yanit ver, baska hicbir sey yazma:\n"
         '{"kalori": sayi_veya_null, "protein": sayi_veya_null, '
         '"yag": sayi_veya_null, "karbonhidrat": sayi_veya_null, '
         '"seker": sayi_veya_null, "tuz": sayi_veya_null, "lif": sayi_veya_null}\n'
-        "Deger etiket uzerinde yoksa null yaz. Tum degerler 100g/ml basina olsun."
+        "Her deger 100g/ml basina olsun. Etiket uzerinde yoksa null yaz. "
+        "ONEMLI: Hangi sayi hangi besine ait oldugunu tablodaki satir sirasiyla eslestireceksin, "
+        "kendi tahminlerinle degil."
     )
 
     try:
