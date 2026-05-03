@@ -461,7 +461,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:999;
 }
 @keyframes logoSweep{0%,80%,100%{left:-100%}40%{left:200%}}
 
-.nav{display:flex;align-items:center;gap:2px}
+.nav{display:flex;align-items:center;gap:2px;position:fixed;top:0;right:40px;height:64px;z-index:101}
 .nav a{
   color:var(--muted);text-decoration:none;
   font-size:.72rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
@@ -826,7 +826,8 @@ document.addEventListener('DOMContentLoaded',function(){
     <div class="logo">Nex<span>Stock</span></div>
   </a>
   <button class="hamburger" id="mob-btn" onclick="mobMenu()" aria-label="Menu">☰</button>
-  <div class="nav" id="mob-nav">
+</div>
+<div class="nav" id="mob-nav">
     <a href="/tarama" class="{{ 'active' if page=='tarama' }}">Tarama</a>
     {% if session.get('rol') not in ['misafir','goruntuleyici'] %}
     <a href="/" class="{{ 'active' if page=='dashboard' }}">Dashboard</a>
@@ -848,7 +849,6 @@ document.addEventListener('DOMContentLoaded',function(){
     <div class="nav-divider"></div>
     <a href="/giris" class="btn-login">Giris Yap</a>
     {% endif %}
-  </div>
 </div>
 <div class="main">
 CONTENT_BLOCK
@@ -870,7 +870,7 @@ function mobMenu(){
 document.addEventListener('DOMContentLoaded',function(){
   document.querySelectorAll('#mob-nav a').forEach(function(a){
     a.addEventListener('click',function(){
-      document.getElementById('mob-nav').style.display='none';
+      document.getElementById('mob-nav').style.display='none';_mobOpen=false;
       document.getElementById('mob-btn').textContent='☰';
     });
   });
