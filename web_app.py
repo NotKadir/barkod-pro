@@ -93,6 +93,17 @@ def init_db():
             telefon TEXT, email TEXT, adres TEXT, not_ TEXT,
             aktif INTEGER DEFAULT 1
         )""")
+        # Nutrition columns migration (safe - IF NOT EXISTS)
+        for col, typ in [
+            ("kalori","REAL"), ("protein","REAL"), ("yag","REAL"),
+            ("karbonhidrat","REAL"), ("seker","REAL"), ("tuz","REAL"),
+            ("lif","REAL"), ("icindekiler","TEXT")
+        ]:
+            try:
+                c.execute(f"ALTER TABLE urunler ADD COLUMN IF NOT EXISTS {col} {typ}")
+                c.commit()
+            except Exception:
+                pass
         c.commit()
         h = hashlib.sha256("admin123".encode()).hexdigest()
         c.execute(
@@ -2311,6 +2322,81 @@ def api_ai_scan():
         return jsonify({"error": err}), 500
 
 
+
+@app.route("/api/ai-ingredients", methods=["POST"])
+@yetkili_giris
+def api_ai_ingredients():
+    if session.get("rol") != "admin":
+        return jsonify({"error": "Sadece admin kullanabilir"}), 403
+    payload = request.get_json(force=True) or {}
+    img_data = payload.get("image", "")
+    if not img_data:
+        return jsonify({"error": "Goruntu eksik"}), 400
+    raw_b64 = img_data.split(",", 1)[1] if "," in img_data else img_data
+    data_url = "data:image/jpeg;base64," + raw_b64
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return jsonify({"error": "GROQ_API_KEY ayarlanmamis"}), 500
+    prompt = (
+        "Bu fotograftaki icindekiler listesini oku. "
+        "Sadece icindekiler satirini/satirlarini bul ve ham metin olarak ver. "
+        "Baska hicbir sey yazma, aciklama yapma, sadece icindekiler metnini yaz."
+    )
+    try:
+        client = _Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": data_url}},
+                {"type": "text", "text": prompt}
+            ]}],
+            max_tokens=512,
+        )
+        text = response.choices[0].message.content.strip()
+        return jsonify({"success": True, "icindekiler": text})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/urun-ai-ekle", methods=["POST"])
+@yetkili_giris
+def api_urun_ai_ekle():
+    if session.get("rol") != "admin":
+        return jsonify({"error": "Sadece admin"}), 403
+    data = request.get_json(force=True) or {}
+    barkod      = (data.get("barkod") or "").strip()
+    urun_adi    = (data.get("urun_adi") or "").strip()
+    kategori    = (data.get("kategori") or "Genel").strip()
+    nutrition   = data.get("nutrition") or {}
+    icindekiler = (data.get("icindekiler") or "").strip()
+    if not barkod or not urun_adi:
+        return jsonify({"error": "Barkod ve urun adi zorunlu"}), 400
+    c = get_db()
+    try:
+        c.execute(
+            """INSERT INTO urunler
+               (barkod, urun_adi, kategori, kalori, protein, yag, karbonhidrat,
+                seker, tuz, lif, icindekiler)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (barkod) DO UPDATE SET
+                 urun_adi=EXCLUDED.urun_adi, kategori=EXCLUDED.kategori,
+                 kalori=EXCLUDED.kalori, protein=EXCLUDED.protein,
+                 yag=EXCLUDED.yag, karbonhidrat=EXCLUDED.karbonhidrat,
+                 seker=EXCLUDED.seker, tuz=EXCLUDED.tuz,
+                 lif=EXCLUDED.lif, icindekiler=EXCLUDED.icindekiler,
+                 son_guncelleme=NOW()""",
+            (barkod, urun_adi, kategori,
+             nutrition.get("kalori"), nutrition.get("protein"), nutrition.get("yag"),
+             nutrition.get("karbonhidrat"), nutrition.get("seker"),
+             nutrition.get("tuz"), nutrition.get("lif"), icindekiler or None)
+        )
+        c.commit()
+        return jsonify({"success": True, "barkod": barkod})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        c.close()
+
 @app.route("/ai-okuyucu")
 @yetkili_giris
 def ai_okuyucu():
@@ -2318,98 +2404,237 @@ def ai_okuyucu():
         return redirect("/")
     content = r"""
 <div class="page-title">AI Okuyucu</div>
-<div style="max-width:680px;margin:0 auto">
+<div style="max-width:640px;margin:0 auto">
 
-  <div class="panel">
-    <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">
-      Ürünün arka etiketini fotoğrafla — AI kalori ve besin değerlerini okur
-    </div>
-    <input type="file" id="ai-file" accept="image/*" capture="environment"
-           style="display:none" onchange="dosyaSecildi(this)">
-    <button onclick="document.getElementById('ai-file').click()"
-            class="btn btn-green" style="width:100%;font-size:1rem;padding:16px">
-      📷 Etiketi Fotoğrafla
-    </button>
-  </div>
-
-  <div id="preview-wrap" style="display:none;margin-bottom:16px">
-    <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">ÇEKILEN FOTOĞRAF</div>
-    <img id="ai-preview" style="width:100%;border:1px solid #1a1a1a;display:block">
-    <button onclick="document.getElementById('ai-file').click()"
-            class="btn btn-muted" style="width:100%;margin-top:8px">🔄 Tekrar Çek</button>
-  </div>
-
-  <div id="ai-loading" style="display:none;text-align:center;padding:32px">
-    <div style="font-family:JetBrains Mono,monospace;font-size:.72rem;color:#525252;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px">MODEL ANALİZ EDİYOR…</div>
-    <div style="width:200px;height:2px;background:#1a1a1a;margin:0 auto;overflow:hidden;border-radius:1px">
-      <div style="width:40%;height:100%;background:var(--accent);animation:loadSlide 1.2s ease-in-out infinite alternate;box-shadow:0 0 8px var(--accent)"></div>
-    </div>
-    <style>@keyframes loadSlide{from{transform:translateX(-100%)}to{transform:translateX(350%)}}</style>
-  </div>
-
-  <div id="ai-sonuc" style="display:none"></div>
+<!-- STEP INDICATOR -->
+<div id="step-bar" style="display:flex;gap:0;margin-bottom:24px;border:1px solid #1a1a1a;overflow:hidden">
+  <div class="step-tab active" id="tab1" style="flex:1;text-align:center;padding:10px 4px;font-size:.65rem;font-family:JetBrains Mono,monospace;letter-spacing:1px;color:#525252;text-transform:uppercase;transition:all .2s">1 · BARKOD</div>
+  <div class="step-tab" id="tab2" style="flex:1;text-align:center;padding:10px 4px;font-size:.65rem;font-family:JetBrains Mono,monospace;letter-spacing:1px;color:#525252;text-transform:uppercase;border-left:1px solid #1a1a1a;transition:all .2s">2 · BESİN</div>
+  <div class="step-tab" id="tab3" style="flex:1;text-align:center;padding:10px 4px;font-size:.65rem;font-family:JetBrains Mono,monospace;letter-spacing:1px;color:#525252;text-transform:uppercase;border-left:1px solid #1a1a1a;transition:all .2s">3 · İÇİNDEKİLER</div>
+  <div class="step-tab" id="tab4" style="flex:1;text-align:center;padding:10px 4px;font-size:.65rem;font-family:JetBrains Mono,monospace;letter-spacing:1px;color:#525252;text-transform:uppercase;border-left:1px solid #1a1a1a;transition:all .2s">4 · KAYDET</div>
 </div>
+
+<!-- STEP 1: BARKOD -->
+<div id="step1" class="panel">
+  <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">BARKOD NUMARASI</div>
+  <input type="text" id="barkod-input" placeholder="Barkod numarasini girin..." inputmode="numeric"
+         style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:14px;font-family:JetBrains Mono,monospace;font-size:1rem;margin-bottom:12px">
+  <div id="barkod-err" style="display:none;color:#e05252;font-size:.75rem;margin-bottom:8px"></div>
+  <button onclick="step1Next()" class="btn btn-green" style="width:100%;padding:14px">DEVAM ET →</button>
+</div>
+
+<!-- STEP 2: BESİN ÖGELERİ -->
+<div id="step2" style="display:none">
+  <div class="panel">
+    <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">BESIN ÖGELERİ ETİKETİ</div>
+    <input type="file" id="besin-file" accept="image/*" capture="environment" style="display:none" onchange="besинScan(this)">
+    <button onclick="document.getElementById('besin-file').click()" class="btn btn-green" style="width:100%;padding:14px;font-size:1rem">📷 Besin Tablosunu Fotoğrafla</button>
+  </div>
+  <div id="besin-preview-wrap" style="display:none;margin-top:0">
+    <img id="besin-preview" style="width:100%;border:1px solid #1a1a1a;display:block">
+    <button onclick="document.getElementById('besin-file').click()" class="btn btn-muted" style="width:100%;margin-top:0;border-top:none">🔄 Tekrar Çek</button>
+  </div>
+  <div id="besin-loading" style="display:none;text-align:center;padding:24px;font-family:JetBrains Mono,monospace;font-size:.7rem;color:#525252;letter-spacing:2px">ANALİZ EDİLİYOR…</div>
+  <div id="besin-sonuc" style="display:none" class="panel" style="margin-top:0">
+    <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px">ÇIKARILAN DEĞERLER (düzenleyebilirsin)</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="besin-fields"></div>
+    <button onclick="step2Next()" class="btn btn-green" style="width:100%;padding:14px;margin-top:16px">DEVAM ET →</button>
+  </div>
+</div>
+
+<!-- STEP 3: İÇİNDEKİLER -->
+<div id="step3" style="display:none">
+  <div class="panel">
+    <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">İÇİNDEKİLER</div>
+    <input type="file" id="ic-file" accept="image/*" capture="environment" style="display:none" onchange="icindekilerScan(this)">
+    <button onclick="document.getElementById('ic-file').click()" class="btn btn-green" style="width:100%;padding:14px;font-size:1rem">📷 İçindekileri Fotoğrafla</button>
+    <button onclick="step3Skip()" class="btn btn-muted" style="width:100%;padding:10px;margin-top:4px;font-size:.8rem">Atla →</button>
+  </div>
+  <div id="ic-preview-wrap" style="display:none;margin-top:0">
+    <img id="ic-preview" style="width:100%;border:1px solid #1a1a1a;display:block">
+    <button onclick="document.getElementById('ic-file').click()" class="btn btn-muted" style="width:100%;margin-top:0;border-top:none">🔄 Tekrar Çek</button>
+  </div>
+  <div id="ic-loading" style="display:none;text-align:center;padding:24px;font-family:JetBrains Mono,monospace;font-size:.7rem;color:#525252;letter-spacing:2px">İÇİNDEKİLER OKUNUYOR…</div>
+  <div id="ic-sonuc" style="display:none" class="panel" style="margin-top:0">
+    <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">İÇİNDEKİLER (düzenleyebilirsin)</div>
+    <textarea id="ic-text" rows="5" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-size:.82rem;resize:vertical"></textarea>
+    <button onclick="step3Next()" class="btn btn-green" style="width:100%;padding:14px;margin-top:8px">DEVAM ET →</button>
+  </div>
+</div>
+
+<!-- STEP 4: KAYDET -->
+<div id="step4" style="display:none">
+  <div class="panel">
+    <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">ÜRÜN BİLGİLERİ</div>
+    <label style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:1px;display:block;margin-bottom:4px">ÜRÜN ADI</label>
+    <input type="text" id="urun-adi-input" placeholder="Ürün adını girin..."
+           style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-size:.9rem;margin-bottom:12px">
+    <label style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:1px;display:block;margin-bottom:4px">KATEGORİ</label>
+    <input type="text" id="kategori-input" value="Genel"
+           style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-size:.9rem;margin-bottom:16px">
+    <div id="ozet-besin" style="margin-bottom:8px"></div>
+    <div id="ozet-ic" style="display:none;margin-bottom:16px">
+      <div style="font-family:JetBrains Mono,monospace;font-size:.58rem;color:#525252;letter-spacing:1px;margin-bottom:4px">İÇİNDEKİLER</div>
+      <div id="ozet-ic-text" style="font-size:.78rem;color:#a3a3a3;line-height:1.5"></div>
+    </div>
+    <div id="kaydet-err" style="display:none;color:#e05252;font-size:.75rem;margin-bottom:8px"></div>
+    <button onclick="kaydet()" class="btn btn-green" style="width:100%;padding:16px;font-size:1rem" id="kaydet-btn">💾 VERİTABANINA EKLE</button>
+  </div>
+</div>
+
+<style>
+.step-tab.active{color:var(--g)!important;background:rgba(16,185,129,.06)}
+</style>
 <script>
-function dosyaSecildi(input){
+var _state = {barkod:'', nutrition:{}, icindekiler:''};
+var NUT_KEYS = ['kalori','protein','yag','karbonhidrat','seker','tuz','lif'];
+var NUT_LABELS = {kalori:'Kalori (kcal)',protein:'Protein (g)',yag:'Yağ (g)',karbonhidrat:'Karbonhidrat (g)',seker:'Şeker (g)',tuz:'Tuz (g)',lif:'Lif (g)'};
+
+function showStep(n){
+  [1,2,3,4].forEach(function(i){
+    document.getElementById('step'+i).style.display = i===n?'block':'none';
+    var t=document.getElementById('tab'+i);
+    t.classList.toggle('active',i===n);
+    t.style.color = i===n ? 'var(--g)' : (i<n ? '#f5f5f5' : '#525252');
+  });
+}
+
+// STEP 1
+function step1Next(){
+  var b = document.getElementById('barkod-input').value.trim();
+  var err = document.getElementById('barkod-err');
+  if(!b){err.textContent='Barkod zorunlu';err.style.display='block';return;}
+  err.style.display='none';
+  _state.barkod = b;
+  showStep(2);
+}
+document.getElementById('barkod-input').addEventListener('keydown',function(e){if(e.key==='Enter')step1Next();});
+
+// STEP 2
+function besинScan(input){
   if(!input.files||!input.files[0]) return;
   var reader=new FileReader();
   reader.onload=function(e){
-    var dataUrl=e.target.result;
-    document.getElementById('ai-preview').src=dataUrl;
-    document.getElementById('preview-wrap').style.display='block';
-    document.getElementById('ai-loading').style.display='block';
-    document.getElementById('ai-sonuc').style.display='none';
-    fetch('/api/ai-scan',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({image:dataUrl})
-    }).then(function(r){return r.json();})
-      .then(function(d){gosterSonuc(d);})
-      .catch(function(e){
-        document.getElementById('ai-loading').style.display='none';
-        gosterHata('Bağlantı hatası: '+e.message);
-      });
+    var url=e.target.result;
+    document.getElementById('besin-preview').src=url;
+    document.getElementById('besin-preview-wrap').style.display='block';
+    document.getElementById('besin-loading').style.display='block';
+    document.getElementById('besin-sonuc').style.display='none';
+    fetch('/api/ai-scan',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:url})
+    }).then(function(r){return r.json();}).then(function(d){
+      document.getElementById('besin-loading').style.display='none';
+      if(d.error){alert('Hata: '+d.error);return;}
+      _state.nutrition = d.data || {};
+      renderBesinFields(_state.nutrition);
+      document.getElementById('besin-sonuc').style.display='block';
+    }).catch(function(e){
+      document.getElementById('besin-loading').style.display='none';
+      alert('Bağlantı hatası: '+e.message);
+    });
   };
   reader.readAsDataURL(input.files[0]);
 }
-function gosterHata(msg){
-  var el=document.getElementById('ai-sonuc');
-  el.innerHTML='<div class="alert alert-red" style="margin-top:8px">⚠ '+msg+'</div>';
-  el.style.display='block';
+function renderBesinFields(data){
+  var html='';
+  NUT_KEYS.forEach(function(k){
+    var v = data[k]!=null ? data[k] : '';
+    html += '<div><div style="font-family:JetBrains Mono,monospace;font-size:.55rem;color:#525252;letter-spacing:1px;margin-bottom:4px">'+NUT_LABELS[k]+'</div>';
+    html += '<input type="number" step="0.1" id="nut_'+k+'" value="'+v+'" style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:8px;font-size:.9rem"></div>';
+  });
+  document.getElementById('besin-fields').innerHTML = html;
 }
-function gosterSonuc(d){
-  document.getElementById('ai-loading').style.display='none';
-  var el=document.getElementById('ai-sonuc');
-  if(d.error){gosterHata(d.error);return;}
-  var data=d.data;
-  var html='<div class="panel" style="margin-top:0"><h2>🧠 AI Analiz Sonucu</h2>';
-  var LABELS={kalori:'Kalori (kcal)',protein:'Protein (g)',yag:'Yağ (g)',karbonhidrat:'Karbonhidrat (g)',seker:'Şeker (g)',tuz:'Tuz (g)',lif:'Lif (g)',ham_yanit:'Ham Yanıt'};
-  var ICONS={kalori:'🔥',protein:'💪',yag:'🫙',karbonhidrat:'🌾',seker:'🍬',tuz:'🧂',lif:'🌿'};
-  if(typeof data==='object'&&data!==null&&!Array.isArray(data)){
-    html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:var(--border);margin-bottom:16px">';
-    Object.keys(data).forEach(function(k){
-      var v=data[k];
-      if(v===null||v===undefined) return;
-      var ico=ICONS[k]||'📊';
-      var lbl=LABELS[k]||k;
-      html+='<div style="background:var(--card);padding:16px;text-align:center">';
-      html+='<div style="font-size:1.4rem;margin-bottom:4px">'+ico+'</div>';
-      html+='<div style="font-family:Bebas Neue,sans-serif;font-size:1.8rem;color:#f5f5f5;line-height:1">'+v+'</div>';
-      html+='<div style="font-family:JetBrains Mono,monospace;font-size:.58rem;color:#525252;letter-spacing:1px;margin-top:4px">'+lbl+'</div>';
-      html+='</div>';
+function step2Next(){
+  NUT_KEYS.forEach(function(k){
+    var el=document.getElementById('nut_'+k);
+    _state.nutrition[k] = el&&el.value!=='' ? parseFloat(el.value) : null;
+  });
+  showStep(3);
+}
+
+// STEP 3
+function icindekilerScan(input){
+  if(!input.files||!input.files[0]) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var url=e.target.result;
+    document.getElementById('ic-preview').src=url;
+    document.getElementById('ic-preview-wrap').style.display='block';
+    document.getElementById('ic-loading').style.display='block';
+    document.getElementById('ic-sonuc').style.display='none';
+    fetch('/api/ai-ingredients',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({image:url})
+    }).then(function(r){return r.json();}).then(function(d){
+      document.getElementById('ic-loading').style.display='none';
+      if(d.error){alert('Hata: '+d.error);return;}
+      document.getElementById('ic-text').value = d.icindekiler || '';
+      document.getElementById('ic-sonuc').style.display='block';
+    }).catch(function(e){
+      document.getElementById('ic-loading').style.display='none';
+      alert('Bağlantı hatası: '+e.message);
     });
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+function step3Next(){
+  _state.icindekiler = document.getElementById('ic-text').value.trim();
+  showStep4();
+}
+function step3Skip(){
+  _state.icindekiler = '';
+  showStep4();
+}
+
+// STEP 4
+function showStep4(){
+  showStep(4);
+  // Özet besin
+  var html='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin-bottom:12px">';
+  NUT_KEYS.forEach(function(k){
+    var v=_state.nutrition[k];
+    if(v==null) return;
+    html+='<div style="background:var(--card);padding:10px;text-align:center">';
+    html+='<div style="font-family:Bebas Neue,sans-serif;font-size:1.3rem;color:#f5f5f5">'+v+'</div>';
+    html+='<div style="font-family:JetBrains Mono,monospace;font-size:.52rem;color:#525252;letter-spacing:1px">'+NUT_LABELS[k]+'</div>';
     html+='</div>';
-  } else {
-    html+='<pre style="color:#a3a3a3;font-size:.8rem;white-space:pre-wrap">'+JSON.stringify(data,null,2)+'</pre>';
+  });
+  html+='</div>';
+  document.getElementById('ozet-besin').innerHTML=html;
+  if(_state.icindekiler){
+    document.getElementById('ozet-ic-text').textContent=_state.icindekiler;
+    document.getElementById('ozet-ic').style.display='block';
   }
-  html+='<div style="margin-top:12px;font-size:.6rem;color:#2d2d2d;text-align:right">Kaynak: Hugging Face · openfoodfacts/nutrition-extractor</div></div>';
-  el.innerHTML=html; el.style.display='block';
+}
+
+// KAYDET
+function kaydet(){
+  var urun_adi = document.getElementById('urun-adi-input').value.trim();
+  var kategori = document.getElementById('kategori-input').value.trim() || 'Genel';
+  var err = document.getElementById('kaydet-err');
+  if(!urun_adi){err.textContent='Ürün adı zorunlu';err.style.display='block';return;}
+  err.style.display='none';
+  var btn = document.getElementById('kaydet-btn');
+  btn.textContent='Kaydediliyor…'; btn.disabled=true;
+  fetch('/api/urun-ai-ekle',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      barkod: _state.barkod,
+      urun_adi: urun_adi,
+      kategori: kategori,
+      nutrition: _state.nutrition,
+      icindekiler: _state.icindekiler
+    })
+  }).then(function(r){return r.json();}).then(function(d){
+    if(d.error){err.textContent=d.error;err.style.display='block';btn.textContent='💾 VERİTABANINA EKLE';btn.disabled=false;return;}
+    window.location.href='/tarama?barkod='+encodeURIComponent(_state.barkod);
+  }).catch(function(e){
+    err.textContent='Bağlantı hatası: '+e.message;err.style.display='block';
+    btn.textContent='💾 VERİTABANINA EKLE';btn.disabled=false;
+  });
 }
 </script>
 """
     return render(content, page="ai-okuyucu", title="AI Okuyucu")
 
-# Health check endpoint for Railway
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"}), 200
