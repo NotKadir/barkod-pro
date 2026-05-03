@@ -1252,8 +1252,33 @@ def tarama():
             # ── Allerjen & Besin Bilgileri (tüm kullanıcılar) ──
             allerjen_section = ""
             if True:  # Görev-3: tüm roller için göster
+                # Önce lokal DB'den bak (AI Okuyucu ile eklendiyse)
+                _local_nut = {
+                    "enerji": urun.get("kalori"),
+                    "yag": urun.get("yag"),
+                    "doymus_yag": None,
+                    "karbonhidrat": urun.get("karbonhidrat"),
+                    "seker": urun.get("seker"),
+                    "protein": urun.get("protein"),
+                    "tuz": urun.get("tuz"),
+                    "lif": urun.get("lif"),
+                }
+                _has_local = any(v is not None for v in _local_nut.values())
+                _local_ic = urun.get("icindekiler") or ""
+
                 _off = off_allerjen(barkod)
-                if _off:
+                if _off or _has_local:
+                    # Besin verisini belirle: lokal varsa onu kullan, yoksa OFF
+                    if _has_local:
+                        _b_final = _local_nut
+                        _ic_final = _local_ic
+                        _kaynak = "AI Okuyucu (Lokal DB)"
+                    else:
+                        _b_final = _off["beslenme"] if _off else {}
+                        _ic_final = (_off["icerik"] if _off else "") or ""
+                        _kaynak = "OpenFoodFacts.org"
+                    _off = _off  # allerjen için hala kullan
+                if _off or _has_local:
                     def _badge(nm, col="#e05252", ico="⚠"):
                         return (f'<span style="display:inline-flex;align-items:center;gap:3px;'
                                 f'padding:3px 9px;background:{col}18;color:{col};border:1px solid {col}44;'
@@ -1262,13 +1287,13 @@ def tarama():
                     def _fmt(v, u="g"):
                         return f"{v:.1f}&nbsp;{u}" if v is not None else "—"
 
-                    al_html = ("".join(_badge(a) for a in _off["allerjenler"])
+                    al_html = ("".join(_badge(a) for a in (_off["allerjenler"] if _off else []))
                                or '<span style="color:#4ade80;font-size:.78rem">✓ Bilinen alerjen tespit edilmedi</span>')
-                    iz_html = "".join(_badge(z, "#f0b429", "◦") for z in _off["izler"])
-                    et_html = "".join(_badge(e, "#4ade80", "✓") for e in _off["etiketler"])
+                    iz_html = "".join(_badge(z, "#f0b429", "◦") for z in (_off["izler"] if _off else []))
+                    et_html = "".join(_badge(e, "#4ade80", "✓") for e in (_off["etiketler"] if _off else []))
 
                     NS_C = {"A": "#038141", "B": "#85bb2f", "C": "#fecb02", "D": "#ee8100", "E": "#e63312"}
-                    ns = _off["nutriscore"]
+                    ns = _off["nutriscore"] if _off else None
                     ns_badge = (f'<span style="background:{NS_C[ns]};color:#fff;font-size:.88rem;'
                                 f'font-weight:900;padding:4px 16px;border-radius:3px;letter-spacing:.5px;'
                                 f'font-family:JetBrains Mono,monospace">NUTRI-SCORE&nbsp;{ns}</span>'
@@ -1276,7 +1301,7 @@ def tarama():
 
                     NOVA_L = {1: ("İşlenmemiş", "#4ade80"), 2: ("Mutfak Maddesi", "#86efac"),
                               3: ("İşlenmiş", "#fbbf24"),   4: ("Ultra İşlenmiş", "#e05252")}
-                    nv = _off.get("nova")
+                    nv = _off.get("nova") if _off else None
                     nova_badge = ""
                     if isinstance(nv, int) and nv in NOVA_L:
                         nl, nc = NOVA_L[nv]
@@ -1284,11 +1309,11 @@ def tarama():
                                       f'font-size:.7rem;font-weight:700;padding:4px 12px;border-radius:3px;'
                                       f'font-family:JetBrains Mono,monospace">NOVA&nbsp;{nv}&nbsp;–&nbsp;{nl}</span>')
 
-                    b = _off["beslenme"]
+                    b = _b_final if _has_local else _off["beslenme"]
                     lf_row = (f'<tr><td style="color:#a3a3a3">Lif</td>'
                               f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["lif"])}</td></tr>'
-                              if b["lif"] is not None else "")
-                    ic = _off["icerik"]
+                              if b.get("lif") is not None else "")
+                    ic = _ic_final
                     ic_html = (f'<div style="margin-top:12px;padding-top:10px;border-top:1px solid #1e1e2e">'
                                f'<div style="font-family:JetBrains Mono,monospace;font-size:.6rem;'
                                f'color:#525252;letter-spacing:2px;margin-bottom:4px">İÇERİK</div>'
@@ -1323,23 +1348,25 @@ def tarama():
                         '<tr><th style="text-align:left;font-weight:500;color:#a3a3a3">Besin Ögesi</th>',
                         '<th style="text-align:right;font-weight:500;color:#a3a3a3">Miktar</th></tr>',
                         f'<tr><td style="color:#a3a3a3">Enerji</td>'
-                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["enerji"], "kcal")}</td></tr>',
+                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b.get("enerji"), "kcal")}</td></tr>',
                         f'<tr><td style="color:#a3a3a3">Yağ</td>'
-                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["yag"])}</td></tr>',
-                        f'<tr><td style="color:#6a6a6a;font-size:.78rem;padding-left:12px">— doymuş</td>'
-                        f'<td style="text-align:right;color:#6a6a6a;font-size:.78rem">{_fmt(b["doymus_yag"])}</td></tr>',
+                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b.get("yag"))}</td></tr>',
+                        (f'<tr><td style="color:#6a6a6a;font-size:.78rem;padding-left:12px">— doymuş</td>'
+                        f'<td style="text-align:right;color:#6a6a6a;font-size:.78rem">{_fmt(b.get("doymus_yag"))}</td></tr>'
+                        if b.get("doymus_yag") is not None else ""),
                         f'<tr><td style="color:#a3a3a3">Karbonhidrat</td>'
-                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["karbonhidrat"])}</td></tr>',
-                        f'<tr><td style="color:#6a6a6a;font-size:.78rem;padding-left:12px">— şeker</td>'
-                        f'<td style="text-align:right;color:#6a6a6a;font-size:.78rem">{_fmt(b["seker"])}</td></tr>',
+                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b.get("karbonhidrat"))}</td></tr>',
+                        (f'<tr><td style="color:#6a6a6a;font-size:.78rem;padding-left:12px">— şeker</td>'
+                        f'<td style="text-align:right;color:#6a6a6a;font-size:.78rem">{_fmt(b.get("seker"))}</td></tr>'
+                        if b.get("seker") is not None else ""),
                         f'<tr><td style="color:#a3a3a3">Protein</td>'
-                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["protein"])}</td></tr>',
+                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b.get("protein"))}</td></tr>',
                         f'<tr><td style="color:#a3a3a3">Tuz</td>'
-                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b["tuz"])}</td></tr>',
+                        f'<td style="text-align:right;color:#f5f5f5">{_fmt(b.get("tuz"))}</td></tr>',
                         lf_row, '</table></div>',
                         ic_html,
-                        '<div style="margin-top:8px;font-size:.6rem;color:#2d2d2d;text-align:right">'
-                        'Kaynak: OpenFoodFacts.org</div>',
+                        f'<div style="margin-top:8px;font-size:.6rem;color:#2d2d2d;text-align:right">'
+                        f'Kaynak: {_kaynak}</div>',
                         '</div>',
                     ])
 
