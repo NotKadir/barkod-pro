@@ -938,10 +938,10 @@ document.querySelectorAll('.stat-card .val').forEach(function(el){
 #cb-send{background:var(--g);border:none;color:#000;font-weight:700;padding:9px 14px;cursor:pointer;font-size:.82rem;font-family:JetBrains Mono,monospace;letter-spacing:1px}
 #cb-send:hover{opacity:.85}
 </style>
-<button id="cb-btn" onclick="cbToggle()" title="Besin Asistanı">🤖</button>
+<button id="cb-btn" onclick="cbToggle()" title="Besin Asistanı"><svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path stroke-linecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></button>
 <div id="cb-panel">
   <div id="cb-header">
-    <span>🤖 Besin Asistanı</span>
+    <span style="display:flex;align-items:center;gap:8px"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path stroke-linecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg> Besin Asistanı</span>
     <button onclick="cbToggle()" style="background:none;border:none;color:#525252;cursor:pointer;font-size:1rem">✕</button>
   </div>
   <div id="cb-messages">
@@ -960,7 +960,7 @@ var _cbLoading=false;
 function cbToggle(){
   _cbOpen=!_cbOpen;
   document.getElementById('cb-panel').style.display=_cbOpen?'flex':'none';
-  document.getElementById('cb-btn').textContent=_cbOpen?'✕':'🤖';
+  document.getElementById('cb-btn').innerHTML=_cbOpen?'<span style="font-size:1.2rem">✕</span>':'<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path stroke-linecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>';
   if(_cbOpen) setTimeout(function(){document.getElementById('cb-input').focus();},100);
 }
 function cbAppend(text,cls){
@@ -1069,10 +1069,19 @@ def kayit():
         rol    = request.form.get("rol", "misafir").strip()
         if rol not in [r[0] for r in ROL_SECENEKLER]:
             rol = "misafir"
+        import re as _sre
         if not isim or not k or not s:
             hata = "Tüm alanlar zorunlu!"
-        elif len(s) < 4:
-            hata = "Şifre en az 4 karakter olmalı!"
+        elif len(s) < 8:
+            hata = "Şifre en az 8 karakter olmalı!"
+        elif not _sre.search(r"[A-Z]", s):
+            hata = "Şifre en az bir büyük harf içermeli! (A-Z)"
+        elif not _sre.search(r"[a-z]", s):
+            hata = "Şifre en az bir küçük harf içermeli! (a-z)"
+        elif not _sre.search(r"[0-9]", s):
+            hata = "Şifre en az bir rakam içermeli! (0-9)"
+        elif not _sre.search(r"[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/]", s):
+            hata = "Şifre en az bir özel karakter içermeli! (!@#$% vb.)"
         else:
             c = get_db()
             try:
@@ -1105,7 +1114,7 @@ def kayit():
     <div class="login-sub" style="margin-bottom:20px">Hesap Oluştur</div>
     {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
     {'<div class="alert alert-green">'+basari+'</div>' if basari else ''}
-    <form method="POST">
+    <form method="POST" onsubmit="return checkPw()">
       <label>ROL</label>
       <select name="rol" style="width:100%;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:10px 12px;font-family:inherit;font-size:.85rem;margin-bottom:4px">
         {rol_options}
@@ -1115,9 +1124,53 @@ def kayit():
       <label>KULLANICI ADI</label>
       <input name="k" placeholder="kullanici_adi" autocomplete="username">
       <label>ŞİFRE</label>
-      <input name="s" type="password" placeholder="••••••••" autocomplete="new-password">
-      <button type="submit" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px">KAYIT OL</button>
+      <input name="s" id="pw-input" type="password" placeholder="••••••••" autocomplete="new-password" oninput="updateStrength(this.value)">
+      <div id="pw-bar" style="height:4px;background:#1a1a1a;border-radius:2px;margin:6px 0 4px">
+        <div id="pw-fill" style="height:100%;width:0%;border-radius:2px;transition:width .3s,background .3s"></div>
+      </div>
+      <ul id="pw-rules" style="list-style:none;padding:0;margin:0 0 12px;font-size:.75rem;font-family:JetBrains Mono,monospace">
+        <li id="r-len"  style="color:#525252">✗ En az 8 karakter</li>
+        <li id="r-upper" style="color:#525252">✗ En az 1 büyük harf (A-Z)</li>
+        <li id="r-lower" style="color:#525252">✗ En az 1 küçük harf (a-z)</li>
+        <li id="r-num"  style="color:#525252">✗ En az 1 rakam (0-9)</li>
+        <li id="r-spec" style="color:#525252">✗ En az 1 özel karakter (!@#$% vb.)</li>
+      </ul>
+      <button type="submit" id="pw-submit" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px;opacity:.4;cursor:not-allowed" disabled>KAYIT OL</button>
     </form>
+    <script>
+    function updateStrength(v){{
+      var rules={{
+        'r-len':  v.length>=8,
+        'r-upper':/[A-Z]/.test(v),
+        'r-lower':/[a-z]/.test(v),
+        'r-num':  /[0-9]/.test(v),
+        'r-spec': /[!@#$%^&*()+\-=\[\]{{}}|;:,.<>?/]/.test(v)
+      }};
+      var score=0;
+      for(var id in rules){{
+        var ok=rules[id]; score+=ok?1:0;
+        var el=document.getElementById(id);
+        el.style.color=ok?'#10b981':'#525252';
+        el.textContent=(ok?'\u2713':'\u2717')+' '+el.textContent.slice(2);
+      }}
+      var pct=score*20;
+      var fill=document.getElementById('pw-fill');
+      fill.style.width=pct+'%';
+      fill.style.background=score<=2?'#ef4444':score<=3?'#f59e0b':score==4?'#3b82f6':'#10b981';
+      var btn=document.getElementById('pw-submit');
+      var allOk=Object.values(rules).every(Boolean);
+      btn.disabled=!allOk;
+      btn.style.opacity=allOk?'1':'.4';
+      btn.style.cursor=allOk?'pointer':'not-allowed';
+    }}
+    function checkPw(){{
+      var v=document.getElementById('pw-input').value;
+      if(v.length<8||!/[A-Z]/.test(v)||!/[a-z]/.test(v)||!/[0-9]/.test(v)||!/[!@#$%^&*()+\-=\[\]{{}}|;:,.<>?/]/.test(v)){{
+        return false;
+      }}
+      return true;
+    }}
+    </script>
     <div style="text-align:center;margin-top:16px">
       <a href="/giris" style="color:#525252;font-size:.82rem;text-decoration:none;font-family:JetBrains Mono,monospace">← Giriş Yap</a>
     </div>
@@ -1125,6 +1178,21 @@ def kayit():
 </div>"""
     return render(content, page="kayit", title="Kayit Ol")
 
+
+@app.route("/admin/temizle-kullanicilar", methods=["POST"])
+def admin_temizle_kullanicilar():
+    if session.get("rol") != "admin":
+        return "Yetkisiz", 403
+    c = get_db()
+    try:
+        c.execute("DELETE FROM kullanicilar WHERE kullanici_adi != 'admin'")
+        c.commit()
+        silinen = c.execute("SELECT changes()").fetchone()
+    except Exception:
+        pass
+    finally:
+        c.close()
+    return redirect("/kullanicilar")
 
 @app.route("/cikis")
 def cikis():
@@ -2488,10 +2556,15 @@ def kullanicilar():
         rows += f'<tr><td style="font-weight:600">{u["kullanici_adi"]}</td><td>{u.get("tam_ad","—")}</td><td style="color:{rc};font-weight:700">{u["rol"].upper()}</td><td>{akt}</td><td style="color:#a3a3a3">{str(u.get("son_giris","—"))[:16]}</td></tr>'
 
     content = f"""
-<div class="page-title">Kullanicilar</div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+  <div class="page-title" style="margin:0">Kullanicilar</div>
+  <form method="POST" action="/admin/temizle-kullanicilar" onsubmit="return confirm('Admin disindaki TUM kullanicilar silinecek. Emin misiniz?')">
+    <button type="submit" style="background:#ef4444;border:none;color:#fff;padding:8px 16px;font-family:JetBrains Mono,monospace;font-size:.75rem;letter-spacing:1px;cursor:pointer;border-radius:2px">HEPSINI SİL</button>
+  </form>
+</div>
 <div class="tbl-wrap"><table>
   <tr><th>Kullanici Adi</th><th>Tam Ad</th><th>Rol</th><th>Durum</th><th>Son Giris</th></tr>
-  {rows}
+  {{rows}}
 </table></div>"""
     return render(content, page="kullanicilar", title="Kullanicilar")
 
