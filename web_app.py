@@ -917,6 +917,89 @@ document.querySelectorAll('.stat-card .val').forEach(function(el){
   io.observe(el);
 });
 </script>
+
+<!-- ═══════════════ CHATBOT WIDGET ═══════════════ -->
+{% if session.get('user') %}
+<style>
+#cb-btn{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--g);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.4rem;box-shadow:0 4px 24px rgba(16,185,129,.4);z-index:9000;transition:transform .2s}
+#cb-btn:hover{transform:scale(1.1)}
+#cb-panel{position:fixed;bottom:88px;right:24px;width:340px;max-width:calc(100vw - 32px);height:480px;max-height:calc(100vh - 120px);background:#0d0d0d;border:1px solid #1e1e1e;display:flex;flex-direction:column;z-index:9000;box-shadow:0 8px 40px rgba(0,0,0,.6);display:none}
+#cb-header{padding:14px 16px;border-bottom:1px solid #1a1a1a;font-family:JetBrains Mono,monospace;font-size:.65rem;letter-spacing:2px;color:var(--g);text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+#cb-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+#cb-messages::-webkit-scrollbar{width:3px}
+#cb-messages::-webkit-scrollbar-thumb{background:#1e1e1e}
+.cb-msg{max-width:88%;padding:9px 13px;font-size:.82rem;line-height:1.5;border-radius:2px}
+.cb-msg.user{align-self:flex-end;background:#10b98122;color:#f5f5f5;border:1px solid #10b98133}
+.cb-msg.bot{align-self:flex-start;background:#111;color:#d4d4d4;border:1px solid #1e1e1e}
+.cb-msg.bot.loading{color:#525252;font-style:italic}
+#cb-input-row{padding:10px;border-top:1px solid #1a1a1a;display:flex;gap:6px;flex-shrink:0}
+#cb-input{flex:1;background:#080808;border:1px solid #1a1a1a;color:#f5f5f5;padding:9px 12px;font-size:.82rem;font-family:inherit;outline:none}
+#cb-input:focus{border-color:var(--g)}
+#cb-send{background:var(--g);border:none;color:#000;font-weight:700;padding:9px 14px;cursor:pointer;font-size:.82rem;font-family:JetBrains Mono,monospace;letter-spacing:1px}
+#cb-send:hover{opacity:.85}
+</style>
+<button id="cb-btn" onclick="cbToggle()" title="Besin Asistanı">🤖</button>
+<div id="cb-panel">
+  <div id="cb-header">
+    <span>🤖 Besin Asistanı</span>
+    <button onclick="cbToggle()" style="background:none;border:none;color:#525252;cursor:pointer;font-size:1rem">✕</button>
+  </div>
+  <div id="cb-messages">
+    <div class="cb-msg bot">Merhaba! Ben NexStock besin asistanıyım. Alerjin veya sağlık durumun varsa söyle, hangi ürünlerden uzak durman gerektiğini söylerim.</div>
+  </div>
+  <div id="cb-input-row">
+    <input id="cb-input" placeholder="Mesajınızı yazın..." onkeydown="if(event.key==='Enter')cbSend()">
+    <button id="cb-send" onclick="cbSend()">→</button>
+  </div>
+</div>
+<script>
+var _cbOpen=false;
+var _cbHistory=[];
+var _cbLoading=false;
+
+function cbToggle(){
+  _cbOpen=!_cbOpen;
+  document.getElementById('cb-panel').style.display=_cbOpen?'flex':'none';
+  document.getElementById('cb-btn').textContent=_cbOpen?'✕':'🤖';
+  if(_cbOpen) setTimeout(function(){document.getElementById('cb-input').focus();},100);
+}
+function cbAppend(text,cls){
+  var el=document.createElement('div');
+  el.className='cb-msg '+cls;
+  el.textContent=text;
+  var msgs=document.getElementById('cb-messages');
+  msgs.appendChild(el);
+  msgs.scrollTop=msgs.scrollHeight;
+  return el;
+}
+function cbSend(){
+  if(_cbLoading) return;
+  var inp=document.getElementById('cb-input');
+  var msg=inp.value.trim();
+  if(!msg) return;
+  inp.value='';
+  cbAppend(msg,'user');
+  _cbHistory.push({role:'user',content:msg});
+  _cbLoading=true;
+  var loadEl=cbAppend('Düşünüyor…','bot loading');
+  fetch('/api/chat',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({messages:_cbHistory})
+  }).then(function(r){return r.json();}).then(function(d){
+    _cbLoading=false;
+    loadEl.remove();
+    var reply=d.reply||d.error||'Bir hata oluştu.';
+    cbAppend(reply,'bot');
+    _cbHistory.push({role:'assistant',content:reply});
+  }).catch(function(e){
+    _cbLoading=false;
+    loadEl.remove();
+    cbAppend('Bağlantı hatası: '+e.message,'bot');
+  });
+}
+</script>
+{% endif %}
 </body></html>"""
 
 def render(content, page="", title="NexStock", **kw):
@@ -2387,6 +2470,78 @@ def api_hareketler():
     finally:
         c.close()
     return jsonify(liste)
+
+
+@app.route("/api/chat", methods=["POST"])
+@yetkili_giris
+def api_chat():
+    payload = request.get_json(force=True) or {}
+    messages = payload.get("messages") or []
+    if not messages:
+        return jsonify({"error": "Mesaj eksik"}), 400
+
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return jsonify({"error": "GROQ_API_KEY ayarlanmamis"}), 500
+
+    # DB'den tüm ürünlerin alerjen + besin bilgilerini çek
+    c = get_db()
+    try:
+        urunler_rows = c.execute(
+            """SELECT urun_adi, barkod, allerjenler, katki_maddeleri, icindekiler,
+                      kalori, protein, yag, karbonhidrat, seker, tuz, lif
+               FROM urunler ORDER BY urun_adi"""
+        ).fetchall()
+        urunler_rows = [dict(r) for r in urunler_rows]
+    finally:
+        c.close()
+
+    # Ürün listesini sistem promptuna ekle
+    urun_bilgi = []
+    for u in urunler_rows:
+        satir = f"- {u['urun_adi']} (barkod: {u['barkod']})"
+        if u.get('allerjenler'):
+            satir += f" | Alerjenler: {u['allerjenler']}"
+        if u.get('katki_maddeleri'):
+            satir += f" | Katkı: {u['katki_maddeleri']}"
+        if u.get('icindekiler'):
+            satir += f" | İçindekiler: {u['icindekiler'][:120]}..."
+        if u.get('kalori'):
+            satir += f" | Kalori: {u['kalori']} kcal"
+        urun_bilgi.append(satir)
+
+    urun_listesi = "\n".join(urun_bilgi) if urun_bilgi else "Henüz urun eklenmemis."
+
+    system_prompt = f"""Sen NexStock sisteminin besin ve alerjen asistanısın.
+Kullanıcıların sağlık durumlarına göre hangi ürünleri yiyip yiyemeyeceklerini söylüyorsun.
+
+Sistemdeki ürünler ve alerjen bilgileri:
+{urun_listesi}
+
+Davranış kuralları:
+- Kısa, net ve pratik yanıtlar ver
+- Türkçe yaz
+- Çölyak/gluten intoleransı: gluten, buğday, arpa, çavdar içeren ürünleri say
+- Laktoz intoleransı: süt, peynir, yoğurt içeren ürünleri say
+- Fıstık alerjisi: yer fıstığı ve eser miktarlarını say
+- Kullanıcı bir ürün sorarsa direkt DB'deki bilgiyi kullan
+- DB'de alerjen bilgisi olmayan ürünler için "bu ürünün alerjen bilgisi sisteme eklenmemiş" de
+- Asla tıbbi tavsiye verme, doktora yönlendir
+- Emoji kullanabilirsin"""
+
+    groq_messages = [{"role": "system", "content": system_prompt}] + messages[-10:]  # son 10 mesaj
+
+    try:
+        client = _Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=groq_messages,
+            max_tokens=400,
+        )
+        reply = response.choices[0].message.content.strip()
+        return jsonify({"reply": reply})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ═══════════════════════════════════════════════════
