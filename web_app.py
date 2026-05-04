@@ -919,7 +919,7 @@ document.querySelectorAll('.stat-card .val').forEach(function(el){
 </script>
 
 <!-- ═══════════════ CHATBOT WIDGET ═══════════════ -->
-{% if session.get('user') %}
+{% if session.get('rol') in ['kullanici', 'admin'] %}
 <style>
 #cb-btn{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--g);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.4rem;box-shadow:0 4px 24px rgba(16,185,129,.4);z-index:9000;transition:transform .2s}
 #cb-btn:hover{transform:scale(1.1)}
@@ -1045,10 +1045,86 @@ def giris():
       <input name="s" type="password" placeholder="••••••••" autocomplete="current-password">
       <button type="submit" class="btn btn-green" style="width:100%;margin-top:4px;padding:12px">GIRIS YAP</button>
     </form>
-    <div style="text-align:center;margin-top:16px;color:#525252;font-size:.8rem">Varsayilan: admin / admin123</div>
+    <div style="text-align:center;margin-top:16px">
+      <a href="/kayit" style="color:var(--g);font-size:.82rem;text-decoration:none;font-family:JetBrains Mono,monospace">Hesap Oluştur →</a>
+    </div>
   </div>
 </div>"""
     return render(content, page="giris", title="Giris")
+
+@app.route("/kayit", methods=["GET", "POST"])
+def kayit():
+    hata = ""
+    basari = ""
+    ROL_SECENEKLER = [
+        ("misafir",   "Misafir — sadece tarama görüntüleyebilir"),
+        ("kullanici", "Kullanıcı — tarama + besin asistanı"),
+        ("kasiyer",   "Kasiyer — stok okutma ve ekleme"),
+        ("admin",     "Admin — tam yetki"),
+    ]
+    if request.method == "POST":
+        isim   = request.form.get("isim", "").strip()
+        k      = request.form.get("k", "").strip()
+        s      = request.form.get("s", "").strip()
+        rol    = request.form.get("rol", "misafir").strip()
+        if rol not in [r[0] for r in ROL_SECENEKLER]:
+            rol = "misafir"
+        if not isim or not k or not s:
+            hata = "Tüm alanlar zorunlu!"
+        elif len(s) < 4:
+            hata = "Şifre en az 4 karakter olmalı!"
+        else:
+            c = get_db()
+            try:
+                mevcut = c.execute("SELECT id FROM kullanicilar WHERE kullanici_adi=%s", (k,)).fetchone()
+                if mevcut:
+                    hata = "Bu kullanıcı adı zaten alınmış!"
+                else:
+                    c.execute(
+                        "INSERT INTO kullanicilar (kullanici_adi,sifre_hash,tam_ad,rol) VALUES (%s,%s,%s,%s)",
+                        (k, sh(s), isim, rol)
+                    )
+                    c.commit()
+                    basari = "Hesap oluşturuldu! Giriş yapabilirsin."
+            except Exception as e:
+                hata = f"Hata: {str(e)}"
+            finally:
+                c.close()
+
+    rol_options = "".join(
+        f'<option value="{r}">{l}</option>'
+        for r, l in [("misafir","Misafir — sadece tarama"),
+                     ("kullanici","Kullanıcı — tarama + asistan"),
+                     ("kasiyer","Kasiyer — stok yönetimi"),
+                     ("admin","Admin — tam yetki")]
+    )
+    content = f"""
+<div class="login-wrap">
+  <div class="panel">
+    <div class="login-logo">Nex<span style="color:var(--g)">Stock</span></div>
+    <div class="login-sub" style="margin-bottom:20px">Hesap Oluştur</div>
+    {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
+    {'<div class="alert alert-green">'+basari+'</div>' if basari else ''}
+    <form method="POST">
+      <label>ROL</label>
+      <select name="rol" style="width:100%;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:10px 12px;font-family:inherit;font-size:.85rem;margin-bottom:4px">
+        {rol_options}
+      </select>
+      <label>İSİM</label>
+      <input name="isim" placeholder="Adınız Soyadınız" autofocus>
+      <label>KULLANICI ADI</label>
+      <input name="k" placeholder="kullanici_adi" autocomplete="username">
+      <label>ŞİFRE</label>
+      <input name="s" type="password" placeholder="••••••••" autocomplete="new-password">
+      <button type="submit" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px">KAYIT OL</button>
+    </form>
+    <div style="text-align:center;margin-top:16px">
+      <a href="/giris" style="color:#525252;font-size:.82rem;text-decoration:none;font-family:JetBrains Mono,monospace">← Giriş Yap</a>
+    </div>
+  </div>
+</div>"""
+    return render(content, page="kayit", title="Kayit Ol")
+
 
 @app.route("/cikis")
 def cikis():
