@@ -1183,6 +1183,76 @@ def kayit():
                      ("kasiyer","Kasiyer — stok yönetimi"),
                      ("admin","Admin — tam yetki")]
     )
+
+    def _acc_block(gid, baslik, inp, secenekler):
+        pills = "".join(
+            '<label class="tag-pill">'
+            f'<input type="checkbox" name="{inp}" value="{v}" onchange="updateBadge(\'{gid}\')">'
+            f'<span>{l}</span></label>'
+            for v, l in secenekler
+        )
+        return (
+            f'<div class="acc-item">'
+            f'<button type="button" class="acc-trigger" onclick="toggleAcc(this,\'{gid}\')">'
+            f'<span>{baslik}</span>'
+            f'<span class="acc-badge" id="{gid}-badge"></span>'
+            f'<span class="acc-arrow">&#8250;</span>'
+            f'</button>'
+            f'<div class="acc-body" id="{gid}-body" style="display:none">'
+            f'<div class="tag-grid">{pills}</div>'
+            f'</div></div>'
+        )
+
+    profil_acc = (
+        '<style>'
+        '.acc-item{margin-bottom:6px}'
+        '.acc-trigger{width:100%;background:rgba(255,255,255,.03);border:1px solid #1a1a1a;'
+        'color:#f5f5f5;padding:11px 14px;cursor:pointer;'
+        "font-family:'JetBrains Mono',monospace;font-size:.72rem;"
+        'letter-spacing:1px;text-transform:uppercase;'
+        'display:flex;align-items:center;justify-content:space-between;'
+        'transition:border-color .25s,background .25s}'
+        '.acc-trigger:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.05)}'
+        '.acc-trigger.open{border-color:var(--g);background:rgba(16,185,129,.06)}'
+        '.acc-arrow{font-size:1.1rem;transition:transform .3s cubic-bezier(.16,1,.3,1);color:var(--muted);line-height:1}'
+        '.acc-trigger.open .acc-arrow{transform:rotate(90deg);color:var(--g)}'
+        '.acc-badge{margin-left:8px;margin-right:auto;font-size:.62rem;background:var(--g);color:#060606;'
+        'padding:1px 7px;font-weight:700;letter-spacing:.5px;display:none}'
+        '.acc-badge.visible{display:inline-block}'
+        '.acc-body{border:1px solid #1a1a1a;border-top:none;padding:14px;background:rgba(255,255,255,.015)}'
+        '.tag-grid{display:flex;flex-wrap:wrap;gap:7px}'
+        '.tag-pill{position:relative}'
+        '.tag-pill input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}'
+        '.tag-pill span{display:inline-flex;align-items:center;padding:6px 13px;cursor:pointer;'
+        "font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.5px;text-transform:uppercase;"
+        'border:1px solid #1a1a1a;color:#686868;background:transparent;'
+        'transition:all .2s cubic-bezier(.16,1,.3,1);user-select:none}'
+        '.tag-pill span:hover{border-color:rgba(255,255,255,.15);color:#a0a0a0}'
+        '.tag-pill input:checked + span{border-color:var(--g);color:#060606;background:var(--g)}'
+        '</style>'
+        + _acc_block("hastalik", "Hastalık / Alerji", "hastalik", [
+            ("colyak","Çölyak"),("seker","Şeker Hastalığı"),("hipertansiyon","Hipertansiyon"),
+            ("kolesterol","Yüksek Kolesterol"),("laktoz","Laktoz İnt."),
+            ("fruktoz","Fruktoz İnt."),("gluten","Gluten Alerjisi"),("hicbiri","Hiçbiri"),
+        ])
+        + _acc_block("yeme", "Yeme Alışkanlığı", "yeme", [
+            ("vegan","Vegan"),("vejetaryan","Vejetaryan"),("pescatarian","Pescatarian"),
+            ("halal","Helal"),("kosher","Koşer"),("glutensiz","Glutensiz"),
+            ("dusuk_seker","Düşük Şeker"),("dusuk_tuz","Düşük Tuz"),("hicbiri","Hiçbiri"),
+        ])
+        + '<script>'
+        'function toggleAcc(btn,gid){'
+        'var body=document.getElementById(gid+"-body");'
+        'var open=body.style.display==="block";'
+        'body.style.display=open?"none":"block";'
+        'btn.classList.toggle("open",!open)}'
+        'function updateBadge(gid){'
+        'var n=document.querySelectorAll("input[name=\'"+gid+"\']:checked").length;'
+        'var b=document.getElementById(gid+"-badge");'
+        'b.textContent=n;b.classList.toggle("visible",n>0)}'
+        '</script>'
+    )
+
     content = f"""
 <div class="login-wrap">
   <div class="panel">
@@ -1211,23 +1281,8 @@ def kayit():
         <li id="r-num"  style="color:#525252">✗ En az 1 rakam (0-9)</li>
         <li id="r-spec" style="color:#525252">✗ En az 1 özel karakter (!@#$% vb.)</li>
       </ul>
-      <div id="profil-alanlari" style="margin-top:18px;margin-bottom:4px;display:none">
-        <label style="margin-bottom:8px">HASTALIK / ALERJI (isteğe bağlı)</label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-bottom:14px">
-          {"".join(f'<label style="display:flex;align-items:center;gap:6px;font-family:JetBrains Mono,monospace;font-size:.75rem;color:#a0a0a0;cursor:pointer"><input type="checkbox" name="hastalik" value="{v}" style="accent-color:var(--g)">{l}</label>' for v,l in [
-            ("colyak","Çölyak"),("seker","Şeker Hastalığı"),("hipertansiyon","Hipertansiyon"),
-            ("kolesterol","Yüksek Kolesterol"),("laktoz","Laktoz İntoleransı"),
-            ("fruktoz","Fruktoz İntoleransı"),("gluten","Gluten Alerjisi"),("yok","Yok / Bilmiyorum")
-          ])}
-        </div>
-        <label style="margin-bottom:8px">YEME ALIŞKANLIĞI (isteğe bağlı)</label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-bottom:6px">
-          {"".join(f'<label style="display:flex;align-items:center;gap:6px;font-family:JetBrains Mono,monospace;font-size:.75rem;color:#a0a0a0;cursor:pointer"><input type="checkbox" name="yeme" value="{v}" style="accent-color:var(--g)">{l}</label>' for v,l in [
-            ("vegan","Vegan"),("vejetaryan","Vejetaryan"),("pescatarian","Pescatarian"),
-            ("halal","Helal"),("kosher","Koşer"),("glutensiz","Glutensiz"),
-            ("dusuk_seker","Düşük Şeker"),("dusuk_tuz","Düşük Tuz")
-          ])}
-        </div>
+      <div id="profil-alanlari" style="display:none;margin:16px 0 4px">
+        {profil_acc}
       </div>
       <button type="submit" id="pw-submit" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px;opacity:.4;cursor:not-allowed" disabled>KAYIT OL</button>
     </form>
