@@ -3,3 +3,4 @@ requests
 gunicorn
 psycopg2-binary
 groq
+firebase-admin  
