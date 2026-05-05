@@ -123,17 +123,16 @@ def init_db():
             ("karbonhidrat","REAL"), ("seker","REAL"), ("tuz","REAL"),
             ("lif","REAL"), ("icindekiler","TEXT"),
             ("allerjenler","TEXT"), ("katki_maddeleri","TEXT")
+        ]:
+            try:
+                c.execute(f"ALTER TABLE urunler ADD COLUMN IF NOT EXISTS {col} {typ}")
+                c.commit()
+            except Exception:
+                pass
         # Firebase kolonları migration
         for _col, _typ in [("firebase_uid","TEXT"), ("email","TEXT")]:
             try:
                 c.execute(f"ALTER TABLE kullanicilar ADD COLUMN IF NOT EXISTS {_col} {_typ}")
-                c.commit()
-            except Exception:
-                pass
-
-        ]:
-            try:
-                c.execute(f"ALTER TABLE urunler ADD COLUMN IF NOT EXISTS {col} {typ}")
                 c.commit()
             except Exception:
                 pass
