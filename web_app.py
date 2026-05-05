@@ -1070,6 +1070,192 @@ def giris():
         hata = "Hatali kullanici adi veya sifre!"
 
     content = f"""
+<div class="login-wrap">
+  <div class="panel">
+    <div class="login-logo">Nex<span style="color:var(--g)">Stock</span></div>
+    <div class="login-sub">Envanter Yonetim Sistemi</div>
+    {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
+    <form method="POST">
+      <label>KULLANICI ADI</label>
+      <input name="k" placeholder="kullanici_adi" autofocus autocomplete="username">
+      <label>SIFRE</label>
+      <input name="s" type="password" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" autocomplete="current-password">
+      <button type="submit" class="btn btn-green" style="width:100%;margin-top:4px;padding:12px">GIRIS YAP</button>
+    </form>
+    <div style="text-align:center;margin-top:16px">
+    <div style="margin:16px 0;display:flex;align-items:center;gap:12px">
+      <div style="flex:1;height:1px;background:#1a1a1a"></div>
+      <span style="color:#525252;font-size:.75rem;font-family:JetBrains Mono,monospace">VEYA</span>
+      <div style="flex:1;height:1px;background:#1a1a1a"></div>
+    </div>
+    <button type="button" onclick="googleGiris()" style="width:100%;background:#fff;color:#000;border:none;padding:11px;font-family:inherit;font-size:.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;letter-spacing:.5px">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Google ile Giris Yap
+    </button>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script>
+    var _fbConfig = {{
+      apiKey:            "AIzaSyDQVp3H0DKjnfcl9-1fe51KBHV43K2TAmA",
+      authDomain:        "nexstock-8c7ed.firebaseapp.com",
+      projectId:         "nexstock-8c7ed",
+      storageBucket:     "nexstock-8c7ed.firebasestorage.app",
+      messagingSenderId: "960691238543",
+      appId:             "1:960691238543:web:82c3dc0eef17a3eb30a2fa"
+    }};
+    if (!firebase.apps.length) firebase.initializeApp(_fbConfig);
+    function googleGiris(){{
+      var provider = new firebase.auth.GoogleAuthProvider();
+      firebase.auth().signInWithPopup(provider).then(function(result){{
+        return result.user.getIdToken();
+      }}).then(function(token){{
+        return fetch("/api/firebase-login",{{
+          method:"POST",
+          headers:{{"Content-Type":"application/json"}},
+          body: JSON.stringify({{idToken: token}})
+        }});
+      }}).then(function(r){{ return r.json(); }}).then(function(data){{
+        if(data.ok) window.location.href = data.redirect || "/";
+        else alert("Giris hatasi: " + data.error);
+      }}).catch(function(err){{
+        alert("Google giris hatasi: " + err.message);
+      }});
+    }}
+    </script>
+    <a href="/kayit" style="color:var(--g);font-size:.82rem;text-decoration:none;font-family:JetBrains Mono,monospace">Hesap Olustur</a>
+    </div>
+  </div>
+</div>"""
+    return render(content, page="giris", title="Giris")
+
+@app.route("/kayit", methods=["GET", "POST"])
+def kayit():
+    hata = ""
+    basari = ""
+    ROL_SECENEKLER = [
+        ("misafir",   "Misafir -- sadece tarama goruntuleyebilir"),
+        ("kullanici", "Kullanici -- tarama + besin asistani"),
+        ("kasiyer",   "Kasiyer -- stok okutma ve ekleme"),
+        ("admin",     "Admin -- tam yetki"),
+    ]
+    if request.method == "POST":
+        isim             = request.form.get("isim", "").strip()
+        k                = request.form.get("k", "").strip()
+        s                = request.form.get("s", "").strip()
+        rol              = request.form.get("rol", "misafir").strip()
+        hastaliklar      = ",".join(request.form.getlist("hastalik"))
+        yeme_aliskanlik  = ",".join(request.form.getlist("yeme"))
+        if rol not in [r[0] for r in ROL_SECENEKLER]:
+            rol = "misafir"
+        import re as _sre
+        if not isim or not k or not s:
+            hata = "Tum alanlar zorunlu!"
+        elif len(s) < 8:
+            hata = "Sifre en az 8 karakter olmali!"
+        elif not _sre.search(r"[A-Z]", s):
+            hata = "Sifre en az bir buyuk harf icermeli! (A-Z)"
+        elif not _sre.search(r"[a-z]", s):
+            hata = "Sifre en az bir kucuk harf icermeli! (a-z)"
+        elif not _sre.search(r"[0-9]", s):
+            hata = "Sifre en az bir rakam icermeli! (0-9)"
+        elif not _sre.search(r"[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/]", s):
+            hata = "Sifre en az bir ozel karakter icermeli! (!@#$% vb.)"
+        else:
+            c = get_db()
+            try:
+                mevcut = c.execute("SELECT id FROM kullanicilar WHERE kullanici_adi=%s", (k,)).fetchone()
+                if mevcut:
+                    hata = "Bu kullanici adi zaten alinmis!"
+                else:
+                    c.execute(
+                        "INSERT INTO kullanicilar (kullanici_adi,sifre_hash,tam_ad,rol,hastaliklar,yeme_aliskanlik) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (k, sh(s), isim, rol, hastaliklar or None, yeme_aliskanlik or None)
+                    )
+                    c.commit()
+                    basari = "Hesap olusturuldu! Giris yapabilirsin."
+            except Exception as e:
+                hata = f"Hata: {str(e)}"
+            finally:
+                c.close()
+
+    rol_options = "".join(
+        f'<option value="{r}">{l}</option>'
+        for r, l in [("misafir","Misafir -- sadece tarama"),
+                     ("kullanici","Kullanici -- tarama + asistan"),
+                     ("kasiyer","Kasiyer -- stok yonetimi"),
+                     ("admin","Admin -- tam yetki")]
+    )
+
+    def _acc_block(gid, baslik, inp, secenekler):
+        pills = "".join(
+            '<label class="tag-pill">'
+            f'<input type="checkbox" name="{inp}" value="{v}" onchange="updateBadge(\'{gid}\')">'
+            f'<span>{l}</span></label>'
+            for v, l in secenekler
+        )
+        return (
+            f'<div class="acc-item">'
+            f'<button type="button" class="acc-trigger" onclick="toggleAcc(this,\'{gid}\')">'
+            f'<span>{baslik}</span>'
+            f'<span class="acc-badge" id="{gid}-badge"></span>'
+            f'<span class="acc-arrow">&#8250;</span>'
+            f'</button>'
+            f'<div class="acc-body" id="{gid}-body" style="display:none">'
+            f'<div class="tag-grid">{pills}</div>'
+            f'</div></div>'
+        )
+
+    profil_acc = (
+        '<style>'
+        '.acc-item{margin-bottom:6px}'
+        '.acc-trigger{width:100%;background:rgba(255,255,255,.03);border:1px solid #1a1a1a;'
+        "color:#f5f5f5;padding:11px 14px;cursor:pointer;"
+        "font-family:'JetBrains Mono',monospace;font-size:.72rem;"
+        'letter-spacing:1px;text-transform:uppercase;'
+        'display:flex;align-items:center;justify-content:space-between;'
+        'transition:border-color .25s,background .25s}'
+        '.acc-trigger:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.05)}'
+        '.acc-trigger.open{border-color:var(--g);background:rgba(16,185,129,.06)}'
+        '.acc-arrow{font-size:1.1rem;transition:transform .3s cubic-bezier(.16,1,.3,1);color:var(--muted);line-height:1}'
+        '.acc-trigger.open .acc-arrow{transform:rotate(90deg);color:var(--g)}'
+        '.acc-badge{margin-left:8px;margin-right:auto;font-size:.62rem;background:var(--g);color:#060606;'
+        'padding:1px 7px;font-weight:700;letter-spacing:.5px;display:none}'
+        '.acc-badge.visible{display:inline-block}'
+        '.acc-body{border:1px solid #1a1a1a;border-top:none;padding:14px;background:rgba(255,255,255,.015)}'
+        '.tag-grid{display:flex;flex-wrap:wrap;gap:7px}'
+        '.tag-pill{position:relative}'
+        '.tag-pill input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}'
+        '.tag-pill span{display:inline-flex;align-items:center;padding:6px 13px;cursor:pointer;'
+        "font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.5px;text-transform:uppercase;"
+        'border:1px solid #1a1a1a;color:#686868;background:transparent;'
+        'transition:all .2s cubic-bezier(.16,1,.3,1);user-select:none}'
+        '.tag-pill span:hover{border-color:rgba(255,255,255,.15);color:#a0a0a0}'
+        '.tag-pill input:checked + span{border-color:var(--g);color:#060606;background:var(--g)}'
+        '</style>'
+        + _acc_block("hastalik", "Hastalik / Alerji", "hastalik", [
+            ("colyak","Colyak"),("seker","Seker Hastaligi"),("hipertansiyon","Hipertansiyon"),
+            ("kolesterol","Yuksek Kolesterol"),("laktoz","Laktoz Int."),
+            ("fruktoz","Fruktoz Int."),("gluten","Gluten Alerjisi"),("hicbiri","Hicbiri"),
+        ])
+        + _acc_block("yeme", "Yeme Aliskanligi", "yeme", [
+            ("vegan","Vegan"),("vejetaryan","Vejetaryan"),("pescatarian","Pescatarian"),
+            ("halal","Helal"),("kosher","Koser"),("glutensiz","Glutensiz"),
+            ("dusuk_seker","Dusuk Seker"),("dusuk_tuz","Dusuk Tuz"),("hicbiri","Hicbiri"),
+        ])
+        + '<script>'
+        'function toggleAcc(btn,gid){'
+        'var body=document.getElementById(gid+"-body");'
+        'var open=body.style.display==="block";'
+        'body.style.display=open?"none":"block";'
+        'btn.classList.toggle("open",!open)}'
+        'function updateBadge(gid){'
+        'var n=document.querySelectorAll("input[name='"+gid+"']:checked").length;'
+        'var b=document.getElementById(gid+"-badge");'
+        'b.textContent=n;b.classList.toggle("visible",n>0)}'
+        '</script>'
+    )
+
+    content = f"""
 <style>
 .step-bar{{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:32px}}
 .step-dot{{width:28px;height:28px;border-radius:50%;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:.65rem;font-weight:600;color:#525252;background:var(--card);transition:all .3s cubic-bezier(.16,1,.3,1);position:relative;z-index:1}}
@@ -1194,6 +1380,7 @@ def giris():
   </div>
 </div>"""
     return render(content, page="kayit", title="Kayit Ol")
+
 
 
 @app.route("/admin/temizle-kullanicilar", methods=["POST"])
