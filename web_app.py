@@ -387,9 +387,9 @@ BASE = r"""<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --g:#ffffff;--g2:#e5e5e5;--bg:#060606;--panel:#0e0e0e;
-  --card:#111111;--border:#222;--text:#f5f5f5;--sub:#d4d4d4;--muted:#525252;
-  --accent:rgba(165,216,255,1);
+  --g:#10b981;--g2:#34d399;--bg:#060606;--panel:#0e0e0e;
+  --card:#111111;--border:#1e1e1e;--text:#f5f5f5;--sub:#d4d4d4;--muted:#525252;
+  --accent:#a5d8ff;--red:#e05252;--yellow:#f0b429;--orange:#fb923c;--purple:#a78bfa;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
@@ -562,19 +562,20 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:50;
 .page-title::before{content:'';display:block;width:4px;height:36px;background:var(--g);animation:barGrow .5s .2s cubic-bezier(.16,1,.3,1) both}
 @keyframes barGrow{from{height:0}to{height:36px}}
 
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;margin-bottom:32px;background:var(--border)}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:32px}
 .stat-card{
-  background:var(--card);padding:24px 20px;text-align:center;
+  background:var(--card);padding:22px 18px 18px;text-align:center;
+  border:1px solid var(--border);
   position:relative;overflow:hidden;transition:all .35s cubic-bezier(.16,1,.3,1);
 }
-.stat-card:hover{background:#1a1a1a;transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.4)}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
-  background:linear-gradient(90deg,transparent,var(--g),var(--accent),var(--g),transparent);
-  background-size:200% 100%;opacity:0;transition:opacity .3s}
-.stat-card:hover::before{opacity:1;animation:hdrLine 3s linear infinite}
-.stat-card .val{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;line-height:1;margin-bottom:6px;transition:transform .3s cubic-bezier(.16,1,.3,1)}
-.stat-card:hover .val{transform:scale(1.08)}
-.stat-card .lbl{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.stat-card:hover{background:#161616;transform:translateY(-4px);box-shadow:0 12px 32px rgba(0,0,0,.5)}
+.stat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;opacity:.7;transition:opacity .3s,height .3s}
+.stat-card:hover::after{opacity:1;height:3px}
+.stat-card.pulse-alert{animation:cardPulse 2.5s ease-in-out infinite}
+@keyframes cardPulse{0%,100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}50%{box-shadow:0 0 18px 2px var(--alert-color,rgba(224,82,82,.25))}}
+.stat-card .val{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;line-height:1;margin-bottom:4px;transition:transform .3s cubic-bezier(.16,1,.3,1)}
+.stat-card:hover .val{transform:scale(1.1)}
+.stat-card .lbl{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase}
 
 .tbl-wrap{background:var(--card);border:1px solid var(--border);overflow:hidden;margin-bottom:20px;transition:border-color .3s}
 .tbl-wrap:hover{border-color:rgba(255,255,255,.1)}
@@ -591,16 +592,18 @@ tr:hover td{background:rgba(255,255,255,.04)}
 tr{transition:transform .2s}
 tr:hover{transform:translateX(3px)}
 
-.panel{background:var(--card);border:1px solid var(--border);padding:24px;margin-bottom:20px;position:relative;overflow:hidden;transition:border-color .3s}
-.panel:hover{border-color:rgba(255,255,255,.1)}
-.panel::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--g);opacity:.4;transition:opacity .3s}
-.panel:hover::before{opacity:.8}
+.panel{background:var(--card);border:1px solid var(--border);padding:24px;margin-bottom:20px;position:relative;overflow:hidden;transition:border-color .3s,box-shadow .3s}
+.panel:hover{border-color:rgba(255,255,255,.08);box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.panel::before{content:'';position:absolute;top:0;left:0;width:2px;height:100%;background:linear-gradient(180deg,var(--g),transparent);opacity:.5;transition:opacity .3s}
+.panel:hover::before{opacity:1}
 .panel h2{
-  font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;
-  color:var(--text);margin-bottom:16px;display:flex;align-items:center;gap:8px;
+  font-family:'Syne',sans-serif;font-size:.9rem;font-weight:700;
+  letter-spacing:.5px;text-transform:uppercase;
+  color:var(--sub);margin-bottom:20px;
+  display:flex;align-items:center;gap:10px;
 }
 .panel h2::after{content:'';flex:1;height:1px;background:var(--border)}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 
 input,select,textarea{
   background:rgba(255,255,255,.03);color:var(--text);
@@ -1067,231 +1070,97 @@ def giris():
         hata = "Hatali kullanici adi veya sifre!"
 
     content = f"""
-<div class="login-wrap">
-  <div class="panel">
+<style>
+.step-bar{{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:32px}}
+.step-dot{{width:28px;height:28px;border-radius:50%;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:.65rem;font-weight:600;color:#525252;background:var(--card);transition:all .3s cubic-bezier(.16,1,.3,1);position:relative;z-index:1}}
+.step-dot.active{{border-color:var(--g);color:var(--g);box-shadow:0 0 0 3px rgba(16,185,129,.15)}}
+.step-dot.done{{background:var(--g);border-color:var(--g);color:#060606}}
+.step-line{{flex:1;max-width:40px;height:1px;background:#1e1e1e;transition:background .3s}}
+.step-line.done{{background:var(--g)}}
+.step-panel{{animation:stepIn .35s cubic-bezier(.16,1,.3,1) both}}
+@keyframes stepIn{{from{{opacity:0;transform:translateX(12px)}}to{{opacity:1;transform:none}}}}
+.step-label{{font-family:'JetBrains Mono',monospace;font-size:.62rem;letter-spacing:2px;color:var(--muted);text-align:center;text-transform:uppercase;margin-bottom:24px}}
+</style>
+<div class="login-wrap" style="max-width:440px">
+  <div class="panel" style="padding:36px">
     <div class="login-logo">Nex<span style="color:var(--g)">Stock</span></div>
-    <div class="login-sub">Envanter Yonetim Sistemi</div>
-    {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
-    <form method="POST">
-      <label>KULLANICI ADI</label>
-      <input name="k" placeholder="kullanici_adi" autofocus autocomplete="username">
-      <label>SIFRE</label>
-      <input name="s" type="password" placeholder="••••••••" autocomplete="current-password">
-      <button type="submit" class="btn btn-green" style="width:100%;margin-top:4px;padding:12px">GIRIS YAP</button>
-    </form>
-    <div style="text-align:center;margin-top:16px">
-      
-    <div style="margin:16px 0;display:flex;align-items:center;gap:12px">
-      <div style="flex:1;height:1px;background:#1a1a1a"></div>
-      <span style="color:#525252;font-size:.75rem;font-family:JetBrains Mono,monospace">VEYA</span>
-      <div style="flex:1;height:1px;background:#1a1a1a"></div>
-    </div>
-    <button type="button" onclick="googleGiris()" style="width:100%;background:#fff;color:#000;border:none;padding:11px;font-family:inherit;font-size:.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;letter-spacing:.5px">
-      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-      Google ile Giriş Yap
-    </button>
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-    <script>
-    var _fbConfig = {{
-      apiKey:            "AIzaSyDQVp3H0DKjnfcl9-1fe51KBHV43K2TAmA",
-      authDomain:        "nexstock-8c7ed.firebaseapp.com",
-      projectId:         "nexstock-8c7ed",
-      storageBucket:     "nexstock-8c7ed.firebasestorage.app",
-      messagingSenderId: "960691238543",
-      appId:             "1:960691238543:web:82c3dc0eef17a3eb30a2fa"
-    }};
-    if (!firebase.apps.length) firebase.initializeApp(_fbConfig);
-    function googleGiris(){{
-      var provider = new firebase.auth.GoogleAuthProvider();
-      firebase.auth().signInWithPopup(provider).then(function(result){{
-        return result.user.getIdToken();
-      }}).then(function(token){{
-        return fetch("/api/firebase-login",{{
-          method:"POST",
-          headers:{{"Content-Type":"application/json"}},
-          body: JSON.stringify({{idToken: token}})
-        }});
-      }}).then(function(r){{ return r.json(); }}).then(function(data){{
-        if(data.ok) window.location.href = data.redirect || "/";
-        else alert("Giriş hatası: " + data.error);
-      }}).catch(function(err){{
-        alert("Google giriş hatası: " + err.message);
-      }});
-    }}
-    </script>
-    <a href="/kayit" style="color:var(--g);font-size:.82rem;text-decoration:none;font-family:JetBrains Mono,monospace">Hesap Oluştur →</a>
-    </div>
-  </div>
-</div>"""
-    return render(content, page="giris", title="Giris")
-
-@app.route("/kayit", methods=["GET", "POST"])
-def kayit():
-    hata = ""
-    basari = ""
-    ROL_SECENEKLER = [
-        ("misafir",   "Misafir — sadece tarama görüntüleyebilir"),
-        ("kullanici", "Kullanıcı — tarama + besin asistanı"),
-        ("kasiyer",   "Kasiyer — stok okutma ve ekleme"),
-        ("admin",     "Admin — tam yetki"),
-    ]
-    if request.method == "POST":
-        isim             = request.form.get("isim", "").strip()
-        k                = request.form.get("k", "").strip()
-        s                = request.form.get("s", "").strip()
-        rol              = request.form.get("rol", "misafir").strip()
-        hastaliklar      = ",".join(request.form.getlist("hastalik"))
-        yeme_aliskanlik  = ",".join(request.form.getlist("yeme"))
-        if rol not in [r[0] for r in ROL_SECENEKLER]:
-            rol = "misafir"
-        import re as _sre
-        if not isim or not k or not s:
-            hata = "Tüm alanlar zorunlu!"
-        elif len(s) < 8:
-            hata = "Şifre en az 8 karakter olmalı!"
-        elif not _sre.search(r"[A-Z]", s):
-            hata = "Şifre en az bir büyük harf içermeli! (A-Z)"
-        elif not _sre.search(r"[a-z]", s):
-            hata = "Şifre en az bir küçük harf içermeli! (a-z)"
-        elif not _sre.search(r"[0-9]", s):
-            hata = "Şifre en az bir rakam içermeli! (0-9)"
-        elif not _sre.search(r"[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/]", s):
-            hata = "Şifre en az bir özel karakter içermeli! (!@#$% vb.)"
-        else:
-            c = get_db()
-            try:
-                mevcut = c.execute("SELECT id FROM kullanicilar WHERE kullanici_adi=%s", (k,)).fetchone()
-                if mevcut:
-                    hata = "Bu kullanıcı adı zaten alınmış!"
-                else:
-                    c.execute(
-                        "INSERT INTO kullanicilar (kullanici_adi,sifre_hash,tam_ad,rol,hastaliklar,yeme_aliskanlik) VALUES (%s,%s,%s,%s,%s,%s)",
-                        (k, sh(s), isim, rol, hastaliklar or None, yeme_aliskanlik or None)
-                    )
-                    c.commit()
-                    basari = "Hesap oluşturuldu! Giriş yapabilirsin."
-            except Exception as e:
-                hata = f"Hata: {str(e)}"
-            finally:
-                c.close()
-
-    rol_options = "".join(
-        f'<option value="{r}">{l}</option>'
-        for r, l in [("misafir","Misafir — sadece tarama"),
-                     ("kullanici","Kullanıcı — tarama + asistan"),
-                     ("kasiyer","Kasiyer — stok yönetimi"),
-                     ("admin","Admin — tam yetki")]
-    )
-
-    def _acc_block(gid, baslik, inp, secenekler):
-        pills = "".join(
-            '<label class="tag-pill">'
-            f'<input type="checkbox" name="{inp}" value="{v}" onchange="updateBadge(\'{gid}\')">'
-            f'<span>{l}</span></label>'
-            for v, l in secenekler
-        )
-        return (
-            f'<div class="acc-item">'
-            f'<button type="button" class="acc-trigger" onclick="toggleAcc(this,\'{gid}\')">'
-            f'<span>{baslik}</span>'
-            f'<span class="acc-badge" id="{gid}-badge"></span>'
-            f'<span class="acc-arrow">&#8250;</span>'
-            f'</button>'
-            f'<div class="acc-body" id="{gid}-body" style="display:none">'
-            f'<div class="tag-grid">{pills}</div>'
-            f'</div></div>'
-        )
-
-    profil_acc = (
-        '<style>'
-        '.acc-item{margin-bottom:6px}'
-        '.acc-trigger{width:100%;background:rgba(255,255,255,.03);border:1px solid #1a1a1a;'
-        'color:#f5f5f5;padding:11px 14px;cursor:pointer;'
-        "font-family:'JetBrains Mono',monospace;font-size:.72rem;"
-        'letter-spacing:1px;text-transform:uppercase;'
-        'display:flex;align-items:center;justify-content:space-between;'
-        'transition:border-color .25s,background .25s}'
-        '.acc-trigger:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.05)}'
-        '.acc-trigger.open{border-color:var(--g);background:rgba(16,185,129,.06)}'
-        '.acc-arrow{font-size:1.1rem;transition:transform .3s cubic-bezier(.16,1,.3,1);color:var(--muted);line-height:1}'
-        '.acc-trigger.open .acc-arrow{transform:rotate(90deg);color:var(--g)}'
-        '.acc-badge{margin-left:8px;margin-right:auto;font-size:.62rem;background:var(--g);color:#060606;'
-        'padding:1px 7px;font-weight:700;letter-spacing:.5px;display:none}'
-        '.acc-badge.visible{display:inline-block}'
-        '.acc-body{border:1px solid #1a1a1a;border-top:none;padding:14px;background:rgba(255,255,255,.015)}'
-        '.tag-grid{display:flex;flex-wrap:wrap;gap:7px}'
-        '.tag-pill{position:relative}'
-        '.tag-pill input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}'
-        '.tag-pill span{display:inline-flex;align-items:center;padding:6px 13px;cursor:pointer;'
-        "font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.5px;text-transform:uppercase;"
-        'border:1px solid #1a1a1a;color:#686868;background:transparent;'
-        'transition:all .2s cubic-bezier(.16,1,.3,1);user-select:none}'
-        '.tag-pill span:hover{border-color:rgba(255,255,255,.15);color:#a0a0a0}'
-        '.tag-pill input:checked + span{border-color:var(--g);color:#060606;background:var(--g)}'
-        '</style>'
-        + _acc_block("hastalik", "Hastalık / Alerji", "hastalik", [
-            ("colyak","Çölyak"),("seker","Şeker Hastalığı"),("hipertansiyon","Hipertansiyon"),
-            ("kolesterol","Yüksek Kolesterol"),("laktoz","Laktoz İnt."),
-            ("fruktoz","Fruktoz İnt."),("gluten","Gluten Alerjisi"),("hicbiri","Hiçbiri"),
-        ])
-        + _acc_block("yeme", "Yeme Alışkanlığı", "yeme", [
-            ("vegan","Vegan"),("vejetaryan","Vejetaryan"),("pescatarian","Pescatarian"),
-            ("halal","Helal"),("kosher","Koşer"),("glutensiz","Glutensiz"),
-            ("dusuk_seker","Düşük Şeker"),("dusuk_tuz","Düşük Tuz"),("hicbiri","Hiçbiri"),
-        ])
-        + '<script>'
-        'function toggleAcc(btn,gid){'
-        'var body=document.getElementById(gid+"-body");'
-        'var open=body.style.display==="block";'
-        'body.style.display=open?"none":"block";'
-        'btn.classList.toggle("open",!open)}'
-        'function updateBadge(gid){'
-        'var n=document.querySelectorAll("input[name=\'"+gid+"\']:checked").length;'
-        'var b=document.getElementById(gid+"-badge");'
-        'b.textContent=n;b.classList.toggle("visible",n>0)}'
-        '</script>'
-    )
-
-    content = f"""
-<div class="login-wrap">
-  <div class="panel">
-    <div class="login-logo">Nex<span style="color:var(--g)">Stock</span></div>
-    <div class="login-sub" style="margin-bottom:20px">Hesap Oluştur</div>
+    <div class="login-sub" style="margin-bottom:28px">Hesap Oluştur</div>
     {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
     {'<div class="alert alert-green">'+basari+'</div>' if basari else ''}
-    <form method="POST" onsubmit="return checkPw()">
-      <label>ROL</label>
-      <select name="rol" id="rol-select" onchange="toggleProfilAlanlari(this.value)" style="width:100%;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:10px 12px;font-family:inherit;font-size:.85rem;margin-bottom:4px">
-        {rol_options}
-      </select>
-      <label>İSİM</label>
-      <input name="isim" placeholder="Adınız Soyadınız" autofocus>
-      <label>KULLANICI ADI</label>
-      <input name="k" placeholder="kullanici_adi" autocomplete="username">
-      <label>ŞİFRE</label>
-      <input name="s" id="pw-input" type="password" placeholder="••••••••" autocomplete="new-password" oninput="updateStrength(this.value)">
-      <div id="pw-bar" style="height:4px;background:#1a1a1a;border-radius:2px;margin:6px 0 4px">
-        <div id="pw-fill" style="height:100%;width:0%;border-radius:2px;transition:width .3s,background .3s"></div>
+    <div class="step-bar">
+      <div class="step-dot active" id="sd1">1</div>
+      <div class="step-line" id="sl1"></div>
+      <div class="step-dot" id="sd2">2</div>
+      <div class="step-line" id="sl2"></div>
+      <div class="step-dot" id="sd3">3</div>
+    </div>
+    <form method="POST" id="kayit-form" onsubmit="return checkPw()">
+      <div id="step-1" class="step-panel">
+        <div class="step-label">Rol &amp; Kimlik</div>
+        <label>ROL</label>
+        <select name="rol" id="rol-select" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;color:#f5f5f5;padding:11px 14px;font-family:inherit;font-size:.85rem;margin-bottom:10px;outline:none;transition:border-color .25s" onfocus="this.style.borderColor='var(--g)'" onblur="this.style.borderColor='#1e1e1e'">
+          {rol_options}
+        </select>
+        <label>İSİM SOYAD</label>
+        <input name="isim" id="isim-input" placeholder="Adınız Soyadınız" autocomplete="name">
+        <label>KULLANICI ADI</label>
+        <input name="k" id="k-input" placeholder="kullanici_adi" autocomplete="username">
+        <button type="button" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px" onclick="goStep2()">Devam &#x2192;</button>
       </div>
-      <ul id="pw-rules" style="list-style:none;padding:0;margin:0 0 12px;font-size:.75rem;font-family:JetBrains Mono,monospace">
-        <li id="r-len"  style="color:#525252">✗ En az 8 karakter</li>
-        <li id="r-upper" style="color:#525252">✗ En az 1 büyük harf (A-Z)</li>
-        <li id="r-lower" style="color:#525252">✗ En az 1 küçük harf (a-z)</li>
-        <li id="r-num"  style="color:#525252">✗ En az 1 rakam (0-9)</li>
-        <li id="r-spec" style="color:#525252">✗ En az 1 özel karakter (!@#$% vb.)</li>
-      </ul>
-      <div id="profil-alanlari" style="display:none;margin:16px 0 4px">
+      <div id="step-2" class="step-panel" style="display:none">
+        <div class="step-label">Şifre Oluştur</div>
+        <label>ŞİFRE</label>
+        <input name="s" id="pw-input" type="password" placeholder="••••••••" autocomplete="new-password" oninput="updateStrength(this.value)">
+        <div style="height:3px;background:#1a1a1a;margin:6px 0 4px;overflow:hidden">
+          <div id="pw-fill" style="height:100%;width:0%;transition:width .3s,background .3s"></div>
+        </div>
+        <ul id="pw-rules" style="list-style:none;padding:0;margin:0 0 16px;font-size:.73rem;font-family:JetBrains Mono,monospace;display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">
+          <li id="r-len"   style="color:#525252">&#x2717; 8+ karakter</li>
+          <li id="r-upper" style="color:#525252">&#x2717; Büyük harf</li>
+          <li id="r-lower" style="color:#525252">&#x2717; Küçük harf</li>
+          <li id="r-num"   style="color:#525252">&#x2717; Rakam</li>
+          <li id="r-spec"  style="color:#525252">&#x2717; Özel karakter</li>
+        </ul>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button type="button" class="btn btn-muted" style="padding:12px 16px" onclick="goStep(1)">&#x2190;</button>
+          <button type="button" id="step2-next" class="btn btn-green" style="flex:1;padding:12px;opacity:.4;cursor:not-allowed" disabled onclick="goStep3()">Devam &#x2192;</button>
+        </div>
+      </div>
+      <div id="step-3" class="step-panel" style="display:none">
+        <div class="step-label">Sağlık Profili <span style="color:#444;font-size:.55rem">(isteğe bağlı)</span></div>
         {profil_acc}
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button type="button" class="btn btn-muted" style="padding:12px 16px" onclick="goStep(2)">&#x2190;</button>
+          <button type="submit" class="btn btn-green" style="flex:1;padding:12px">Kayıt Ol</button>
+        </div>
       </div>
-      <button type="submit" id="pw-submit" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px;opacity:.4;cursor:not-allowed" disabled>KAYIT OL</button>
     </form>
     <script>
-    function toggleProfilAlanlari(rol){{
-      var el=document.getElementById('profil-alanlari');
-      el.style.display=(rol==='misafir'||rol==='kullanici')?'block':'none';
+    var pwValid=false;
+    function goStep(n){{
+      [1,2,3].forEach(function(i){{
+        document.getElementById('step-'+i).style.display=i===n?'block':'none';
+        var d=document.getElementById('sd'+i);
+        d.classList.toggle('active',i===n);
+        d.classList.toggle('done',i<n);
+      }});
+      document.getElementById('sl1').classList.toggle('done',n>1);
+      document.getElementById('sl2').classList.toggle('done',n>2);
     }}
-    toggleProfilAlanlari(document.getElementById('rol-select').value);
+    function goStep2(){{
+      var isim=document.getElementById('isim-input').value.trim();
+      var k=document.getElementById('k-input').value.trim();
+      if(!isim){{document.getElementById('isim-input').focus();document.getElementById('isim-input').style.borderColor='#e05252';return;}}
+      if(!k){{document.getElementById('k-input').focus();document.getElementById('k-input').style.borderColor='#e05252';return;}}
+      goStep(2);
+      setTimeout(function(){{document.getElementById('pw-input').focus();}},100);
+    }}
+    function goStep3(){{
+      if(!pwValid) return;
+      var rol=document.getElementById('rol-select').value;
+      if(rol==='misafir'||rol==='kullanici'){{goStep(3);}}
+      else{{document.getElementById('kayit-form').submit();}}
+    }}
     function updateStrength(v){{
       var rules={{
         'r-len':  v.length>=8,
@@ -1302,31 +1171,25 @@ def kayit():
       }};
       var score=0;
       for(var id in rules){{
-        var ok=rules[id]; score+=ok?1:0;
+        var ok=rules[id];score+=ok?1:0;
         var el=document.getElementById(id);
         el.style.color=ok?'#10b981':'#525252';
-        el.textContent=(ok?'\u2713':'\u2717')+' '+el.textContent.slice(2);
+        el.textContent=(ok?'✓':'✗')+' '+el.textContent.slice(2);
       }}
-      var pct=score*20;
       var fill=document.getElementById('pw-fill');
-      fill.style.width=pct+'%';
-      fill.style.background=score<=2?'#ef4444':score<=3?'#f59e0b':score==4?'#3b82f6':'#10b981';
-      var btn=document.getElementById('pw-submit');
-      var allOk=Object.values(rules).every(Boolean);
-      btn.disabled=!allOk;
-      btn.style.opacity=allOk?'1':'.4';
-      btn.style.cursor=allOk?'pointer':'not-allowed';
+      fill.style.width=(score*20)+'%';
+      fill.style.background=score<=2?'#e05252':score<=3?'#f0b429':score==4?'#3b82f6':'#10b981';
+      pwValid=Object.values(rules).every(Boolean);
+      var nb=document.getElementById('step2-next');
+      nb.disabled=!pwValid;nb.style.opacity=pwValid?'1':'.4';nb.style.cursor=pwValid?'pointer':'not-allowed';
     }}
     function checkPw(){{
       var v=document.getElementById('pw-input').value;
-      if(v.length<8||!/[A-Z]/.test(v)||!/[a-z]/.test(v)||!/[0-9]/.test(v)||!/[!@#$%^&*()+\-=\[\]{{}}|;:,.<>?/]/.test(v)){{
-        return false;
-      }}
-      return true;
+      return v.length>=8&&/[A-Z]/.test(v)&&/[a-z]/.test(v)&&/[0-9]/.test(v)&&/[!@#$%^&*()+\-=\[\]{{}}|;:,.<>?/]/.test(v);
     }}
     </script>
-    <div style="text-align:center;margin-top:16px">
-      <a href="/giris" style="color:#525252;font-size:.82rem;text-decoration:none;font-family:JetBrains Mono,monospace">← Giriş Yap</a>
+    <div style="text-align:center;margin-top:20px">
+      <a href="/giris" style="color:#525252;font-size:.78rem;text-decoration:none;font-family:JetBrains Mono,monospace;letter-spacing:1px">&#x2190; Giriş Yap</a>
     </div>
   </div>
 </div>"""
@@ -1457,9 +1320,25 @@ def index():
         ("bugun",        "Bugun Islem",    "#ffffff"),
         ("tedarikci",    "Tedarikci",      "#a3a3a3"),
     ]
-    kartlar = "".join(
-        f'<div class="stat-card" style="border-color:{col}"><div class="val" style="color:{col}">{s[k]}</div><div class="lbl">{l}</div></div>'
-        for k, l, col in kfg
+    def _kart(k, l, col, alert=False):
+        v = s[k]
+        pulse = f' pulse-alert style="--alert-color:{col}33"' if alert and v > 0 else ''
+        return (
+            f'<div class="stat-card"{pulse}>'
+            f'<div class="val" style="color:{col}" data-target="{v}">0</div>'
+            f'<div class="lbl">{l}</div>'
+            f'<div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:{col};opacity:.6"></div>'
+            f'</div>'
+        )
+    kartlar = (
+        _kart("toplam_urun",  "Toplam Ürün",    "#f5f5f5")
+        + _kart("toplam_stok",  "Toplam Stok",    "#34d399")
+        + _kart("tarihi_gecmis","Tarihi Geçmiş",  "#e05252", alert=True)
+        + _kart("yaklasan",     "Yaklaşan SKT",   "#f0b429", alert=True)
+        + _kart("kritik",       "Kritik Stok",    "#fb923c", alert=True)
+        + _kart("stoksuz",      "Stoksuz",        "#a78bfa", alert=True)
+        + _kart("bugun",        "Bugün İşlem",    "#a5d8ff")
+        + _kart("tedarikci",    "Tedarikçi",      "#737373")
     )
 
     skt_rows = ""
@@ -1498,12 +1377,31 @@ def index():
   </div>
 </div>
 <div class="panel">
-  <h2>Son Islemler</h2>
+  <h2>Son İşlemler</h2>
   <div class="tbl-wrap"><table>
-    <tr><th>Tip</th><th>Urun</th><th>Miktar</th><th>Tarih</th><th>Kullanici</th></tr>
-    {har_rows or '<tr><td colspan=5 class="muted" style="text-align:center;padding:16px">Islem yok</td></tr>'}
+    <tr><th>Tip</th><th>Ürün</th><th>Miktar</th><th>Tarih</th><th>Kullanıcı</th></tr>
+    {har_rows or '<tr><td colspan=5 class="muted" style="text-align:center;padding:16px">İşlem yok</td></tr>'}
   </table></div>
-</div>"""
+</div>
+<script>
+(function(){{
+  var els=document.querySelectorAll('.val[data-target]');
+  els.forEach(function(el){{
+    var target=parseInt(el.dataset.target)||0;
+    if(target===0){{el.textContent='0';return;}}
+    var dur=900,start=null;
+    function ease(t){{return 1-Math.pow(1-t,3);}}
+    function step(ts){{
+      if(!start) start=ts;
+      var p=Math.min((ts-start)/dur,1);
+      el.textContent=Math.round(ease(p)*target);
+      if(p<1) requestAnimationFrame(step);
+      else el.textContent=target;
+    }}
+    requestAnimationFrame(step);
+  }});
+}})();
+</script>"""
     return render(content, page="dashboard", title="Dashboard")
 
 # ═══════════════════════════════════════════════════
