@@ -1192,7 +1192,7 @@ def kayit():
     {'<div class="alert alert-green">'+basari+'</div>' if basari else ''}
     <form method="POST" onsubmit="return checkPw()">
       <label>ROL</label>
-      <select name="rol" style="width:100%;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:10px 12px;font-family:inherit;font-size:.85rem;margin-bottom:4px">
+      <select name="rol" id="rol-select" onchange="toggleProfilAlanlari(this.value)" style="width:100%;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:10px 12px;font-family:inherit;font-size:.85rem;margin-bottom:4px">
         {rol_options}
       </select>
       <label>İSİM</label>
@@ -1211,7 +1211,7 @@ def kayit():
         <li id="r-num"  style="color:#525252">✗ En az 1 rakam (0-9)</li>
         <li id="r-spec" style="color:#525252">✗ En az 1 özel karakter (!@#$% vb.)</li>
       </ul>
-      <div style="margin-top:18px;margin-bottom:4px">
+      <div id="profil-alanlari" style="margin-top:18px;margin-bottom:4px;display:none">
         <label style="margin-bottom:8px">HASTALIK / ALERJI (isteğe bağlı)</label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-bottom:14px">
           {"".join(f'<label style="display:flex;align-items:center;gap:6px;font-family:JetBrains Mono,monospace;font-size:.75rem;color:#a0a0a0;cursor:pointer"><input type="checkbox" name="hastalik" value="{v}" style="accent-color:var(--g)">{l}</label>' for v,l in [
@@ -1232,6 +1232,11 @@ def kayit():
       <button type="submit" id="pw-submit" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px;opacity:.4;cursor:not-allowed" disabled>KAYIT OL</button>
     </form>
     <script>
+    function toggleProfilAlanlari(rol){{
+      var el=document.getElementById('profil-alanlari');
+      el.style.display=(rol==='misafir'||rol==='kullanici')?'block':'none';
+    }}
+    toggleProfilAlanlari(document.getElementById('rol-select').value);
     function updateStrength(v){{
       var rules={{
         'r-len':  v.length>=8,
