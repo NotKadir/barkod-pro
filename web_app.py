@@ -129,8 +129,9 @@ def init_db():
                 c.commit()
             except Exception:
                 pass
-        # Firebase kolonları migration
-        for _col, _typ in [("firebase_uid","TEXT"), ("email","TEXT")]:
+        # Firebase + profil kolonları migration
+        for _col, _typ in [("firebase_uid","TEXT"), ("email","TEXT"),
+                           ("hastaliklar","TEXT"), ("yeme_aliskanlik","TEXT")]:
             try:
                 c.execute(f"ALTER TABLE kullanicilar ADD COLUMN IF NOT EXISTS {_col} {_typ}")
                 c.commit()
@@ -1136,10 +1137,12 @@ def kayit():
         ("admin",     "Admin — tam yetki"),
     ]
     if request.method == "POST":
-        isim   = request.form.get("isim", "").strip()
-        k      = request.form.get("k", "").strip()
-        s      = request.form.get("s", "").strip()
-        rol    = request.form.get("rol", "misafir").strip()
+        isim             = request.form.get("isim", "").strip()
+        k                = request.form.get("k", "").strip()
+        s                = request.form.get("s", "").strip()
+        rol              = request.form.get("rol", "misafir").strip()
+        hastaliklar      = ",".join(request.form.getlist("hastalik"))
+        yeme_aliskanlik  = ",".join(request.form.getlist("yeme"))
         if rol not in [r[0] for r in ROL_SECENEKLER]:
             rol = "misafir"
         import re as _sre
@@ -1163,8 +1166,8 @@ def kayit():
                     hata = "Bu kullanıcı adı zaten alınmış!"
                 else:
                     c.execute(
-                        "INSERT INTO kullanicilar (kullanici_adi,sifre_hash,tam_ad,rol) VALUES (%s,%s,%s,%s)",
-                        (k, sh(s), isim, rol)
+                        "INSERT INTO kullanicilar (kullanici_adi,sifre_hash,tam_ad,rol,hastaliklar,yeme_aliskanlik) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (k, sh(s), isim, rol, hastaliklar or None, yeme_aliskanlik or None)
                     )
                     c.commit()
                     basari = "Hesap oluşturuldu! Giriş yapabilirsin."
@@ -1208,6 +1211,24 @@ def kayit():
         <li id="r-num"  style="color:#525252">✗ En az 1 rakam (0-9)</li>
         <li id="r-spec" style="color:#525252">✗ En az 1 özel karakter (!@#$% vb.)</li>
       </ul>
+      <div style="margin-top:18px;margin-bottom:4px">
+        <label style="margin-bottom:8px">HASTALIK / ALERJI (isteğe bağlı)</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-bottom:14px">
+          {"".join(f'<label style="display:flex;align-items:center;gap:6px;font-family:JetBrains Mono,monospace;font-size:.75rem;color:#a0a0a0;cursor:pointer"><input type="checkbox" name="hastalik" value="{v}" style="accent-color:var(--g)">{l}</label>' for v,l in [
+            ("colyak","Çölyak"),("seker","Şeker Hastalığı"),("hipertansiyon","Hipertansiyon"),
+            ("kolesterol","Yüksek Kolesterol"),("laktoz","Laktoz İntoleransı"),
+            ("fruktoz","Fruktoz İntoleransı"),("gluten","Gluten Alerjisi"),("yok","Yok / Bilmiyorum")
+          ])}
+        </div>
+        <label style="margin-bottom:8px">YEME ALIŞKANLIĞI (isteğe bağlı)</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-bottom:6px">
+          {"".join(f'<label style="display:flex;align-items:center;gap:6px;font-family:JetBrains Mono,monospace;font-size:.75rem;color:#a0a0a0;cursor:pointer"><input type="checkbox" name="yeme" value="{v}" style="accent-color:var(--g)">{l}</label>' for v,l in [
+            ("vegan","Vegan"),("vejetaryan","Vejetaryan"),("pescatarian","Pescatarian"),
+            ("halal","Helal"),("kosher","Koşer"),("glutensiz","Glutensiz"),
+            ("dusuk_seker","Düşük Şeker"),("dusuk_tuz","Düşük Tuz")
+          ])}
+        </div>
+      </div>
       <button type="submit" id="pw-submit" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px;opacity:.4;cursor:not-allowed" disabled>KAYIT OL</button>
     </form>
     <script>
