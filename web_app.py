@@ -30,6 +30,53 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "nexstock_secret_2024")
 
 # ═══════════════════════════════════════════════════
+#  GZIP COMPRESSION (network payload %70 daha kucuk)
+# ═══════════════════════════════════════════════════
+import gzip as _gzip, io as _gz_io
+@app.after_request
+def _gzip_response(response):
+    try:
+        accept = request.headers.get("Accept-Encoding", "")
+        if "gzip" not in accept.lower():
+            return response
+        ctype = (response.content_type or "").lower()
+        # Sadece text-bazli icerikleri sikistir; resim/PDF zaten sikistirilmis
+        compressible = any(t in ctype for t in (
+            "text/", "application/json", "application/javascript",
+            "application/xml", "image/svg"
+        ))
+        if not compressible:
+            return response
+        if response.direct_passthrough or response.status_code < 200 or response.status_code >= 300:
+            return response
+        body = response.get_data()
+        if len(body) < 512:  # Cok kucuk response'larin sikistirilmasi mantik degil
+            return response
+        buf = _gz_io.BytesIO()
+        with _gzip.GzipFile(fileobj=buf, mode="wb", compresslevel=5) as f:
+            f.write(body)
+        response.set_data(buf.getvalue())
+        response.headers["Content-Encoding"] = "gzip"
+        response.headers["Vary"] = "Accept-Encoding"
+        response.headers["Content-Length"] = str(len(response.get_data()))
+    except Exception as _e:
+        # Sikistirma hata verirse orijinal cevabi don
+        pass
+    return response
+
+# HTTP cache headers - statik benzeri response'lar icin
+@app.after_request
+def _cache_headers(response):
+    try:
+        path = request.path or ""
+        # HTML sayfalar: kisa sure private cache (back/forward hizli olsun)
+        if response.content_type and response.content_type.startswith("text/html"):
+            response.headers.setdefault("Cache-Control", "private, max-age=0, must-revalidate")
+    except Exception:
+        pass
+    return response
+
+# ═══════════════════════════════════════════════════
 #  ÇEVIRI SİSTEMİ (TR/EN)
 # ═══════════════════════════════════════════════════
 TRANSLATIONS = {
@@ -645,6 +692,9 @@ BASE = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NexStock — {{ title }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="image" href="/asistan.png">
+<link rel="dns-prefetch" href="https://www.gstatic.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -1299,6 +1349,98 @@ function cbSend(){
 }
 </script>
 {% endif %}
+
+<!-- ═══════ INSTANT NAVIGATION (hover prefetch + visible loading bar) ═══════ -->
+<script>
+(function(){
+  if(window._navInit) return; window._navInit=true;
+
+  // ── 1) Top loading bar - kullanici "bir sey oluyor" hissini hizli alsin
+  function _showLoadBar(){
+    var bar = document.getElementById('nav-loadbar');
+    if(!bar){
+      bar = document.createElement('div');
+      bar.id = 'nav-loadbar';
+      bar.style.cssText = 'position:fixed;top:0;left:0;height:2px;width:0;background:#fff;z-index:9999;transition:width .4s cubic-bezier(.16,1,.3,1);box-shadow:0 0 8px rgba(255,255,255,.6);pointer-events:none';
+      document.body.appendChild(bar);
+    }
+    bar.style.opacity = '1';
+    bar.style.width = '0';
+    setTimeout(function(){ bar.style.width = '70%'; }, 10);
+  }
+
+  // ── 2) Link click'inde anlik gorsel feedback (sayfa yuklenirken kullanici beklemiyormus gibi hisseder)
+  function _isInternalNav(a){
+    if(!a || a.target === '_blank' || a.hasAttribute('download')) return false;
+    var href = a.getAttribute('href');
+    if(!href) return false;
+    if(href.indexOf('#')===0 || href.indexOf('javascript:')===0) return false;
+    if(href.indexOf('mailto:')===0 || href.indexOf('tel:')===0) return false;
+    try{
+      var u = new URL(href, window.location.href);
+      if(u.origin !== window.location.origin) return false;
+      if(u.pathname === '/asistan.png') return false;
+      if(u.pathname.indexOf('/api/') === 0) return false;
+      return true;
+    }catch(e){ return false; }
+  }
+
+  document.addEventListener('click', function(e){
+    if(e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target.closest('a');
+    if(!_isInternalNav(a)) return;
+    _showLoadBar();
+  }, true);
+
+  // Form submit'lerinde de loading bar
+  document.addEventListener('submit', function(e){
+    var f = e.target;
+    if(f && f.method && f.method.toLowerCase() === 'post'){
+      _showLoadBar();
+    }
+  }, true);
+
+  // ── 3) Hover/touchstart prefetch - kullanici tiklamadan once browser cache'e indir
+  var _prefetched = {};
+  function _doPrefetch(href){
+    try{
+      var u = new URL(href, window.location.href);
+      var key = u.pathname + u.search;
+      if(_prefetched[key]) return;
+      _prefetched[key] = true;
+      var link = document.createElement('link');
+      link.rel = 'prefetch';
+      link.href = u.href;
+      link.as = 'document';
+      document.head.appendChild(link);
+    }catch(e){}
+  }
+
+  var _hoverTimer = null;
+  document.addEventListener('mouseover', function(e){
+    var a = e.target.closest('a');
+    if(!_isInternalNav(a)) return;
+    clearTimeout(_hoverTimer);
+    var href = a.getAttribute('href');
+    _hoverTimer = setTimeout(function(){ _doPrefetch(href); }, 65);
+  });
+  document.addEventListener('mouseout', function(){ clearTimeout(_hoverTimer); });
+
+  // Touch devices: touchstart'ta prefetch (kullanici parmagini koymadan basliyor)
+  document.addEventListener('touchstart', function(e){
+    var a = e.target.closest('a');
+    if(!_isInternalNav(a)) return;
+    _doPrefetch(a.getAttribute('href'));
+  }, {passive: true});
+
+  // ── 4) Page show event - back button'da loading bar'i temizle
+  window.addEventListener('pageshow', function(){
+    var bar = document.getElementById('nav-loadbar');
+    if(bar){ bar.style.opacity = '0'; bar.style.width = '0'; }
+  });
+})();
+</script>
+
 </body></html>"""
 
 def render(content, page="", title="NexStock", **kw):
