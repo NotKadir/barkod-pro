@@ -219,7 +219,11 @@ def init_db():
             ("kalori","REAL"), ("protein","REAL"), ("yag","REAL"),
             ("karbonhidrat","REAL"), ("seker","REAL"), ("tuz","REAL"),
             ("lif","REAL"), ("icindekiler","TEXT"),
-            ("allerjenler","TEXT"), ("katki_maddeleri","TEXT")
+            ("allerjenler","TEXT"), ("katki_maddeleri","TEXT"),
+            ("onaylanmis","BOOLEAN DEFAULT FALSE"),
+            ("dogrulama_kaynak","TEXT"),
+            ("dogrulama_skor","REAL"),
+            ("eklenme_kullanici","TEXT")
         ]:
             try:
                 c.execute(f"ALTER TABLE urunler ADD COLUMN IF NOT EXISTS {col} {typ}")
@@ -982,6 +986,7 @@ document.addEventListener('DOMContentLoaded',function(){
     {% endif %}
     {% if session.get('rol') in ['admin','mudur'] %}
     <a href="/kullanicilar" class="{{ 'active' if page=='kullanicilar' }}">{{ t('nav.kullanicilar') }}</a>
+    <a href="/admin/onay-bekleyenler" class="{{ 'active' if page=='onay-bekleyenler' }}" style="color:#f0b429">Onay</a>
     {% endif %}
     {% if session.get('rol') in ['admin','mudur','kasiyer','kullanici'] %}
     <a href="/ai-okuyucu" class="{{ 'active' if page=='ai-okuyucu' }}">{{ t('nav.ai_okuyucu') }}</a>
@@ -2490,6 +2495,13 @@ def tarama():
                               if _show_price_skt else '')
 
             skt_gun_data = f'data-gun="{gun}"' if gun is not None else 'data-gun="null"'
+            _is_onayli = urun.get("onaylanmis", True)
+            _onay_rozeti = "" if _is_onayli else (
+                '<span style="display:inline-block;margin-left:10px;padding:3px 9px;background:#3d2e0a;'
+                'color:#f0b429;border:1px solid #f0b429;font-family:JetBrains Mono,monospace;'
+                'font-size:.62rem;letter-spacing:1.5px;font-weight:700;vertical-align:middle"'
+                ' title="Bu urun AI dogrulamasi bekliyor - admin onayina tabidir">&#9888; DOGRULANIYOR</span>'
+            )
             sonuc_html = f"""
 {_allerjen_uyari_html}
 <div id="skt-gun-data" {skt_gun_data} style="display:none"></div>
@@ -2497,7 +2509,7 @@ def tarama():
 <div class="scan-result">
   <div class="scan-header" style="{hdr_bg}">
     <div>
-      <div class="scan-urun-adi">{urun["urun_adi"]}</div>
+      <div class="scan-urun-adi">{urun["urun_adi"]}{_onay_rozeti}</div>
       <div class="scan-meta">Barkod: {barkod}&nbsp;&nbsp;|&nbsp;&nbsp;Kategori: {urun.get("kategori","—")}</div>
     </div>
     {fiyat_html}
@@ -3921,6 +3933,187 @@ def _send_sifre_reset_mail(to_email, tam_ad, yeni_sifre):
         return False
 
 
+# ═══════════════════════════════════════════════════
+#  ÜRÜN DOĞRULAMA — Multi-source verification (OFF + UPCitemdb + AI)
+# ═══════════════════════════════════════════════════
+
+def _normalize_isim(s):
+    """Türkçe karakter, lowercase, fazla boşluk, noktalama temizliği."""
+    if not s:
+        return ""
+    s = s.lower().strip()
+    repl = {"ı":"i","ş":"s","ğ":"g","ü":"u","ö":"o","ç":"c","â":"a","î":"i","û":"u"}
+    for k,v in repl.items():
+        s = s.replace(k, v)
+    import re as _re_n
+    s = _re_n.sub(r"[^a-z0-9\s]", " ", s)
+    s = _re_n.sub(r"\s+", " ", s).strip()
+    return s
+
+def _fuzzy_score(a, b):
+    """0-1 arası benzerlik. Normalize edip difflib SequenceMatcher kullanır."""
+    if not a or not b:
+        return 0.0
+    from difflib import SequenceMatcher
+    na, nb = _normalize_isim(a), _normalize_isim(b)
+    if not na or not nb:
+        return 0.0
+    # Tam token eşleşmesi ekstra puan: "cubuk kareler 40g" vs "cubuk kareler"
+    tokens_a = set(na.split())
+    tokens_b = set(nb.split())
+    if tokens_a and tokens_b:
+        token_ratio = len(tokens_a & tokens_b) / max(len(tokens_a), len(tokens_b))
+    else:
+        token_ratio = 0
+    seq_ratio = SequenceMatcher(None, na, nb).ratio()
+    # Birleştirilmiş skor: %60 sequence + %40 token-overlap
+    return round(seq_ratio * 0.6 + token_ratio * 0.4, 3)
+
+def _off_lookup(barkod):
+    """OpenFoodFacts'tan barkod -> isim çek. None döner bulunamazsa."""
+    try:
+        import urllib.request, json as _json
+        url = f"https://world.openfoodfacts.org/api/v2/product/{barkod}.json?fields=product_name,product_name_tr,brands,generic_name"
+        req = urllib.request.Request(url, headers={"User-Agent": "NexStock/1.0 (nexstock@zohomail.eu)"})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            data = _json.loads(r.read().decode("utf-8"))
+        if data.get("status") != 1:
+            return None
+        p = data.get("product", {})
+        # Türkçe öncelikli
+        name = (p.get("product_name_tr") or p.get("product_name") or
+                p.get("generic_name") or "").strip()
+        brand = (p.get("brands") or "").split(",")[0].strip()
+        if not name:
+            return None
+        # Marka adı isminde geçmiyorsa marka prefix'le
+        if brand and brand.lower() not in name.lower():
+            return f"{brand} {name}"
+        return name
+    except Exception:
+        return None
+
+def _upcitemdb_lookup(barkod):
+    """UPCitemdb trial endpoint - 100 istek/gün, auth gerektirmez."""
+    try:
+        import urllib.request, json as _json
+        url = f"https://api.upcitemdb.com/prod/trial/lookup?upc={barkod}"
+        req = urllib.request.Request(url, headers={"User-Agent": "NexStock/1.0"})
+        with urllib.request.urlopen(req, timeout=6) as r:
+            data = _json.loads(r.read().decode("utf-8"))
+        items = data.get("items", [])
+        if not items:
+            return None
+        return (items[0].get("title") or "").strip() or None
+    except Exception:
+        return None
+
+def _ai_son_karar(barkod, kullanici_ismi, off_isim, upc_isim, fuzzy_skorlari):
+    """Groq AI'a tüm kaynakları gönder, JSON karar al."""
+    import os as _os
+    api_key = _os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        return None
+    kaynak_metni = []
+    if off_isim:
+        kaynak_metni.append(f"OpenFoodFacts: \"{off_isim}\" (fuzzy={fuzzy_skorlari.get('off',0)})")
+    if upc_isim:
+        kaynak_metni.append(f"UPCitemdb: \"{upc_isim}\" (fuzzy={fuzzy_skorlari.get('upc',0)})")
+    if not kaynak_metni:
+        kaynak_metni.append("(Hicbir dis kaynak bilgi vermedi)")
+    prompt = (
+        "Sen bir urun veritabani kalite kontrol AI'sin. Kullanicinin AI Okuyucu ile "
+        "ekledigi urun adi gercekten o barkoda mi ait, ona karar veriyorsun.\n\n"
+        f"BARKOD: {barkod}\n"
+        f"KULLANICI ISMI: \"{kullanici_ismi}\"\n\n"
+        "DIS KAYNAKLAR:\n" + "\n".join(kaynak_metni) + "\n\n"
+        "KARAR KURALLARI:\n"
+        "- Eger en az 1 dis kaynak kullanici ismiyle yakin eslesiyorsa (~0.6+) ONAYLA.\n"
+        "- Kullanici ismi bos veya cok kisa (1-2 harf) ise ONAYLAMA.\n"
+        "- Hicbir dis kaynak yoksa ama isim plausible bir gida urunu adi gibi gorunuyorsa, "
+        "  marka adi makul ve barkod 13 hane Turk EAN (869/868 prefix) ise sartli ONAYLA.\n"
+        "- Kullanici ismi tamamen ilgisiz gorunuyorsa (rastgele harfler, kufur, alakasiz urun) REDDET.\n\n"
+        "SADECE GECERLI JSON ile cevap ver, baska hicbir aciklama yapma:\n"
+        '{"onayla": true/false, "duzeltilmis_isim": "...", "skor": 0.0-1.0, "neden": "kisa aciklama"}\n'
+        "duzeltilmis_isim: eger kullanici isminde acik yazim hatasi varsa duzeltilmis hali, "
+        "yoksa kullanicinin verdigini koru."
+    )
+    try:
+        client = _Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[{"role":"user","content":prompt}],
+            max_tokens=200,
+            temperature=0.1,
+        )
+        txt = response.choices[0].message.content.strip()
+        # JSON ayıkla
+        import json as _json, re as _re_j
+        match = _re_j.search(r"\{.*\}", txt, _re_j.DOTALL)
+        if not match:
+            return None
+        result = _json.loads(match.group(0))
+        return {
+            "onayla": bool(result.get("onayla", False)),
+            "duzeltilmis_isim": (result.get("duzeltilmis_isim") or kullanici_ismi).strip(),
+            "skor": float(result.get("skor", 0.5)),
+            "neden": result.get("neden", "")[:200],
+        }
+    except Exception:
+        return None
+
+def _barkod_dogrula(barkod, kullanici_ismi):
+    """
+    Multi-source verification. Karar:
+      - onaylanmis: bool
+      - duzeltilmis_isim: AI'in onerdigi isim (default = kullanici_ismi)
+      - skor: 0-1
+      - kaynak: JSON metin (debug icin)
+    """
+    off_isim = _off_lookup(barkod)
+    upc_isim = _upcitemdb_lookup(barkod)
+
+    off_skor = _fuzzy_score(kullanici_ismi, off_isim) if off_isim else 0.0
+    upc_skor = _fuzzy_score(kullanici_ismi, upc_isim) if upc_isim else 0.0
+    fuzzy_skorlari = {"off": off_skor, "upc": upc_skor}
+
+    # 2 kaynaktan en az biri yakin (>=0.7) ise direkt otomatik onay
+    auto_onay = (off_skor >= 0.7) or (upc_skor >= 0.7)
+    en_iyi_skor = max(off_skor, upc_skor, 0.0)
+    duzeltilmis_isim = kullanici_ismi
+
+    ai_karar = None
+    if not auto_onay:
+        # AI'a son karar verdir
+        ai_karar = _ai_son_karar(barkod, kullanici_ismi, off_isim, upc_isim, fuzzy_skorlari)
+
+    if auto_onay:
+        onay = True
+        # Eger kaynak ismi cok daha temiz gorunuyorsa onu kullanmaya gerek yok, kullanici verisi korunur
+    elif ai_karar:
+        onay = ai_karar["onayla"]
+        duzeltilmis_isim = ai_karar["duzeltilmis_isim"] or kullanici_ismi
+        en_iyi_skor = max(en_iyi_skor, ai_karar["skor"])
+    else:
+        # AI bile cevap veremediyse: bekleme moduna at
+        onay = False
+
+    import json as _json
+    kaynak_json = _json.dumps({
+        "off": off_isim, "off_skor": off_skor,
+        "upc": upc_isim, "upc_skor": upc_skor,
+        "ai": ai_karar,
+        "kullanici_ismi": kullanici_ismi,
+    }, ensure_ascii=False)
+
+    return {
+        "onaylanmis": onay,
+        "duzeltilmis_isim": duzeltilmis_isim,
+        "skor": round(en_iyi_skor, 3),
+        "kaynak_json": kaynak_json[:2000],  # DB limit guvenligi
+    }
+
+
 @app.route("/api/urun-ai-ekle", methods=["POST"])
 @yetkili_giris
 def api_urun_ai_ekle():
@@ -3936,45 +4129,200 @@ def api_urun_ai_ekle():
     katki_maddeleri = (data.get("katki_maddeleri") or "").strip()
     if not barkod or not urun_adi:
         return jsonify({"error": "Barkod ve urun adi zorunlu"}), 400
+
+    eklenme_kullanici = session.get("user","sistem")
     c = get_db()
     try:
+        # 1) DEDUP: Bu barkod zaten var mi?
+        mevcut = c.execute(
+            "SELECT barkod, urun_adi, onaylanmis FROM urunler WHERE barkod=%s",
+            (barkod,)
+        ).fetchone()
+
+        if mevcut:
+            if mevcut["onaylanmis"]:
+                # Zaten onaylanmis - kullanici isim ekleyemez (data integrity)
+                # Sadece nutrition/icindekiler bilgisi (yan datayi) guncelleyebilir
+                # ama urun adi degisemez
+                c.execute(
+                    """UPDATE urunler SET
+                         kalori=COALESCE(%s, kalori),
+                         protein=COALESCE(%s, protein),
+                         yag=COALESCE(%s, yag),
+                         karbonhidrat=COALESCE(%s, karbonhidrat),
+                         seker=COALESCE(%s, seker),
+                         tuz=COALESCE(%s, tuz),
+                         lif=COALESCE(%s, lif),
+                         icindekiler=COALESCE(NULLIF(%s,''), icindekiler),
+                         allerjenler=COALESCE(NULLIF(%s,''), allerjenler),
+                         katki_maddeleri=COALESCE(NULLIF(%s,''), katki_maddeleri),
+                         son_guncelleme=NOW()
+                       WHERE barkod=%s""",
+                    (nutrition.get("kalori"), nutrition.get("protein"), nutrition.get("yag"),
+                     nutrition.get("karbonhidrat"), nutrition.get("seker"),
+                     nutrition.get("tuz"), nutrition.get("lif"),
+                     icindekiler, allerjenler, katki_maddeleri, barkod)
+                )
+                c.commit()
+                return jsonify({
+                    "success": True, "barkod": barkod,
+                    "status": "zaten_onayli",
+                    "mesaj": f"Bu barkod zaten onaylanmis: '{mevcut['urun_adi']}'. Besin/icindekiler bilgisi guncellendi."
+                })
+            else:
+                # Onay surecindeydi - tekrar verification yapma (DEDUP)
+                return jsonify({
+                    "success": True, "barkod": barkod,
+                    "status": "zaten_dogrulanmada",
+                    "mesaj": f"Bu barkod zaten dogrulanma surecinde: '{mevcut['urun_adi']}'. Tekrar gonderim engellendi."
+                })
+
+        # 2) Verification - 3 kaynak (OFF + UPCitemdb + AI)
+        dogrulama = _barkod_dogrula(barkod, urun_adi)
+        final_isim = dogrulama["duzeltilmis_isim"] or urun_adi
+
+        # 3) INSERT
         c.execute(
             """INSERT INTO urunler
                (barkod, urun_adi, kategori, kalori, protein, yag, karbonhidrat,
-                seker, tuz, lif, icindekiler, allerjenler, katki_maddeleri)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-               ON CONFLICT (barkod) DO UPDATE SET
-                 urun_adi=EXCLUDED.urun_adi, kategori=EXCLUDED.kategori,
-                 kalori=EXCLUDED.kalori, protein=EXCLUDED.protein,
-                 yag=EXCLUDED.yag, karbonhidrat=EXCLUDED.karbonhidrat,
-                 seker=EXCLUDED.seker, tuz=EXCLUDED.tuz,
-                 lif=EXCLUDED.lif, icindekiler=EXCLUDED.icindekiler,
-                 allerjenler=EXCLUDED.allerjenler,
-                 katki_maddeleri=EXCLUDED.katki_maddeleri,
-                 son_guncelleme=NOW()""",
-            (barkod, urun_adi, kategori,
+                seker, tuz, lif, icindekiler, allerjenler, katki_maddeleri,
+                onaylanmis, dogrulama_kaynak, dogrulama_skor, eklenme_kullanici)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               ON CONFLICT (barkod) DO NOTHING""",
+            (barkod, final_isim, kategori,
              nutrition.get("kalori"), nutrition.get("protein"), nutrition.get("yag"),
              nutrition.get("karbonhidrat"), nutrition.get("seker"),
              nutrition.get("tuz"), nutrition.get("lif"), icindekiler or None,
-             allerjenler or None, katki_maddeleri or None)
+             allerjenler or None, katki_maddeleri or None,
+             dogrulama["onaylanmis"], dogrulama["kaynak_json"],
+             dogrulama["skor"], eklenme_kullanici)
         )
         c.commit()
-        # Teşekkür maili (arka planda, hata olsa bile bloklamaz)
-        try:
-            _mu = c.execute("SELECT email,tam_ad FROM kullanicilar WHERE kullanici_adi=%s",
-                            (session.get("user",""),)).fetchone()
-            if _mu:
-                import threading
-                threading.Thread(target=_send_tesekkur_mail,
-                                 args=(_mu["email"] or "", _mu["tam_ad"] or "", urun_adi),
-                                 daemon=True).start()
-        except Exception:
-            pass
-        return jsonify({"success": True, "barkod": barkod})
+
+        # 4) Teşekkür maili sadece onaylanmis ürünler için (yoksa spam olur)
+        if dogrulama["onaylanmis"]:
+            try:
+                _mu = c.execute("SELECT email,tam_ad FROM kullanicilar WHERE kullanici_adi=%s",
+                                (eklenme_kullanici,)).fetchone()
+                if _mu:
+                    import threading
+                    threading.Thread(target=_send_tesekkur_mail,
+                                     args=(_mu["email"] or "", _mu["tam_ad"] or "", final_isim),
+                                     daemon=True).start()
+            except Exception:
+                pass
+
+        return jsonify({
+            "success": True,
+            "barkod": barkod,
+            "urun_adi": final_isim,
+            "onaylanmis": dogrulama["onaylanmis"],
+            "skor": dogrulama["skor"],
+            "status": "onayli" if dogrulama["onaylanmis"] else "dogrulaniyor",
+            "mesaj": ("Urun otomatik onaylandi ve sisteme eklendi." if dogrulama["onaylanmis"]
+                      else "Urun kaydedildi fakat AI dogrulamasinda guvenirlik dusuk cikti. Tarama'da 'Dogrulaniyor' rozetiyle gosterilecek.")
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         c.close()
+
+
+@app.route("/admin/onay-bekleyenler")
+@yetkili_giris
+def admin_onay_bekleyenler():
+    """Onaylanmamis urun listesi - admin/mudur icin gorebilir, manuel onay/red yapabilir."""
+    if session.get("rol") not in ("admin","mudur"):
+        return redirect("/")
+    c = get_db()
+    try:
+        liste = [dict(r) for r in c.execute(
+            "SELECT barkod, urun_adi, dogrulama_skor, dogrulama_kaynak, eklenme_kullanici, eklenme_tarihi "
+            "FROM urunler WHERE onaylanmis=FALSE ORDER BY eklenme_tarihi DESC LIMIT 200"
+        ).fetchall()]
+    finally:
+        c.close()
+
+    rows = ""
+    for u in liste:
+        import json as _json_p
+        try:
+            kj = _json_p.loads(u.get("dogrulama_kaynak") or "{}")
+        except Exception:
+            kj = {}
+        off = kj.get("off") or "—"
+        upc = kj.get("upc") or "—"
+        ai_o = (kj.get("ai") or {}).get("onayla") if kj.get("ai") else None
+        ai_neden = (kj.get("ai") or {}).get("neden", "") if kj.get("ai") else ""
+        ai_text = ("✓ ONAYLA" if ai_o else "✗ RED") if ai_o is not None else "—"
+        ai_color = "#10b981" if ai_o else "#e05252" if ai_o is False else "#525252"
+        rows += (
+            f'<tr>'
+            f'<td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td>'
+            f'<td><strong>{u["urun_adi"]}</strong></td>'
+            f'<td style="color:#a3a3a3;font-size:.82rem">OFF: {off}<br>UPC: {upc}</td>'
+            f'<td style="color:{ai_color};font-weight:700">{ai_text}<br><span style="font-weight:400;color:#a3a3a3;font-size:.7rem">{ai_neden}</span></td>'
+            f'<td style="color:#a3a3a3">{u.get("dogrulama_skor","—")}</td>'
+            f'<td style="color:#a3a3a3;font-size:.82rem">{u.get("eklenme_kullanici","—")}</td>'
+            f'<td>'
+            f'<form method="POST" action="/admin/urun-onayla" style="display:inline">'
+            f'<input type="hidden" name="barkod" value="{u["barkod"]}">'
+            f'<button type="submit" class="btn btn-green" style="padding:4px 10px;font-size:.7rem">ONAYLA</button>'
+            f'</form> '
+            f'<form method="POST" action="/admin/urun-reddet" style="display:inline" onsubmit="return confirm(\'Urun silinsin mi?\')">'
+            f'<input type="hidden" name="barkod" value="{u["barkod"]}">'
+            f'<button type="submit" class="btn btn-muted" style="padding:4px 10px;font-size:.7rem;border-color:#e05252;color:#e05252">SIL</button>'
+            f'</form>'
+            f'</td></tr>'
+        )
+
+    content = f"""
+<div class="page-title">Onay Bekleyenler <span style="color:#525252;font-size:.9rem">({len(liste)})</span></div>
+<div style="color:#a3a3a3;margin-bottom:18px;font-size:.85rem;line-height:1.6">
+  AI dogrulamasi guvenilir bulmadigi urunler burada. AI'in onerisini gor, manuel onaylayabilir ya da silebilirsin.<br>
+  <span style="color:#525252">Onaylanmis urunler tarama'da normal gosterilir; onaylanmamislar 'Dogrulaniyor' rozetiyle isaretli kalır.</span>
+</div>
+<div class="tbl-wrap"><table>
+  <tr><th>Barkod</th><th>Urun Adi</th><th>Dis Kaynaklar</th><th>AI Karari</th><th>Skor</th><th>Ekleyen</th><th>Aksiyon</th></tr>
+  {rows or '<tr><td colspan=7 class="muted" style="text-align:center;padding:20px">Onay bekleyen urun yok ✓</td></tr>'}
+</table></div>"""
+    return render(content, page="onay-bekleyenler", title="Onay Bekleyenler")
+
+
+@app.route("/admin/urun-onayla", methods=["POST"])
+@yetkili_giris
+def admin_urun_onayla():
+    if session.get("rol") not in ("admin","mudur"):
+        return "Yetkisiz", 403
+    barkod = (request.form.get("barkod") or "").strip()
+    if not barkod:
+        return "Barkod yok", 400
+    c = get_db()
+    try:
+        c.execute("UPDATE urunler SET onaylanmis=TRUE WHERE barkod=%s", (barkod,))
+        c.commit()
+    finally:
+        c.close()
+    return redirect("/admin/onay-bekleyenler")
+
+
+@app.route("/admin/urun-reddet", methods=["POST"])
+@yetkili_giris
+def admin_urun_reddet():
+    if session.get("rol") not in ("admin","mudur"):
+        return "Yetkisiz", 403
+    barkod = (request.form.get("barkod") or "").strip()
+    if not barkod:
+        return "Barkod yok", 400
+    c = get_db()
+    try:
+        # Once partileri sil (foreign key), sonra urunu
+        c.execute("DELETE FROM partiler WHERE barkod=%s", (barkod,))
+        c.execute("DELETE FROM urunler WHERE barkod=%s AND onaylanmis=FALSE", (barkod,))
+        c.commit()
+    finally:
+        c.close()
+    return redirect("/admin/onay-bekleyenler")
 
 @app.route("/ai-okuyucu")
 @yetkili_giris
@@ -4310,6 +4658,18 @@ function kaydet(){
     })
   }).then(function(r){return r.json();}).then(function(d){
     if(d.error){err.textContent=d.error;err.style.display='block';btn.textContent='💾 VERİTABANINA EKLE';btn.disabled=false;return;}
+    // Duruma göre kullanıcıya bilgi ver
+    var status = d.status || '';
+    var msg = d.mesaj || '';
+    if(status === 'zaten_onayli'){
+      alert('✓ ' + msg);
+    } else if(status === 'zaten_dogrulanmada'){
+      alert('⚠ ' + msg + '\n\nAdmin tarafından inceleniyor, lütfen bekleyin.');
+    } else if(status === 'dogrulaniyor'){
+      alert('⚠ Ürün kaydedildi fakat doğrulama bekliyor:\n\n' + (d.urun_adi || '') + '\n\nDoğrulama skoru: ' + (d.skor || 0) + '\n\nAdmin onayından sonra herkese açık olacak. Şimdilik tarama sayfasında "Doğrulanıyor" rozetiyle görünür.');
+    } else if(status === 'onayli'){
+      // Sessiz başarı - direkt yönlendir
+    }
     window.location.href='/tarama?barkod='+encodeURIComponent(_state.barkod);
   }).catch(function(e){
     err.textContent='Bağlantı hatası: '+e.message;err.style.display='block';
