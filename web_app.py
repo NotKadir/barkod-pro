@@ -445,6 +445,43 @@ def init_db():
                 c.commit()
             except Exception:
                 pass
+
+        # ── PERF: KRITIK INDEX'LER (dashboard/hareketler/tarama sorgu hizini 10-50x arttirir)
+        # Bu index'ler olmadan PostgreSQL "sequential scan" yapar (tum tabloyu okur)
+        # Index ile direkt B-tree lookup (O(log n)) yapilir
+        _INDEXES = [
+            # stok_hareketleri - en cok sorgulanan tablo
+            "CREATE INDEX IF NOT EXISTS idx_hareketler_tarih ON stok_hareketleri (tarih DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_hareketler_kullanici_tarih ON stok_hareketleri (kullanici, tarih DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_hareketler_barkod ON stok_hareketleri (barkod)",
+            "CREATE INDEX IF NOT EXISTS idx_hareketler_tip_tarih ON stok_hareketleri (hareket_tipi, tarih DESC)",
+            # partiler - JOIN'lerde cok kullaniliyor
+            "CREATE INDEX IF NOT EXISTS idx_partiler_barkod ON partiler (barkod)",
+            "CREATE INDEX IF NOT EXISTS idx_partiler_stt ON partiler (stt)",
+            "CREATE INDEX IF NOT EXISTS idx_partiler_barkod_stt ON partiler (barkod, stt)",
+            # urunler - barkod zaten PRIMARY KEY, ama urun_adi arama icin
+            "CREATE INDEX IF NOT EXISTS idx_urunler_onaylanmis ON urunler (onaylanmis)",
+            # kullanicilar - firebase_uid icin (login)
+            "CREATE INDEX IF NOT EXISTS idx_kullanicilar_firebase ON kullanicilar (firebase_uid)",
+            "CREATE INDEX IF NOT EXISTS idx_kullanicilar_email ON kullanicilar (email)",
+        ]
+        for _idx_sql in _INDEXES:
+            try:
+                c.execute(_idx_sql)
+                c.commit()
+            except Exception as _ie:
+                # Index olusturma hatasi uygulamayi durdurmamali
+                print(f"[INDEX] {_ie}", file=sys.stderr, flush=True)
+
+        # PostgreSQL query planner istatistikleri guncelle (yeni index'leri kullanmasi icin)
+        try:
+            c.execute("ANALYZE stok_hareketleri")
+            c.execute("ANALYZE partiler")
+            c.execute("ANALYZE urunler")
+            c.commit()
+        except Exception:
+            pass
+
         c.commit()
         h = hashlib.sha256("admin123".encode()).hexdigest()
         c.execute(
@@ -2638,7 +2675,11 @@ def tarama():
                 _local_allerjenler = urun.get("allerjenler") or ""
                 _local_katki = urun.get("katki_maddeleri") or ""
 
-                _off = off_allerjen(barkod)
+                # ── PERF: OFF API'ye HER tarama icin gitme!
+                # Eger lokal DB'de yeterli veri varsa OFF'a gitmeye gerek yok (200ms-2sn tasarruf)
+                # Sadece lokal'de hicbir besin/icindekiler/allerjen yoksa OFF'a sor
+                _local_has_data = _has_local or bool(_local_ic) or bool(_local_allerjenler)
+                _off = off_allerjen(barkod) if not _local_has_data else None
                 if _off or _has_local:
                     # Besin verisini belirle: lokal varsa onu kullan, yoksa OFF
                     if _has_local:
