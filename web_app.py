@@ -2,7 +2,7 @@
 import os, hashlib, functools, requests, traceback, sys
 import psycopg2, psycopg2.extras
 from datetime import datetime, date
-from flask import Flask, render_template_string, request, redirect, session, jsonify
+from flask import Flask, render_template_string, request, redirect, session, jsonify, send_from_directory
 
 
 # ── Firebase Admin ──────────────────────────
@@ -28,6 +28,103 @@ def _get_fb():
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "nexstock_secret_2024")
+
+# ═══════════════════════════════════════════════════
+#  ÇEVIRI SİSTEMİ (TR/EN)
+# ═══════════════════════════════════════════════════
+TRANSLATIONS = {
+    "tr": {
+        # Nav
+        "nav.tarama": "Tarama", "nav.dashboard": "Dashboard", "nav.urunler": "Urunler",
+        "nav.partiler": "Partiler", "nav.hareketler": "Hareketler", "nav.raporlar": "Raporlar",
+        "nav.kullanicilar": "Kullanicilar", "nav.ai_okuyucu": "AI Okuyucu", "nav.oneri": "Oneri",
+        "nav.cikis": "Cikis", "nav.giris_yap": "Giris Yap", "nav.ayarlar": "Ayarlar",
+        # Page titles
+        "title.dashboard": "Dashboard", "title.tarama": "Tarama", "title.urunler": "Urunler",
+        "title.partiler": "Partiler", "title.hareketler": "Hareket Gecmisi",
+        "title.hareketler_kullanici": "Hareket Gecmisi (Sadece sizin)",
+        "title.raporlar": "Raporlar", "title.kullanicilar": "Kullanicilar",
+        "title.ai_okuyucu": "AI Okuyucu", "title.oneri": "Oneri Kutusu",
+        "title.ayarlar": "Ayarlar", "title.giris": "Giris", "title.kayit": "Hesap Olustur",
+        "title.sifremi_unuttum": "Sifremi Unuttum",
+        # Dashboard cards
+        "card.toplam_urun": "Toplam Urun", "card.toplam_stok": "Toplam Stok",
+        "card.tarihi_gecmis": "Tarihi Gecmis", "card.yaklasan": "Yaklasan SKT",
+        "card.kritik": "Kritik Stok", "card.stoksuz": "Stoksuz",
+        "card.bugun_islem": "Bugun Islem", "card.tedarikci": "Tedarikci",
+        "card.bugun_tarama": "Bugun Taradigim", "card.hafta_tarama": "Bu Hafta",
+        "card.toplam_tarama": "Toplam Tarama", "card.farkli_urun": "Farkli Urun",
+        # Common labels
+        "label.kullanici_adi": "Kullanici Adi", "label.sifre": "Sifre",
+        "label.ad_soyad": "Ad Soyad", "label.email": "E-Mail", "label.dil": "Dil",
+        "label.rol": "Rol", "label.konu": "Konu", "label.mesaj": "Mesaj",
+        "label.mevcut_sifre": "Mevcut Sifre", "label.yeni_sifre": "Yeni Sifre",
+        "label.yeni_sifre2": "Yeni Sifre (Tekrar)",
+        # Buttons
+        "btn.kaydet": "Kaydet", "btn.iptal": "Iptal", "btn.sil": "Sil",
+        "btn.ekle": "Ekle", "btn.gonder": "Gonder", "btn.ara": "Ara",
+        "btn.giris_yap": "Giris Yap", "btn.kayit_ol": "Kayit Ol",
+        "btn.google_giris": "Google ile Giris Yap", "btn.google_kayit": "Google ile Kayit Ol",
+        "btn.sifremi_unuttum": "Sifremi Unuttum", "btn.hesap_olustur": "Hesap Olustur",
+        # Ayarlar
+        "ayarlar.hesap_bilgileri": "Hesap Bilgileri", "ayarlar.sifre_degistir": "Sifre Degistir",
+        "ayarlar.saglik_profili": "Saglik Profili",
+        "ayarlar.hastalik_alerji": "Hastalik / Alerji", "ayarlar.yeme_aliskanligi": "Yeme Aliskanligi",
+        # Oneri
+        "oneri.baslik": "Fikrini, sorunlarini ya da onerini bize ilet",
+        "oneri.aciklama": "Eksik bir ozellik mi var? Bir bug mi yakalandi? Yeni bir fikrin mi var? NexStock'u senin gibi kullanicilarla birlikte gelistiriyoruz.",
+        "oneri.gonder": "Onerimi Gonder",
+        # Mesajlar
+        "msg.guncellendi": "Guncellendi!", "msg.eklendi": "Eklendi!",
+        "msg.silindi": "Silindi!", "msg.basarili": "Basarili!",
+    },
+    "en": {
+        "nav.tarama": "Scan", "nav.dashboard": "Dashboard", "nav.urunler": "Products",
+        "nav.partiler": "Batches", "nav.hareketler": "Activity", "nav.raporlar": "Reports",
+        "nav.kullanicilar": "Users", "nav.ai_okuyucu": "AI Reader", "nav.oneri": "Feedback",
+        "nav.cikis": "Logout", "nav.giris_yap": "Sign In", "nav.ayarlar": "Settings",
+        "title.dashboard": "Dashboard", "title.tarama": "Scan", "title.urunler": "Products",
+        "title.partiler": "Batches", "title.hareketler": "Activity History",
+        "title.hareketler_kullanici": "Activity History (Yours only)",
+        "title.raporlar": "Reports", "title.kullanicilar": "Users",
+        "title.ai_okuyucu": "AI Reader", "title.oneri": "Feedback Box",
+        "title.ayarlar": "Settings", "title.giris": "Sign In", "title.kayit": "Create Account",
+        "title.sifremi_unuttum": "Forgot Password",
+        "card.toplam_urun": "Total Products", "card.toplam_stok": "Total Stock",
+        "card.tarihi_gecmis": "Expired", "card.yaklasan": "Expiring Soon",
+        "card.kritik": "Low Stock", "card.stoksuz": "Out of Stock",
+        "card.bugun_islem": "Today's Activity", "card.tedarikci": "Suppliers",
+        "card.bugun_tarama": "Scanned Today", "card.hafta_tarama": "This Week",
+        "card.toplam_tarama": "Total Scans", "card.farkli_urun": "Unique Products",
+        "label.kullanici_adi": "Username", "label.sifre": "Password",
+        "label.ad_soyad": "Full Name", "label.email": "E-Mail", "label.dil": "Language",
+        "label.rol": "Role", "label.konu": "Subject", "label.mesaj": "Message",
+        "label.mevcut_sifre": "Current Password", "label.yeni_sifre": "New Password",
+        "label.yeni_sifre2": "New Password (Repeat)",
+        "btn.kaydet": "Save", "btn.iptal": "Cancel", "btn.sil": "Delete",
+        "btn.ekle": "Add", "btn.gonder": "Send", "btn.ara": "Search",
+        "btn.giris_yap": "Sign In", "btn.kayit_ol": "Sign Up",
+        "btn.google_giris": "Sign in with Google", "btn.google_kayit": "Sign up with Google",
+        "btn.sifremi_unuttum": "Forgot Password", "btn.hesap_olustur": "Create Account",
+        "ayarlar.hesap_bilgileri": "Account Information", "ayarlar.sifre_degistir": "Change Password",
+        "ayarlar.saglik_profili": "Health Profile",
+        "ayarlar.hastalik_alerji": "Conditions / Allergies", "ayarlar.yeme_aliskanligi": "Diet Preferences",
+        "oneri.baslik": "Share your thoughts, issues or ideas with us",
+        "oneri.aciklama": "Is a feature missing? Did you catch a bug? Got a new idea? We're building NexStock together with users like you.",
+        "oneri.gonder": "Send Feedback",
+        "msg.guncellendi": "Updated!", "msg.eklendi": "Added!",
+        "msg.silindi": "Deleted!", "msg.basarili": "Success!",
+    }
+}
+
+def t(key):
+    """Translate a key based on session['lang'] (default tr)."""
+    lang = session.get("lang", "tr") if session else "tr"
+    if lang not in TRANSLATIONS:
+        lang = "tr"
+    return TRANSLATIONS[lang].get(key, TRANSLATIONS["tr"].get(key, key))
+
+app.jinja_env.globals["t"] = t
 
 @app.errorhandler(Exception)
 def handle_error(e):
@@ -872,32 +969,32 @@ document.addEventListener('DOMContentLoaded',function(){
   <button class="hamburger" id="mob-btn" onclick="mobMenu()" aria-label="Menu">☰</button>
 </div>
 <div class="nav" id="mob-nav">
-    <a href="/tarama" class="{{ 'active' if page=='tarama' }}">Tarama</a>
+    <a href="/tarama" class="{{ 'active' if page=='tarama' }}">{{ t('nav.tarama') }}</a>
     {% if session.get('rol') not in ['misafir','goruntuleyici'] %}
-    <a href="/" class="{{ 'active' if page=='dashboard' }}">Dashboard</a>
+    <a href="/" class="{{ 'active' if page=='dashboard' }}">{{ t('nav.dashboard') }}</a>
     {% if session.get('rol') in ['admin','mudur','kasiyer'] %}
-    <a href="/urunler" class="{{ 'active' if page=='urunler' }}">Urunler</a>
-    <a href="/partiler" class="{{ 'active' if page=='partiler' }}">Partiler</a>
+    <a href="/urunler" class="{{ 'active' if page=='urunler' }}">{{ t('nav.urunler') }}</a>
+    <a href="/partiler" class="{{ 'active' if page=='partiler' }}">{{ t('nav.partiler') }}</a>
     {% endif %}
-    <a href="/hareketler" class="{{ 'active' if page=='hareketler' }}">Hareketler</a>
+    <a href="/hareketler" class="{{ 'active' if page=='hareketler' }}">{{ t('nav.hareketler') }}</a>
     {% if session.get('rol') in ['admin','mudur'] %}
-    <a href="/raporlar" class="{{ 'active' if page=='raporlar' }}">Raporlar</a>
+    <a href="/raporlar" class="{{ 'active' if page=='raporlar' }}">{{ t('nav.raporlar') }}</a>
     {% endif %}
     {% if session.get('rol') in ['admin','mudur'] %}
-    <a href="/kullanicilar" class="{{ 'active' if page=='kullanicilar' }}">Kullanicilar</a>
+    <a href="/kullanicilar" class="{{ 'active' if page=='kullanicilar' }}">{{ t('nav.kullanicilar') }}</a>
     {% endif %}
     {% if session.get('rol') in ['admin','mudur','kasiyer','kullanici'] %}
-    <a href="/ai-okuyucu" class="{{ 'active' if page=='ai-okuyucu' }}">AI Okuyucu</a>
+    <a href="/ai-okuyucu" class="{{ 'active' if page=='ai-okuyucu' }}">{{ t('nav.ai_okuyucu') }}</a>
     {% endif %}
-    <a href="/oneri" class="{{ 'active' if page=='oneri' }}">Oneri</a>
+    <a href="/oneri" class="{{ 'active' if page=='oneri' }}">{{ t('nav.oneri') }}</a>
     <div class="nav-divider"></div>
     <span class="rol-badge">{{ session.get('rol','') }}</span>
     <span class="nav-user">{{ session.get('tam_ad') or session.get('user') }}</span>
-    <a href="/ayarlar" class="{{ 'active' if page=='ayarlar' }}" title="Ayarlar" style="font-size:1.1rem;padding:8px 10px">&#9881;</a>
-    <a href="/cikis" class="btn-logout">Cikis</a>
+    <a href="/ayarlar" class="{{ 'active' if page=='ayarlar' }}" title="{{ t('nav.ayarlar') }}" style="font-size:1.1rem;padding:8px 10px">&#9881;</a>
+    <a href="/cikis" class="btn-logout">{{ t('nav.cikis') }}</a>
     {% else %}
     <div class="nav-divider"></div>
-    <a href="/giris" class="btn-login">Giris Yap</a>
+    <a href="/giris" class="btn-login">{{ t('nav.giris_yap') }}</a>
     {% endif %}
 </div>
 <div class="main">
@@ -975,10 +1072,10 @@ document.querySelectorAll('.stat-card .val').forEach(function(el){
 #cb-send{background:var(--g);border:none;color:#000;font-weight:700;padding:9px 14px;cursor:pointer;font-size:.82rem;font-family:JetBrains Mono,monospace;letter-spacing:1px}
 #cb-send:hover{opacity:.85}
 </style>
-<button id="cb-btn" onclick="cbToggle()" title="Besin Asistanı"><svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path stroke-linecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></button>
+<button id="cb-btn" onclick="cbToggle()" title="Besin Asistanı" style="padding:0;overflow:hidden"><img src="/asistan.png" alt="Asistan" style="width:100%;height:100%;object-fit:cover;display:block"></button>
 <div id="cb-panel">
   <div id="cb-header">
-    <span style="display:flex;align-items:center;gap:8px"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path stroke-linecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg> Besin Asistanı</span>
+    <span style="display:flex;align-items:center;gap:10px"><img src="/asistan.png" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid #2a2a2a"> Besin Asistanı</span>
     <button onclick="cbToggle()" style="background:none;border:none;color:#525252;cursor:pointer;font-size:1rem">✕</button>
   </div>
   <div id="cb-messages">
@@ -997,7 +1094,7 @@ var _cbLoading=false;
 function cbToggle(){
   _cbOpen=!_cbOpen;
   document.getElementById('cb-panel').style.display=_cbOpen?'flex':'none';
-  document.getElementById('cb-btn').innerHTML=_cbOpen?'<span style="font-size:1.2rem">✕</span>':'<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path stroke-linecap="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>';
+  document.getElementById('cb-btn').innerHTML=_cbOpen?'<span style="font-size:1.4rem;line-height:1">✕</span>':'<img src="/asistan.png" alt="Asistan" style="width:100%;height:100%;object-fit:cover;display:block">';
   if(_cbOpen) setTimeout(function(){document.getElementById('cb-input').focus();},100);
 }
 function cbAppend(text,cls){
@@ -1517,12 +1614,12 @@ def ayarlar():
 
     content = f"""
 {acc_css}
-<div class="page-title">&#9881; Ayarlar</div>
+<div class="page-title">&#9881; {t("title.ayarlar")}</div>
 {yeni_banner}
 {'<div class="alert alert-green">'+basari+'</div>' if basari else ''}
 {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
 <div class="panel" style="max-width:600px;margin-bottom:18px">
-  <h2>Hesap Bilgileri</h2>
+  <h2>{t("ayarlar.hesap_bilgileri")}</h2>
   <form method="POST">
     <input type="hidden" name="form_type" value="hesap">
     <label>AD SOYAD</label>
@@ -1538,7 +1635,7 @@ def ayarlar():
   </form>
 </div>
 <div class="panel" style="max-width:600px;margin-bottom:18px">
-  <h2>Sifre Degistir</h2>
+  <h2>{t("ayarlar.sifre_degistir")}</h2>
   <form method="POST">
     <input type="hidden" name="form_type" value="sifre">
     <label>MEVCUT SIFRE</label>
@@ -1551,7 +1648,7 @@ def ayarlar():
   </form>
 </div>
 <div class="panel" style="max-width:600px">
-  <h2>Saglik Profili</h2>
+  <h2>{t("ayarlar.saglik_profili")}</h2>
   <form method="POST">
     <input type="hidden" name="form_type" value="saglik">
     {acc("hastalik","Hastalik / Alerji","hastalik",HASTALIK,mevcut_h)}
@@ -1604,12 +1701,12 @@ def oneri():
             basari = "Onerin alindi! Tesekkurler — degerlendirip senle iletisime gececegiz."
 
     content = f"""
-<div class="page-title">Oneri Kutusu</div>
+<div class="page-title">{t("title.oneri")}</div>
 {'<div class="alert alert-green">'+basari+'</div>' if basari else ''}
 {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
 <div class="panel" style="max-width:680px">
-  <h2>Fikrini, sorunlarini ya da onerini bize ilet</h2>
-  <p style="color:#a3a3a3;margin-bottom:18px;font-size:.88rem;line-height:1.6">Eksik bir ozellik mi var? Bir bug mi yakalandi? Yeni bir fikrin mi var? NexStock'u senin gibi kullanicilarla birlikte gelistiriyoruz.</p>
+  <h2>{t("oneri.baslik")}</h2>
+  <p style="color:#a3a3a3;margin-bottom:18px;font-size:.88rem;line-height:1.6">{t("oneri.aciklama")}</p>
   <form method="POST">
     <label>KONU</label>
     <input name="konu" placeholder="Kisa baslik" maxlength="120" required>
@@ -1791,19 +1888,32 @@ def index():
         return redirect("/tarama")
 
     c = get_db()
+    _drol_pre = session.get("rol", "")
+    _duser_pre = session.get("user", "")
     try:
         today = date.today().isoformat()
-        s = {
-            "toplam_urun":   c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0],
-            "toplam_stok":   c.execute("SELECT COALESCE(SUM(miktar),0) FROM partiler").fetchone()[0],
-            "tarihi_gecmis": c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<%s AND miktar>0", (today,)).fetchone()[0],
-            "yaklasan":      c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt>=%s AND stt<=%s::date + interval '7 days' AND miktar>0", (today, today)).fetchone()[0],
-            "kritik":        c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) > 0 AND (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= u.min_stok").fetchone()[0],
-            "stoksuz":       c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= 0").fetchone()[0],
-            "bugun":         c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE DATE(tarih)=CURRENT_DATE").fetchone()[0],
-            "tedarikci":     c.execute("SELECT COUNT(*) FROM tedarikciler WHERE aktif=1").fetchone()[0],
-        }
-        skt_list = [dict(r) for r in c.execute("""
+        if _drol_pre == "kullanici":
+            s = {
+                "bugun_tarama":  c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE kullanici=%s AND DATE(tarih)=CURRENT_DATE", (_duser_pre,)).fetchone()[0],
+                "hafta_tarama":  c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE kullanici=%s AND tarih >= NOW() - INTERVAL '7 days'", (_duser_pre,)).fetchone()[0],
+                "toplam_tarama": c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE kullanici=%s", (_duser_pre,)).fetchone()[0],
+                "unique_urun":   c.execute("SELECT COUNT(DISTINCT barkod) FROM stok_hareketleri WHERE kullanici=%s AND barkod IS NOT NULL", (_duser_pre,)).fetchone()[0],
+            }
+            skt_list = []
+            dusuk = []
+        else:
+            s = {
+                "toplam_urun":   c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0],
+                "toplam_stok":   c.execute("SELECT COALESCE(SUM(miktar),0) FROM partiler").fetchone()[0],
+                "tarihi_gecmis": c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<%s AND miktar>0", (today,)).fetchone()[0],
+                "yaklasan":      c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt>=%s AND stt<=%s::date + interval '7 days' AND miktar>0", (today, today)).fetchone()[0],
+                "kritik":        c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) > 0 AND (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= u.min_stok").fetchone()[0],
+                "stoksuz":       c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= 0").fetchone()[0],
+                "bugun":         c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE DATE(tarih)=CURRENT_DATE").fetchone()[0],
+                "tedarikci":     c.execute("SELECT COUNT(*) FROM tedarikciler WHERE aktif=1").fetchone()[0],
+            }
+        if _drol_pre != "kullanici":
+            skt_list = [dict(r) for r in c.execute("""
             SELECT u.barkod, u.urun_adi, u.kategori,
                    MIN(p.stt) as stt,
                    COALESCE(SUM(p.miktar), 0) as stok_adedi
@@ -1811,13 +1921,13 @@ def index():
             WHERE p.stt IS NOT NULL AND p.stt <= %s::date + interval '7 days' AND p.miktar > 0
             GROUP BY u.barkod, u.urun_adi, u.kategori ORDER BY MIN(p.stt)
         """, (today,)).fetchall()]
-        dusuk = [dict(r) for r in c.execute("""
-            SELECT u.*, COALESCE(ps.toplam, 0) as stok_adedi
-            FROM urunler u
-            LEFT JOIN (SELECT barkod, SUM(miktar) as toplam FROM partiler GROUP BY barkod) ps ON u.barkod = ps.barkod
-            WHERE COALESCE(ps.toplam, 0) <= u.min_stok
-            ORDER BY COALESCE(ps.toplam, 0) LIMIT 20
-        """).fetchall()]
+            dusuk = [dict(r) for r in c.execute("""
+                SELECT u.*, COALESCE(ps.toplam, 0) as stok_adedi
+                FROM urunler u
+                LEFT JOIN (SELECT barkod, SUM(miktar) as toplam FROM partiler GROUP BY barkod) ps ON u.barkod = ps.barkod
+                WHERE COALESCE(ps.toplam, 0) <= u.min_stok
+                ORDER BY COALESCE(ps.toplam, 0) LIMIT 20
+            """).fetchall()]
         _drol = session.get("rol", "")
         _duser = session.get("user", "")
         if _drol == "kullanici":
@@ -1896,16 +2006,24 @@ def index():
             f'<div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:{col};opacity:.6"></div>'
             f'</div>'
         )
-    kartlar = (
-        _kart("toplam_urun",  "Toplam Ürün",    "#f5f5f5")
-        + _kart("toplam_stok",  "Toplam Stok",    "#ffffff")
-        + _kart("tarihi_gecmis","Tarihi Geçmiş",  "#e05252", alert=True)
-        + _kart("yaklasan",     "Yaklaşan SKT",   "#f0b429", alert=True)
-        + _kart("kritik",       "Kritik Stok",    "#fb923c", alert=True)
-        + _kart("stoksuz",      "Stoksuz",        "#a78bfa", alert=True)
-        + _kart("bugun",        "Bugün İşlem",    "#a5d8ff")
-        + _kart("tedarikci",    "Tedarikçi",      "#737373")
-    )
+    if _drol == "kullanici":
+        kartlar = (
+            _kart("bugun_tarama",  t("card.bugun_tarama"),   "#a5d8ff")
+            + _kart("hafta_tarama",  t("card.hafta_tarama"),    "#ffffff")
+            + _kart("toplam_tarama", t("card.toplam_tarama"),   "#f5f5f5")
+            + _kart("unique_urun",   t("card.farkli_urun"),     "#a78bfa")
+        )
+    else:
+        kartlar = (
+            _kart("toplam_urun",  t("card.toplam_urun"),    "#f5f5f5")
+            + _kart("toplam_stok",  t("card.toplam_stok"),    "#ffffff")
+            + _kart("tarihi_gecmis",t("card.tarihi_gecmis"),  "#e05252", alert=True)
+            + _kart("yaklasan",     t("card.yaklasan"),       "#f0b429", alert=True)
+            + _kart("kritik",       t("card.kritik"),         "#fb923c", alert=True)
+            + _kart("stoksuz",      t("card.stoksuz"),        "#a78bfa", alert=True)
+            + _kart("bugun",        t("card.bugun_islem"),    "#a5d8ff")
+            + _kart("tedarikci",    t("card.tedarikci"),      "#737373")
+        )
 
     skt_rows = ""
     for u in skt_list:
@@ -1928,9 +2046,10 @@ def index():
 
     _son_islem_baslik = "Son Islemlerim" if session.get("rol") == "kullanici" else "Son Islemler"
 
-    content = f"""
-<div class="page-title">Dashboard</div>
-<div class="stat-grid">{kartlar}</div>
+    if _drol == "kullanici":
+        admin_panels = ""
+    else:
+        admin_panels = f"""
 <div class="grid2">
   <div class="panel">
     <h2>SKT Uyarilari (7 gun)</h2>
@@ -1946,12 +2065,29 @@ def index():
       {dusuk_rows or '<tr><td colspan=3 class="muted" style="text-align:center;padding:16px">Kritik stok yok ✓</td></tr>'}
     </table></div>
   </div>
-</div>
+</div>"""
+
+    _kullanici_columns = '<tr><th>Tip</th><th>Ürün</th><th>Miktar</th><th>Tarih</th></tr>' if _drol == "kullanici" else '<tr><th>Tip</th><th>Ürün</th><th>Miktar</th><th>Tarih</th><th>Kullanıcı</th></tr>'
+
+    if _drol == "kullanici":
+        har_rows2 = ""
+        for h in son_har:
+            cls = "green" if h["hareket_tipi"] == "Giris" else "red" if h["hareket_tipi"] in ["Cikis","Okutma"] else ""
+            _warn = _dh_match(h.get("allerjenler"))
+            _row_style = ' style="background:rgba(224,82,82,.08);border-left:3px solid #e05252"' if _warn else ''
+            _badge = ' <span style="color:#e05252;font-size:.7rem;margin-left:6px" title="Saglik profilinize uygun degil">&#9888;</span>' if _warn else ''
+            har_rows2 += f'<tr{_row_style}><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}{_badge}</td><td>{h["miktar"]}</td><td style="color:#a3a3a3">{str(h["tarih"])[:16]}</td></tr>'
+        har_rows = har_rows2
+
+    content = f"""
+<div class="page-title">{t("title.dashboard")}</div>
+<div class="stat-grid">{kartlar}</div>
+{admin_panels}
 <div class="panel">
   <h2>{_son_islem_baslik}</h2>
   <div class="tbl-wrap"><table>
-    <tr><th>Tip</th><th>Ürün</th><th>Miktar</th><th>Tarih</th><th>Kullanıcı</th></tr>
-    {har_rows or '<tr><td colspan=5 class="muted" style="text-align:center;padding:16px">İşlem yok</td></tr>'}
+    {_kullanici_columns}
+    {har_rows or f'<tr><td colspan={4 if _drol == "kullanici" else 5} class="muted" style="text-align:center;padding:16px">İşlem yok</td></tr>'}
   </table></div>
 </div>
 <script>
@@ -4187,6 +4323,11 @@ function kaydet(){
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"}), 200
+
+
+@app.route("/asistan.png")
+def asistan_logo():
+    return send_from_directory(".", "asistan.png", mimetype="image/png")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
