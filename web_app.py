@@ -890,7 +890,7 @@ document.addEventListener('DOMContentLoaded',function(){
     {% if session.get('rol') in ['admin','mudur'] %}
     <a href="/kullanicilar" class="{{ 'active' if page=='kullanicilar' }}">Kullanicilar</a>
     {% endif %}
-    {% if session.get('rol') == 'admin' %}
+    {% if session.get('rol') in ['admin','mudur','kasiyer','kullanici'] %}
     <a href="/ai-okuyucu" class="{{ 'active' if page=='ai-okuyucu' }}">AI Okuyucu</a>
     {% endif %}
     <div class="nav-divider"></div>
@@ -1334,7 +1334,7 @@ def kayit():
         'r-upper':/[A-Z]/.test(v),
         'r-lower':/[a-z]/.test(v),
         'r-num':  /[0-9]/.test(v),
-        'r-spec': /[!@#$%^&*()+\-=\[\]{{}}|;:,.<>?/]/.test(v)
+        'r-spec': /[!@#$%^&*()+\\-=\\[\\]{{}}|;:,.<>?/]/.test(v)
       }};
       var score=0;
       for(var id in rules){{
@@ -1352,12 +1352,41 @@ def kayit():
     }}
     function checkPw(){{
       var v=document.getElementById('pw-input').value;
-      return v.length>=8&&/[A-Z]/.test(v)&&/[a-z]/.test(v)&&/[0-9]/.test(v)&&/[!@#$%^&*()+\-=\[\]{{}}|;:,.<>?/]/.test(v);
+      return v.length>=8&&/[A-Z]/.test(v)&&/[a-z]/.test(v)&&/[0-9]/.test(v)&&/[!@#$%^&*()+\\-=\\[\\]{{}}|;:,.<>?/]/.test(v);
     }}
     </script>
-    <div style="text-align:center;margin-top:20px">
-      <a href="/giris" style="color:#525252;font-size:.78rem;text-decoration:none;font-family:JetBrains Mono,monospace;letter-spacing:1px">&#x2190; Giriş Yap</a>
+    <div style="margin-top:20px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="flex:1;height:1px;background:#1e1e1e"></div>
+        <span style="color:#525252;font-size:.7rem;font-family:JetBrains Mono,monospace;letter-spacing:1px">VEYA</span>
+        <div style="flex:1;height:1px;background:#1e1e1e"></div>
+      </div>
+      <button type="button" onclick="googleKayit()" style="width:100%;background:#fff;color:#000;border:none;padding:11px;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;letter-spacing:.5px;margin-bottom:16px">
+        <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Google ile Kayıt Ol
+      </button>
+      <div style="text-align:center">
+        <a href="/giris" style="color:#525252;font-size:.78rem;text-decoration:none;font-family:JetBrains Mono,monospace;letter-spacing:1px">&#x2190; Giriş Yap</a>
+      </div>
     </div>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script>
+    var _fbCfg={{apiKey:"AIzaSyDQVp3H0DKjnfcl9-1fe51KBHV43K2TAmA",authDomain:"nexstock-8c7ed.firebaseapp.com",
+      projectId:"nexstock-8c7ed",storageBucket:"nexstock-8c7ed.firebasestorage.app",
+      messagingSenderId:"960691238543",appId:"1:960691238543:web:82c3dc0eef17a3eb30a2fa"}};
+    if(!firebase.apps.length) firebase.initializeApp(_fbCfg);
+    function googleKayit(){{
+      var p=new firebase.auth.GoogleAuthProvider();
+      firebase.auth().signInWithPopup(p).then(function(r){{return r.user.getIdToken();}})
+      .then(function(t){{return fetch("/api/firebase-login",{{method:"POST",
+        headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{idToken:t}})}});}})
+      .then(function(r){{return r.json();}}).then(function(d){{
+        if(d.ok) window.location.href=d.redirect||"/ayarlar?yeni=1";
+        else alert("Hata: "+d.error);
+      }}).catch(function(e){{alert("Google hatasi: "+e.message);}});
+    }}
+    </script>
   </div>
 </div>"""
     return render(content, page="kayit", title="Kayit Ol")
@@ -1733,6 +1762,30 @@ def tarama():
     else:
         barkod = None
 
+    # Kullanıcı sağlık profili
+    _user_rol = session.get("rol", "misafir")
+    _show_price_skt = _user_rol not in ("kullanici", "misafir")
+    _user_hastalik = set()
+    if session.get("user"):
+        try:
+            _uc = get_db()
+            _ur = _uc.execute("SELECT hastaliklar FROM kullanicilar WHERE kullanici_adi=%s",
+                              (session["user"],)).fetchone()
+            _uc.close()
+            if _ur and _ur["hastaliklar"]:
+                _user_hastalik = set(_ur["hastaliklar"].split(","))
+        except Exception:
+            pass
+
+    HASTALIK_ALLERJEN = {
+        "colyak":       ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum"],
+        "gluten":       ["gluten","bugday","wheat","arpa","cavdar","rye","barley","triticum"],
+        "laktoz":       ["sut","milk","laktoz","lactose","peynir","cheese","krema","cream","dairy","whey"],
+        "fruktoz":      ["fruktoz","fructose","sorbitol","meyve sekeri"],
+        "hipertansiyon":["sodyum","sodium","tuz","salt"],
+        "kolesterol":   ["doymus yag","saturated","trans yag","trans fat"],
+    }
+
     if barkod:
         # ── Step 1: Look up product, auto-add from OFF if missing ──
         c = get_db()
@@ -2028,8 +2081,50 @@ def tarama():
                         '</div>',
                     ])
 
+            # Allerjen çakışma kontrolü
+            _urun_allerjen_str = (urun.get("allerjenler") or "").lower()
+            _al_uyari_listesi = []
+            for _hastalik in _user_hastalik:
+                for _kw in HASTALIK_ALLERJEN.get(_hastalik, []):
+                    if _kw in _urun_allerjen_str:
+                        _al_uyari_listesi.append(_hastalik)
+                        break
+            _allerjen_uyari_html = ""
+            if _al_uyari_listesi:
+                _al_labels = {"colyak":"Çölyak","gluten":"Gluten Alerjisi","laktoz":"Laktoz İntoleransı",
+                              "fruktoz":"Fruktoz İntoleransı","hipertansiyon":"Hipertansiyon","kolesterol":"Kolesterol"}
+                _uyari_text = ", ".join(_al_labels.get(h,h.upper()) for h in _al_uyari_listesi)
+                _allerjen_uyari_html = (
+                    '<div class="alerjen-uyari" id="alerjen-uyari-banner">'
+                    f'<span style="font-size:1.3rem">&#9888;</span>'
+                    f'<div><strong>ALERJEN UYARISI</strong><br>'
+                    f'<span style="font-size:.78rem">Bu ürün senin için risk taşıyor: {_uyari_text}</span></div>'
+                    '</div>'
+                    '<style>'
+                    '.alerjen-uyari{display:flex;align-items:center;gap:12px;'
+                    'padding:14px 16px;margin-bottom:12px;'
+                    'background:rgba(224,82,82,.1);border:1px solid #e05252;'
+                    'color:#e05252;font-family:JetBrains Mono,monospace;font-size:.82rem;'
+                    'animation:alerjenShake .5s cubic-bezier(.36,.07,.19,.97) both}'
+                    '@keyframes alerjenShake{'
+                    '0%,100%{transform:translateX(0)}'
+                    '10%,50%,90%{transform:translateX(-6px)}'
+                    '30%,70%{transform:translateX(6px)}}'
+                    '</style>'
+                    '<script>'
+                    'if(navigator.vibrate){navigator.vibrate([200,100,200,100,300]);}'
+                    '</script>'
+                )
+
+            fiyat_html = (f'<div style="font-size:1.7rem;font-weight:800;color:#ffffff">'
+                          f'{float(urun.get("fiyat") or 0):.2f} TL</div>'
+                          if _show_price_skt else '')
+            skt_badge_html = (f'<span class="scan-skt" style="background:{rc}22;color:{rc};border:1px solid {rc}55">{et}</span>'
+                              if _show_price_skt else '')
+
             skt_gun_data = f'data-gun="{gun}"' if gun is not None else 'data-gun="null"'
             sonuc_html = f"""
+{_allerjen_uyari_html}
 <div id="skt-gun-data" {skt_gun_data} style="display:none"></div>
 <div id="alert-type" data-tip="success" style="display:none"></div>
 <div class="scan-result">
@@ -2038,13 +2133,12 @@ def tarama():
       <div class="scan-urun-adi">{urun["urun_adi"]}</div>
       <div class="scan-meta">Barkod: {barkod}&nbsp;&nbsp;|&nbsp;&nbsp;Kategori: {urun.get("kategori","—")}</div>
     </div>
-    <div style="font-size:1.7rem;font-weight:800;color:#ffffff">{float(urun.get("fiyat") or 0):.2f} TL</div>
+    {fiyat_html}
   </div>
   <div class="scan-body">
-    <span class="scan-skt" style="background:{rc}22;color:{rc};border:1px solid {rc}55">{et}</span>
+    {skt_badge_html}
     <div style="margin-top:10px;color:#a3a3a3;font-size:.9rem">
       Toplam Stok: <strong style="color:#f5f5f5">{toplam_stok} adet</strong>
-      &nbsp;&nbsp;|&nbsp;&nbsp;Min: {urun.get("min_stok",5)} adet
       &nbsp;&nbsp;|&nbsp;&nbsp;Parti: <strong style="color:#f5f5f5">{len(partiler_list)}</strong>
     </div>
     {uyari}
@@ -3266,11 +3360,52 @@ def api_ai_ingredients():
         return jsonify({"error": str(e)}), 500
 
 
+def _send_tesekkur_mail(to_email, tam_ad, urun_adi):
+    """Ürün eklendiğinde teşekkür maili gönder (SMTP env var'larıyla)."""
+    import smtplib, os
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    host = os.environ.get("SMTP_HOST","smtp.gmail.com")
+    port = int(os.environ.get("SMTP_PORT","587"))
+    user = os.environ.get("SMTP_USER","")
+    pw   = os.environ.get("SMTP_PASS","")
+    if not user or not pw or not to_email:
+        return
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "NexStock — Katkın için teşekkürler!"
+    msg["From"]    = f"NexStock <{user}>"
+    msg["To"]      = to_email
+    html = f"""
+    <div style="font-family:Arial,sans-serif;background:#060606;color:#f5f5f5;padding:32px;max-width:520px;margin:0 auto">
+      <div style="font-size:1.6rem;font-weight:900;letter-spacing:4px;margin-bottom:8px">Nex<span style="color:#ffffff">Stock</span></div>
+      <div style="height:1px;background:#222;margin-bottom:24px"></div>
+      <p style="color:#d4d4d4">Merhaba <strong>{tam_ad or to_email}</strong>,</p>
+      <p style="color:#d4d4d4;line-height:1.7">
+        AI Okuyucu ile <strong style="color:#ffffff">"{urun_adi}"</strong> ürününü
+        sistemimize eklediğin için teşekkür ederiz.<br>
+        Katkıların NexStock'u daha güçlü yapıyor!
+      </p>
+      <div style="margin-top:24px;padding:16px;background:#111;border-left:2px solid #fff">
+        <div style="font-size:.75rem;color:#525252;letter-spacing:2px;font-family:monospace">EKLENEN ÜRÜN</div>
+        <div style="font-size:1rem;color:#ffffff;margin-top:4px">{urun_adi}</div>
+      </div>
+      <p style="color:#525252;font-size:.78rem;margin-top:32px">NexStock Ekibi</p>
+    </div>"""
+    msg.attach(MIMEText(html, "html"))
+    try:
+        with smtplib.SMTP(host, port, timeout=10) as s:
+            s.starttls()
+            s.login(user, pw)
+            s.sendmail(user, to_email, msg.as_string())
+    except Exception:
+        pass  # Mail gönderilemese de ürün ekleme işlemi engellenmez
+
+
 @app.route("/api/urun-ai-ekle", methods=["POST"])
 @yetkili_giris
 def api_urun_ai_ekle():
-    if session.get("rol") != "admin":
-        return jsonify({"error": "Sadece admin"}), 403
+    if session.get("rol") not in ("admin","mudur","kasiyer","kullanici"):
+        return jsonify({"error": "Yetkisiz"}), 403
     data = request.get_json(force=True) or {}
     barkod          = (data.get("barkod") or "").strip()
     urun_adi        = (data.get("urun_adi") or "").strip()
@@ -3304,6 +3439,17 @@ def api_urun_ai_ekle():
              allerjenler or None, katki_maddeleri or None)
         )
         c.commit()
+        # Teşekkür maili (arka planda, hata olsa bile bloklamaz)
+        try:
+            _mu = c.execute("SELECT email,tam_ad FROM kullanicilar WHERE kullanici_adi=%s",
+                            (session.get("user",""),)).fetchone()
+            if _mu:
+                import threading
+                threading.Thread(target=_send_tesekkur_mail,
+                                 args=(_mu["email"] or "", _mu["tam_ad"] or "", urun_adi),
+                                 daemon=True).start()
+        except Exception:
+            pass
         return jsonify({"success": True, "barkod": barkod})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -3313,7 +3459,7 @@ def api_urun_ai_ekle():
 @app.route("/ai-okuyucu")
 @yetkili_giris
 def ai_okuyucu():
-    if session.get("rol") != "admin":
+    if session.get("rol") not in ("admin","mudur","kasiyer","kullanici"):
         return redirect("/")
     content = r"""
 <div class="page-title">AI Okuyucu</div>
