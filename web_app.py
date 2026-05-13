@@ -495,16 +495,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:50;
   font-family:'Bebas Neue',sans-serif;
   font-size:1.8rem;letter-spacing:4px;color:var(--text);
   transition:letter-spacing .3s,opacity .3s,text-shadow .3s;
-  position:relative;
+  position:relative;display:inline-block;
 }
 .logo:hover{opacity:.9;letter-spacing:6px;text-shadow:0 0 20px rgba(255,255,255,.2)}
 .logo span{color:var(--g);font-style:normal}
-.logo::after{
-  content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);
-  animation:logoSweep 4s ease-in-out infinite;
-}
-@keyframes logoSweep{0%,80%,100%{left:-100%}40%{left:200%}}
 
 .nav{display:flex;align-items:center;gap:1px;position:fixed;top:0;right:16px;z-index:1001;padding:0;height:64px;overflow-x:auto;scrollbar-width:none;max-width:calc(100vw - 220px)}
 .nav::-webkit-scrollbar{display:none}
@@ -881,8 +875,10 @@ document.addEventListener('DOMContentLoaded',function(){
     <a href="/tarama" class="{{ 'active' if page=='tarama' }}">Tarama</a>
     {% if session.get('rol') not in ['misafir','goruntuleyici'] %}
     <a href="/" class="{{ 'active' if page=='dashboard' }}">Dashboard</a>
+    {% if session.get('rol') in ['admin','mudur','kasiyer'] %}
     <a href="/urunler" class="{{ 'active' if page=='urunler' }}">Urunler</a>
     <a href="/partiler" class="{{ 'active' if page=='partiler' }}">Partiler</a>
+    {% endif %}
     <a href="/hareketler" class="{{ 'active' if page=='hareketler' }}">Hareketler</a>
     {% if session.get('rol') in ['admin','mudur'] %}
     <a href="/raporlar" class="{{ 'active' if page=='raporlar' }}">Raporlar</a>
@@ -893,6 +889,7 @@ document.addEventListener('DOMContentLoaded',function(){
     {% if session.get('rol') in ['admin','mudur','kasiyer','kullanici'] %}
     <a href="/ai-okuyucu" class="{{ 'active' if page=='ai-okuyucu' }}">AI Okuyucu</a>
     {% endif %}
+    <a href="/oneri" class="{{ 'active' if page=='oneri' }}">Oneri</a>
     <div class="nav-divider"></div>
     <span class="rol-badge">{{ session.get('rol','') }}</span>
     <span class="nav-user">{{ session.get('tam_ad') or session.get('user') }}</span>
@@ -1125,7 +1122,10 @@ def giris():
       }});
     }}
     </script>
-    <a href="/kayit" style="color:var(--g);font-size:.82rem;text-decoration:none;font-family:JetBrains Mono,monospace">Hesap Olustur</a>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:4px">
+      <a href="/sifremi-unuttum" style="color:#525252;font-size:.78rem;text-decoration:none;font-family:JetBrains Mono,monospace;letter-spacing:.5px">Sifremi Unuttum</a>
+      <a href="/kayit" style="color:var(--g);font-size:.82rem;text-decoration:none;font-family:JetBrains Mono,monospace">Hesap Olustur</a>
+    </div>
     </div>
   </div>
 </div>"""
@@ -1401,23 +1401,63 @@ def ayarlar():
     hata   = ""
     c = get_db()
     try:
-        row = c.execute("SELECT hastaliklar,yeme_aliskanlik FROM kullanicilar WHERE kullanici_adi=%s",
+        row = c.execute("SELECT hastaliklar,yeme_aliskanlik,email,tam_ad FROM kullanicilar WHERE kullanici_adi=%s",
                         (session["user"],)).fetchone()
         mevcut_h = set((row["hastaliklar"] or "").split(",")) if row and row["hastaliklar"] else set()
         mevcut_y = set((row["yeme_aliskanlik"] or "").split(",")) if row and row["yeme_aliskanlik"] else set()
+        mevcut_email = (row["email"] or "") if row else ""
+        mevcut_tamad = (row["tam_ad"] or "") if row else ""
         if request.method == "POST":
-            yeni_h = ",".join(request.form.getlist("hastalik"))
-            yeni_y = ",".join(request.form.getlist("yeme"))
-            c.execute("UPDATE kullanicilar SET hastaliklar=%s, yeme_aliskanlik=%s WHERE kullanici_adi=%s",
-                      (yeni_h or None, yeni_y or None, session["user"]))
-            c.commit()
-            mevcut_h = set(yeni_h.split(",")) if yeni_h else set()
-            mevcut_y = set(yeni_y.split(",")) if yeni_y else set()
-            basari = "Profil guncellendi!"
+            form_type = request.form.get("form_type", "saglik")
+            if form_type == "hesap":
+                yeni_email = (request.form.get("email") or "").strip()
+                yeni_tamad = (request.form.get("tam_ad") or "").strip()
+                yeni_lang  = (request.form.get("lang") or "tr").strip()
+                if yeni_lang not in ("tr","en"):
+                    yeni_lang = "tr"
+                if yeni_email and "@" not in yeni_email:
+                    hata = "Gecerli bir e-mail giriniz!"
+                else:
+                    c.execute("UPDATE kullanicilar SET email=%s, tam_ad=%s WHERE kullanici_adi=%s",
+                              (yeni_email or None, yeni_tamad or None, session["user"]))
+                    c.commit()
+                    session["lang"]   = yeni_lang
+                    session["tam_ad"] = yeni_tamad
+                    mevcut_email = yeni_email
+                    mevcut_tamad = yeni_tamad
+                    basari = "Hesap bilgileri guncellendi!"
+            elif form_type == "sifre":
+                eski = request.form.get("eski_sifre","")
+                yeni = request.form.get("yeni_sifre","")
+                yeni2 = request.form.get("yeni_sifre2","")
+                row2 = c.execute("SELECT sifre_hash FROM kullanicilar WHERE kullanici_adi=%s",
+                                 (session["user"],)).fetchone()
+                if not row2 or row2["sifre_hash"] != sh(eski):
+                    hata = "Mevcut sifre yanlis!"
+                elif len(yeni) < 8:
+                    hata = "Yeni sifre en az 8 karakter olmali!"
+                elif yeni != yeni2:
+                    hata = "Yeni sifreler eslesmiyor!"
+                else:
+                    c.execute("UPDATE kullanicilar SET sifre_hash=%s WHERE kullanici_adi=%s",
+                              (sh(yeni), session["user"]))
+                    c.commit()
+                    basari = "Sifre guncellendi!"
+            else:
+                yeni_h = ",".join(request.form.getlist("hastalik"))
+                yeni_y = ",".join(request.form.getlist("yeme"))
+                c.execute("UPDATE kullanicilar SET hastaliklar=%s, yeme_aliskanlik=%s WHERE kullanici_adi=%s",
+                          (yeni_h or None, yeni_y or None, session["user"]))
+                c.commit()
+                mevcut_h = set(yeni_h.split(",")) if yeni_h else set()
+                mevcut_y = set(yeni_y.split(",")) if yeni_y else set()
+                basari = "Saglik profili guncellendi!"
     except Exception as e:
         hata = str(e)
     finally:
         c.close()
+
+    mevcut_lang = session.get("lang", "tr")
 
     HASTALIK = [("colyak","Colyak"),("seker","Seker Hastaligi"),("hipertansiyon","Hipertansiyon"),
                 ("kolesterol","Yuksek Kolesterol"),("laktoz","Laktoz Intoleransi"),
@@ -1472,15 +1512,48 @@ def ayarlar():
         '.tag-pill input:checked + span{border-color:var(--g);color:#060606;background:var(--g)}'
         '</style>')
 
+    _opt_tr = ' selected' if mevcut_lang == "tr" else ''
+    _opt_en = ' selected' if mevcut_lang == "en" else ''
+
     content = f"""
 {acc_css}
 <div class="page-title">&#9881; Ayarlar</div>
 {yeni_banner}
 {'<div class="alert alert-green">'+basari+'</div>' if basari else ''}
 {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
+<div class="panel" style="max-width:600px;margin-bottom:18px">
+  <h2>Hesap Bilgileri</h2>
+  <form method="POST">
+    <input type="hidden" name="form_type" value="hesap">
+    <label>AD SOYAD</label>
+    <input name="tam_ad" value="{mevcut_tamad}" placeholder="Ad Soyad">
+    <label style="margin-top:10px">E-MAIL</label>
+    <input name="email" type="email" value="{mevcut_email}" placeholder="ornek@mail.com">
+    <label style="margin-top:10px">DIL / LANGUAGE</label>
+    <select name="lang" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;color:#f5f5f5;padding:11px 14px;font-family:inherit;font-size:.85rem;outline:none">
+      <option value="tr"{_opt_tr}>Turkce</option>
+      <option value="en"{_opt_en}>English</option>
+    </select>
+    <button type="submit" class="btn btn-green" style="width:100%;margin-top:16px;padding:12px">Kaydet</button>
+  </form>
+</div>
+<div class="panel" style="max-width:600px;margin-bottom:18px">
+  <h2>Sifre Degistir</h2>
+  <form method="POST">
+    <input type="hidden" name="form_type" value="sifre">
+    <label>MEVCUT SIFRE</label>
+    <input name="eski_sifre" type="password" autocomplete="current-password" required>
+    <label style="margin-top:10px">YENI SIFRE</label>
+    <input name="yeni_sifre" type="password" autocomplete="new-password" minlength="8" required>
+    <label style="margin-top:10px">YENI SIFRE (TEKRAR)</label>
+    <input name="yeni_sifre2" type="password" autocomplete="new-password" minlength="8" required>
+    <button type="submit" class="btn btn-green" style="width:100%;margin-top:16px;padding:12px">Sifreyi Degistir</button>
+  </form>
+</div>
 <div class="panel" style="max-width:600px">
   <h2>Saglik Profili</h2>
   <form method="POST">
+    <input type="hidden" name="form_type" value="saglik">
     {acc("hastalik","Hastalik / Alerji","hastalik",HASTALIK,mevcut_h)}
     <div style="margin-top:12px"></div>
     {acc("yeme","Yeme Aliskanligi","yeme",YEME,mevcut_y)}
@@ -1504,6 +1577,105 @@ function updateBadge(inp){{
 }}
 </script>"""
     return render(content, page="ayarlar", title="Ayarlar")
+
+
+@app.route("/oneri", methods=["GET","POST"])
+def oneri():
+    if not session.get("user"):
+        return redirect("/giris")
+    basari = ""
+    hata = ""
+    if request.method == "POST":
+        konu = (request.form.get("konu") or "").strip()
+        mesaj = (request.form.get("mesaj") or "").strip()
+        if not konu or not mesaj:
+            hata = "Konu ve mesaj zorunlu!"
+        elif len(mesaj) < 10:
+            hata = "Mesaj en az 10 karakter olmali!"
+        else:
+            import threading
+            tam_ad = session.get("tam_ad") or ""
+            from_user = session.get("user","")
+            threading.Thread(
+                target=_send_oneri_mail,
+                args=(from_user, tam_ad, konu, mesaj),
+                daemon=True
+            ).start()
+            basari = "Onerin alindi! Tesekkurler — degerlendirip senle iletisime gececegiz."
+
+    content = f"""
+<div class="page-title">Oneri Kutusu</div>
+{'<div class="alert alert-green">'+basari+'</div>' if basari else ''}
+{'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
+<div class="panel" style="max-width:680px">
+  <h2>Fikrini, sorunlarini ya da onerini bize ilet</h2>
+  <p style="color:#a3a3a3;margin-bottom:18px;font-size:.88rem;line-height:1.6">Eksik bir ozellik mi var? Bir bug mi yakalandi? Yeni bir fikrin mi var? NexStock'u senin gibi kullanicilarla birlikte gelistiriyoruz.</p>
+  <form method="POST">
+    <label>KONU</label>
+    <input name="konu" placeholder="Kisa baslik" maxlength="120" required>
+    <label style="margin-top:12px">MESAJ</label>
+    <textarea name="mesaj" placeholder="Detayli yaz... Ne goruyorsun, ne bekliyorsun?" rows="8" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;color:#f5f5f5;padding:12px 14px;font-family:inherit;font-size:.88rem;resize:vertical;outline:none;transition:border-color .25s" onfocus="this.style.borderColor='var(--g)'" onblur="this.style.borderColor='#1e1e1e'" required></textarea>
+    <button type="submit" class="btn btn-green" style="width:100%;margin-top:16px;padding:12px">Onerimi Gonder</button>
+  </form>
+</div>
+<div style="margin-top:24px;text-align:center;color:#525252;font-size:.76rem;font-family:JetBrains Mono,monospace;letter-spacing:1.5px">
+  Tum oneriler: <span style="color:#a3a3a3">nexstock@zohomail.eu</span>
+</div>"""
+    return render(content, page="oneri", title="Oneri Kutusu")
+
+
+@app.route("/sifremi-unuttum", methods=["GET","POST"])
+def sifremi_unuttum():
+    basari = ""
+    hata = ""
+    if request.method == "POST":
+        email_or_user = (request.form.get("k") or "").strip()
+        if not email_or_user:
+            hata = "Kullanici adi veya e-mail giriniz!"
+        else:
+            import secrets, string, threading
+            c = get_db()
+            try:
+                row = c.execute(
+                    "SELECT kullanici_adi, tam_ad, email FROM kullanicilar WHERE kullanici_adi=%s OR email=%s LIMIT 1",
+                    (email_or_user, email_or_user)
+                ).fetchone()
+                if row and (row.get("email")):
+                    abc = string.ascii_letters + string.digits + "!@#$%"
+                    yeni = "".join(secrets.choice(abc) for _ in range(10)) + "Aa1!"
+                    c.execute("UPDATE kullanicilar SET sifre_hash=%s WHERE kullanici_adi=%s",
+                              (sh(yeni), row["kullanici_adi"]))
+                    c.commit()
+                    threading.Thread(
+                        target=_send_sifre_reset_mail,
+                        args=(row["email"], row.get("tam_ad") or "", yeni),
+                        daemon=True
+                    ).start()
+                # Guvenlik: kullanici var mi yok mu bilgi sizdirilmaz
+                basari = "Eger kayitli bir e-mail ile eslesti ise, gecici sifre kisa sure icinde mail kutunuza gonderilecek."
+            except Exception as e:
+                hata = f"Hata: {str(e)}"
+            finally:
+                c.close()
+
+    content = f"""
+<div class="login-wrap">
+  <div class="panel">
+    <div class="login-logo">Nex<span style="color:var(--g)">Stock</span></div>
+    <div class="login-sub">Sifremi Unuttum</div>
+    {'<div class="alert alert-green">'+basari+'</div>' if basari else ''}
+    {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
+    <form method="POST">
+      <label>KULLANICI ADI VEYA E-MAIL</label>
+      <input name="k" placeholder="kullanici_adi veya mail@ornek.com" autofocus required>
+      <button type="submit" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px">Sifre Sifirlama Maili Gonder</button>
+    </form>
+    <div style="text-align:center;margin-top:20px">
+      <a href="/giris" style="color:#525252;font-size:.78rem;text-decoration:none;font-family:JetBrains Mono,monospace;letter-spacing:1px">&#x2190; Giris Yap</a>
+    </div>
+  </div>
+</div>"""
+    return render(content, page="sifremi-unuttum", title="Sifremi Unuttum")
 
 
 @app.route("/admin/rol-degistir", methods=["POST"])
@@ -1646,9 +1818,63 @@ def index():
             WHERE COALESCE(ps.toplam, 0) <= u.min_stok
             ORDER BY COALESCE(ps.toplam, 0) LIMIT 20
         """).fetchall()]
-        son_har = [dict(r) for r in c.execute("SELECT * FROM stok_hareketleri ORDER BY tarih DESC LIMIT 10").fetchall()]
+        _drol = session.get("rol", "")
+        _duser = session.get("user", "")
+        if _drol == "kullanici":
+            son_har = [dict(r) for r in c.execute(
+                "SELECT h.*, u.allerjenler FROM stok_hareketleri h LEFT JOIN urunler u ON h.barkod=u.barkod "
+                "WHERE h.kullanici=%s ORDER BY h.tarih DESC LIMIT 10", (_duser,)
+            ).fetchall()]
+        else:
+            son_har = [dict(r) for r in c.execute(
+                "SELECT h.*, u.allerjenler FROM stok_hareketleri h LEFT JOIN urunler u ON h.barkod=u.barkod "
+                "ORDER BY h.tarih DESC LIMIT 10"
+            ).fetchall()]
+
+        _user_hastalik = set()
+        _user_yeme = set()
+        if _drol == "kullanici":
+            try:
+                _urow = c.execute(
+                    "SELECT hastaliklar, yeme_aliskanlik FROM kullanicilar WHERE kullanici_adi=%s",
+                    (_duser,)
+                ).fetchone()
+                if _urow:
+                    if _urow.get("hastaliklar"):
+                        _user_hastalik = set(x.strip() for x in _urow["hastaliklar"].split(",") if x.strip())
+                    if _urow.get("yeme_aliskanlik"):
+                        _user_yeme = set(x.strip() for x in _urow["yeme_aliskanlik"].split(",") if x.strip())
+            except Exception:
+                pass
     finally:
         c.close()
+
+    _DH_HASTALIK = {
+        "colyak": ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum"],
+        "gluten": ["gluten","bugday","wheat","arpa","cavdar","rye","barley","triticum"],
+        "laktoz": ["sut","milk","laktoz","lactose","peynir","cheese","krema","cream","dairy","whey"],
+        "fruktoz": ["fruktoz","fructose","sorbitol","meyve sekeri"],
+        "hipertansiyon": ["sodyum","sodium","tuz","salt"],
+        "kolesterol": ["doymus yag","saturated","trans yag","trans fat"],
+    }
+    _DH_YEME = {
+        "vegan": ["et","tavuk","balik","sut","milk","yumurta","egg","peynir","tereyag","jelatin","gelatin","bal","honey"],
+        "vejetaryan": ["et","tavuk","balik","jelatin","gelatin"],
+        "glutensiz": ["gluten","bugday","wheat","arpa","yulaf","cavdar"],
+        "dusuk_seker": ["seker","sugar","glikoz","fruktoz","misir surubu","syrup"],
+        "dusuk_tuz": ["sodyum","sodium","tuz","salt"],
+    }
+    def _dh_match(allerjen_txt):
+        if not allerjen_txt or _drol != "kullanici":
+            return False
+        a = allerjen_txt.lower()
+        for h in _user_hastalik:
+            for kw in _DH_HASTALIK.get(h, []):
+                if kw in a: return True
+        for y in _user_yeme:
+            for kw in _DH_YEME.get(y, []):
+                if kw in a: return True
+        return False
 
     kfg = [
         ("toplam_urun",  "Toplam Urun",    "#ffffff"),
@@ -1695,7 +1921,12 @@ def index():
     har_rows = ""
     for h in son_har:
         cls = "green" if h["hareket_tipi"] == "Giris" else "red" if h["hareket_tipi"] in ["Cikis","Okutma"] else ""
-        har_rows += f'<tr><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td>{h["miktar"]}</td><td style="color:#a3a3a3">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
+        _warn = _dh_match(h.get("allerjenler"))
+        _row_style = ' style="background:rgba(224,82,82,.08);border-left:3px solid #e05252"' if _warn else ''
+        _badge = ' <span style="color:#e05252;font-size:.7rem;margin-left:6px" title="Saglik profilinize uygun degil">&#9888;</span>' if _warn else ''
+        har_rows += f'<tr{_row_style}><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}{_badge}</td><td>{h["miktar"]}</td><td style="color:#a3a3a3">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
+
+    _son_islem_baslik = "Son Islemlerim" if session.get("rol") == "kullanici" else "Son Islemler"
 
     content = f"""
 <div class="page-title">Dashboard</div>
@@ -1717,7 +1948,7 @@ def index():
   </div>
 </div>
 <div class="panel">
-  <h2>Son İşlemler</h2>
+  <h2>{_son_islem_baslik}</h2>
   <div class="tbl-wrap"><table>
     <tr><th>Tip</th><th>Ürün</th><th>Miktar</th><th>Tarih</th><th>Kullanıcı</th></tr>
     {har_rows or '<tr><td colspan=5 class="muted" style="text-align:center;padding:16px">İşlem yok</td></tr>'}
@@ -2974,20 +3205,83 @@ def urunler():
 @app.route("/hareketler")
 @yetkili_giris
 def hareketler():
+    _user_rol = session.get("rol", "misafir")
+    _user_name = session.get("user", "")
+
+    _user_hastalik = set()
+    _user_yeme = set()
+    if _user_rol in ("kullanici", "misafir"):
+        try:
+            c0 = get_db()
+            _row = c0.execute(
+                "SELECT hastaliklar, yeme_aliskanlik FROM kullanicilar WHERE kullanici_adi=%s",
+                (_user_name,)
+            ).fetchone()
+            c0.close()
+            if _row:
+                if _row.get("hastaliklar"):
+                    _user_hastalik = set(x.strip() for x in _row["hastaliklar"].split(",") if x.strip())
+                if _row.get("yeme_aliskanlik"):
+                    _user_yeme = set(x.strip() for x in _row["yeme_aliskanlik"].split(",") if x.strip())
+        except Exception:
+            pass
+
+    HASTALIK_ALLERJEN = {
+        "colyak": ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum"],
+        "gluten": ["gluten","bugday","wheat","arpa","cavdar","rye","barley","triticum"],
+        "laktoz": ["sut","milk","laktoz","lactose","peynir","cheese","krema","cream","dairy","whey"],
+        "fruktoz": ["fruktoz","fructose","sorbitol","meyve sekeri"],
+        "hipertansiyon": ["sodyum","sodium","tuz","salt"],
+        "kolesterol": ["doymus yag","saturated","trans yag","trans fat"],
+    }
+    YEME_KEYWORDS = {
+        "vegan": ["et","tavuk","balik","sut","milk","yumurta","egg","peynir","tereyag","jelatin","gelatin","bal","honey"],
+        "vejetaryan": ["et","tavuk","balik","jelatin","gelatin"],
+        "glutensiz": ["gluten","bugday","wheat","arpa","yulaf","cavdar"],
+        "dusuk_seker": ["seker","sugar","glikoz","fruktoz","misir surubu","syrup"],
+        "dusuk_tuz": ["sodyum","sodium","tuz","salt"],
+    }
+
+    def _allerjen_match(allerjen_txt):
+        if not allerjen_txt:
+            return False
+        a = allerjen_txt.lower()
+        for h in _user_hastalik:
+            for kw in HASTALIK_ALLERJEN.get(h, []):
+                if kw in a:
+                    return True
+        for y in _user_yeme:
+            for kw in YEME_KEYWORDS.get(y, []):
+                if kw in a:
+                    return True
+        return False
+
     c = get_db()
     try:
-        liste = [dict(r) for r in c.execute(
-            "SELECT * FROM stok_hareketleri ORDER BY tarih DESC LIMIT 200").fetchall()]
+        if _user_rol in ("kullanici", "misafir"):
+            liste = [dict(r) for r in c.execute(
+                "SELECT h.*, u.allerjenler FROM stok_hareketleri h LEFT JOIN urunler u ON h.barkod=u.barkod "
+                "WHERE h.kullanici=%s ORDER BY h.tarih DESC LIMIT 200", (_user_name,)
+            ).fetchall()]
+        else:
+            liste = [dict(r) for r in c.execute(
+                "SELECT h.*, u.allerjenler FROM stok_hareketleri h LEFT JOIN urunler u ON h.barkod=u.barkod "
+                "ORDER BY h.tarih DESC LIMIT 200"
+            ).fetchall()]
     finally:
         c.close()
 
     rows = ""
     for h in liste:
         cls = "green" if h["hareket_tipi"] == "Giris" else "red" if h["hareket_tipi"] in ["Cikis","Okutma"] else ""
-        rows += f'<tr><td style="color:#525252">{h["hareket_id"]}</td><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}</td><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{h.get("barkod","—")}</td><td style="font-weight:700">{h["miktar"]}</td><td style="color:#a3a3a3">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
+        warn = _allerjen_match(h.get("allerjenler")) if _user_rol in ("kullanici","misafir") else False
+        row_style = ' style="background:rgba(224,82,82,.08);border-left:3px solid #e05252"' if warn else ''
+        warn_badge = ' <span style="color:#e05252;font-size:.7rem;margin-left:6px" title="Saglik profilinize uygun degil">&#9888;</span>' if warn else ''
+        rows += f'<tr{row_style}><td style="color:#525252">{h["hareket_id"]}</td><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}{warn_badge}</td><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{h.get("barkod","—")}</td><td style="font-weight:700">{h["miktar"]}</td><td style="color:#a3a3a3">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
 
+    title_suffix = " (Sadece sizin)" if _user_rol in ("kullanici","misafir") else ""
     content = f"""
-<div class="page-title">Hareket Gecmisi</div>
+<div class="page-title">Hareket Gecmisi{title_suffix}</div>
 <div class="tbl-wrap"><table>
   <tr><th>#</th><th>Tip</th><th>Urun</th><th>Barkod</th><th>Miktar</th><th>Tarih</th><th>Kullanici</th></tr>
   {rows or '<tr><td colspan=7 class="muted" style="text-align:center;padding:20px">Hareket yok</td></tr>'}
@@ -3200,22 +3494,36 @@ def api_chat():
 
     urun_listesi = "\n".join(urun_bilgi) if urun_bilgi else "Henüz urun eklenmemis."
 
-    system_prompt = f"""Sen NexStock sisteminin besin ve alerjen asistanısın.
-Kullanıcıların sağlık durumlarına göre hangi ürünleri yiyip yiyemeyeceklerini söylüyorsun.
+    system_prompt = f"""Sen NexStock'un besin & katki maddesi uzmanisin. Hedef kitlen sokaktaki normal insan — teknik terim kullanmadan, kafa karistirmadan, "abi sunu yeme cunku..." tarzinda konus.
 
-Sistemdeki ürünler ve alerjen bilgileri:
+Sistemdeki urunler ve etiket bilgileri:
 {urun_listesi}
 
-Davranış kuralları:
-- Kısa, net ve pratik yanıtlar ver
-- Türkçe yaz
-- Çölyak/gluten intoleransı: gluten, buğday, arpa, çavdar içeren ürünleri say
-- Laktoz intoleransı: süt, peynir, yoğurt içeren ürünleri say
-- Fıstık alerjisi: yer fıstığı ve eser miktarlarını say
-- Kullanıcı bir ürün sorarsa direkt DB'deki bilgiyi kullan
-- DB'de alerjen bilgisi olmayan ürünler için "bu ürünün alerjen bilgisi sisteme eklenmemiş" de
-- Asla tıbbi tavsiye verme, doktora yönlendir
-- Emoji kullanabilirsin"""
+Bilgi tabani — koruyucular & katki maddeleri:
+- E102 (Tartrazin): Sari boya. Cocuklarda hiperaktivite yapar, astim krizini tetikler. Avrupa'da uyari etiketi zorunlu.
+- E110 (Sunset Yellow): Turuncu boya. Cocuklarda dikkat sorununa baglandi, alerjik tepkilere yol acar.
+- E124 (Ponceau 4R), E129 (Allura Red): Kirmizi boyalar. Cocuklarda davranis bozukluklari, alerji riski.
+- E211 (Sodyum Benzoat): Koruyucu. C vitamini ile birlestiginde benzen denen kanserojen olusturur. Astim tetikler.
+- E220-228 (Sulfitler/Kukurt dioksit): Sarap, kuru meyvelerde. Astimi olanlarda nefes daralmasi.
+- E249-252 (Nitritler/Nitratlar): Sucuk, salam, sosis. Midede kanserojen N-nitrozaminlere donusur — bagirsak kanseri riski. DSO islenmis eti karsinojen ilan etti.
+- E320 (BHA), E321 (BHT): Cipslerde, sakizda. Hayvan calismasinda kanserle iliskilendirildi, hormon bozucu suphesi.
+- E407 (Karragenan): Sutlu urunlerde koyulastirici. Bagirsak iltihabi tetikleyebilir.
+- E621 (MSG/Monosodyum glutamat): Hazir corbalar, cipsler. Hassas kisilerde bas agrisi, carpinti — "Cin restorani sendromu".
+- E951 (Aspartam): Diyet icecekler, sakiz. DSO 2023'te "muhtemel kanserojen" sinifina aldi. Bas agrisi yapar.
+- E952 (Siklamat), E954 (Sakarin): Yapay tatlandiricilar. Bazi ulkelerde yasakli, mesane riski.
+- Trans yag / Kismen hidrojenize bitkisel yag: Margarinler, hazir kurabiye. KALP DAMAR HASTALIGINA direkt sebep — DSO yasak istiyor.
+- Yuksek fruktozlu misir surubu: Karaciger yagliligi, insulin direnci, obezite.
+- Palmiye yagi: Doymus yag yuksek, kolesterol artirir.
+
+Davranis kurallari:
+- Mala anlatir gibi konus. "Sodyum benzoat" deme; "E211 denen koruyucu — sucuktaki o ekserit" gibi anlat.
+- Yan etkileri saklamadan, ABARTMADAN soyle. Kanser riski varsa "kanser riski var" de — "saglik etkisi olabilir" deme.
+- Cevap KISA olsun: 2-4 cumle yeterli. Liste hali kullan.
+- Hangi hastaliga yol acar, hangi yas grubuna zarar verir, ne kadar guvenli — somut yaz.
+- Bilmedigin koruyucu icin "bu maddeyi taniyamadim, etiketten arastir" de — uydurma.
+- Tibbi tavsiyede dogru bilgi ver ama "ciddi tibbi sorun icin doktora git" diye kapat.
+- Emoji KULLANMA. Sade metin yaz.
+- Kullanici "x koruyucusu zararli mi?" diye sordugunda direkt "evet/hayir, suna sebep oluyor" de — yuvarlama."""
 
     groq_messages = [{"role": "system", "content": system_prompt}] + messages[-10:]  # son 10 mesaj
 
@@ -3399,6 +3707,82 @@ def _send_tesekkur_mail(to_email, tam_ad, urun_adi):
             s.sendmail(user, to_email, msg.as_string())
     except Exception:
         pass  # Mail gönderilemese de ürün ekleme işlemi engellenmez
+
+
+def _send_oneri_mail(from_user, tam_ad, konu, mesaj):
+    """Kullanıcı önerisini NexStock e-mail kutusuna yollar."""
+    import smtplib, os
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    host = os.environ.get("SMTP_HOST","smtp.gmail.com")
+    port = int(os.environ.get("SMTP_PORT","587"))
+    user = os.environ.get("SMTP_USER","")
+    pw   = os.environ.get("SMTP_PASS","")
+    to   = os.environ.get("ONERI_MAIL", user)
+    if not user or not pw or not to:
+        return False
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"[NexStock Oneri] {konu[:60]}"
+    msg["From"]    = f"NexStock Oneri <{user}>"
+    msg["To"]      = to
+    safe_mesaj = (mesaj or "").replace("<","&lt;").replace(">","&gt;").replace("\n","<br>")
+    html = f"""
+    <div style="font-family:Arial,sans-serif;background:#060606;color:#f5f5f5;padding:32px;max-width:560px;margin:0 auto">
+      <div style="font-size:1.4rem;font-weight:900;letter-spacing:3px;margin-bottom:8px">Yeni Oneri</div>
+      <div style="height:1px;background:#222;margin-bottom:20px"></div>
+      <div style="color:#a3a3a3;font-size:.8rem;margin-bottom:6px">KIMDEN</div>
+      <div style="color:#f5f5f5;margin-bottom:14px">{tam_ad or from_user} <span style="color:#525252">({from_user})</span></div>
+      <div style="color:#a3a3a3;font-size:.8rem;margin-bottom:6px">KONU</div>
+      <div style="color:#f5f5f5;margin-bottom:14px;font-weight:600">{konu}</div>
+      <div style="color:#a3a3a3;font-size:.8rem;margin-bottom:6px">MESAJ</div>
+      <div style="background:#111;padding:16px;border-left:2px solid #fff;color:#d4d4d4;line-height:1.6">{safe_mesaj}</div>
+      <p style="color:#525252;font-size:.72rem;margin-top:28px">NexStock Geri Bildirim Sistemi</p>
+    </div>"""
+    msg.attach(MIMEText(html, "html"))
+    try:
+        with smtplib.SMTP(host, port, timeout=10) as s:
+            s.starttls()
+            s.login(user, pw)
+            s.sendmail(user, [to], msg.as_string())
+        return True
+    except Exception:
+        return False
+
+
+def _send_sifre_reset_mail(to_email, tam_ad, yeni_sifre):
+    """Sifre sifirlama maili."""
+    import smtplib, os
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    host = os.environ.get("SMTP_HOST","smtp.gmail.com")
+    port = int(os.environ.get("SMTP_PORT","587"))
+    user = os.environ.get("SMTP_USER","")
+    pw   = os.environ.get("SMTP_PASS","")
+    if not user or not pw or not to_email:
+        return False
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "NexStock — Sifre Sifirlama"
+    msg["From"]    = f"NexStock <{user}>"
+    msg["To"]      = to_email
+    html = f"""
+    <div style="font-family:Arial,sans-serif;background:#060606;color:#f5f5f5;padding:32px;max-width:520px;margin:0 auto">
+      <div style="font-size:1.6rem;font-weight:900;letter-spacing:4px;margin-bottom:8px">Nex<span style="color:#fff">Stock</span></div>
+      <div style="height:1px;background:#222;margin-bottom:24px"></div>
+      <p style="color:#d4d4d4">Merhaba <strong>{tam_ad or to_email}</strong>,</p>
+      <p style="color:#d4d4d4;line-height:1.7">Sifrenizi sifirlama talebinde bulundunuz. Gecici sifreniz asagidadir. Lutfen giris yaptiktan sonra ayarlar sayfasindan degistirin.</p>
+      <div style="margin-top:24px;padding:18px;background:#111;border-left:2px solid #fff;font-family:'Courier New',monospace;font-size:1.2rem;color:#fff;letter-spacing:3px;text-align:center">{yeni_sifre}</div>
+      <p style="color:#525252;font-size:.78rem;margin-top:24px">Eger bu talebi siz yapmadiysaniz lutfen bu maili gormezden gelin ve sifrenizi yine de degistirmeyi dusunun.</p>
+      <p style="color:#525252;font-size:.78rem;margin-top:16px">NexStock Ekibi</p>
+    </div>"""
+    msg.attach(MIMEText(html, "html"))
+    try:
+        with smtplib.SMTP(host, port, timeout=10) as s:
+            s.starttls()
+            s.login(user, pw)
+            s.sendmail(user, to_email, msg.as_string())
+        return True
+    except Exception:
+        return False
 
 
 @app.route("/api/urun-ai-ekle", methods=["POST"])
