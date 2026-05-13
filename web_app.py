@@ -387,7 +387,7 @@ BASE = r"""<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --g:#10b981;--g2:#34d399;--bg:#060606;--panel:#0e0e0e;
+  --g:#ffffff;--g2:#e5e5e5;--bg:#060606;--panel:#0e0e0e;
   --card:#111111;--border:#1e1e1e;--text:#f5f5f5;--sub:#d4d4d4;--muted:#525252;
   --accent:#a5d8ff;--red:#e05252;--yellow:#f0b429;--orange:#fb923c;--purple:#a78bfa;
 }
@@ -961,7 +961,7 @@ document.querySelectorAll('.stat-card .val').forEach(function(el){
 <!-- ═══════════════ CHATBOT WIDGET ═══════════════ -->
 {% if session.get('rol') in ['kullanici', 'admin'] %}
 <style>
-#cb-btn{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--g);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.4rem;box-shadow:0 4px 24px rgba(16,185,129,.4);z-index:9000;transition:transform .2s}
+#cb-btn{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--g);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.4rem;box-shadow:0 4px 24px rgba(255,255,255,.12);z-index:9000;transition:transform .2s}
 #cb-btn:hover{transform:scale(1.1)}
 #cb-panel{position:fixed;bottom:88px;right:24px;width:340px;max-width:calc(100vw - 32px);height:480px;max-height:calc(100vh - 120px);background:#0d0d0d;border:1px solid #1e1e1e;display:flex;flex-direction:column;z-index:9000;box-shadow:0 8px 40px rgba(0,0,0,.6);display:none}
 #cb-header{padding:14px 16px;border-bottom:1px solid #1a1a1a;font-family:JetBrains Mono,monospace;font-size:.65rem;letter-spacing:2px;color:var(--g);text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
@@ -969,7 +969,7 @@ document.querySelectorAll('.stat-card .val').forEach(function(el){
 #cb-messages::-webkit-scrollbar{width:3px}
 #cb-messages::-webkit-scrollbar-thumb{background:#1e1e1e}
 .cb-msg{max-width:88%;padding:9px 13px;font-size:.82rem;line-height:1.5;border-radius:2px}
-.cb-msg.user{align-self:flex-end;background:#10b98122;color:#f5f5f5;border:1px solid #10b98133}
+.cb-msg.user{align-self:flex-end;background:rgba(255,255,255,.06);color:#f5f5f5;border:1px solid rgba(255,255,255,.1)}
 .cb-msg.bot{align-self:flex-start;background:#111;color:#d4d4d4;border:1px solid #1e1e1e}
 .cb-msg.bot.loading{color:#525252;font-style:italic}
 #cb-input-row{padding:10px;border-top:1px solid #1a1a1a;display:flex;gap:6px;flex-shrink:0}
@@ -1202,7 +1202,7 @@ def kayit():
         'display:flex;align-items:center;justify-content:space-between;'
         'transition:border-color .25s,background .25s}'
         '.acc-trigger:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.05)}'
-        '.acc-trigger.open{border-color:var(--g);background:rgba(16,185,129,.06)}'
+        '.acc-trigger.open{border-color:var(--g);background:rgba(255,255,255,.04)}'
         '.acc-arrow{font-size:1.1rem;transition:transform .3s cubic-bezier(.16,1,.3,1);color:var(--muted);line-height:1}'
         '.acc-trigger.open .acc-arrow{transform:rotate(90deg);color:var(--g)}'
         '.acc-badge{margin-left:8px;margin-right:auto;font-size:.62rem;background:var(--g);color:#060606;'
@@ -1246,7 +1246,7 @@ def kayit():
 <style>
 .step-bar{{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:32px}}
 .step-dot{{width:28px;height:28px;border-radius:50%;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:.65rem;font-weight:600;color:#525252;background:var(--card);transition:all .3s cubic-bezier(.16,1,.3,1);position:relative;z-index:1}}
-.step-dot.active{{border-color:var(--g);color:var(--g);box-shadow:0 0 0 3px rgba(16,185,129,.15)}}
+.step-dot.active{{border-color:var(--g);color:var(--g);box-shadow:0 0 0 3px rgba(255,255,255,.08)}}
 .step-dot.done{{background:var(--g);border-color:var(--g);color:#060606}}
 .step-line{{flex:1;max-width:40px;height:1px;background:#1e1e1e;transition:background .3s}}
 .step-line.done{{background:var(--g)}}
@@ -1340,12 +1340,12 @@ def kayit():
       for(var id in rules){{
         var ok=rules[id];score+=ok?1:0;
         var el=document.getElementById(id);
-        el.style.color=ok?'#10b981':'#525252';
+        el.style.color=ok?'#ffffff':'#525252';
         el.textContent=(ok?'✓':'✗')+' '+el.textContent.slice(2);
       }}
       var fill=document.getElementById('pw-fill');
       fill.style.width=(score*20)+'%';
-      fill.style.background=score<=2?'#e05252':score<=3?'#f0b429':score==4?'#3b82f6':'#10b981';
+      fill.style.background=score<=2?'#e05252':score<=3?'#f0b429':score==4?'#a5d8ff':'#ffffff';
       pwValid=Object.values(rules).every(Boolean);
       var nb=document.getElementById('step2-next');
       nb.disabled=!pwValid;nb.style.opacity=pwValid?'1':'.4';nb.style.cursor=pwValid?'pointer':'not-allowed';
@@ -1427,7 +1427,7 @@ def ayarlar():
         "color:#f5f5f5;padding:11px 14px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:.72rem;"
         'letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;transition:border-color .25s,background .25s}'
         '.acc-trigger:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.05)}'
-        '.acc-trigger.open{border-color:var(--g);background:rgba(16,185,129,.06)}'
+        '.acc-trigger.open{border-color:var(--g);background:rgba(255,255,255,.04)}'
         '.acc-arrow{font-size:1.1rem;transition:transform .3s cubic-bezier(.16,1,.3,1);color:var(--muted);line-height:1}'
         '.acc-badge{margin-left:8px;margin-right:auto;font-size:.62rem;background:var(--g);color:#060606;'
         'padding:1px 7px;font-weight:700;letter-spacing:.5px;display:none}'
@@ -1623,7 +1623,7 @@ def index():
 
     kfg = [
         ("toplam_urun",  "Toplam Urun",    "#ffffff"),
-        ("toplam_stok",  "Toplam Stok",    "#34d399"),
+        ("toplam_stok",  "Toplam Stok",    "#ffffff"),
         ("tarihi_gecmis","Tarihi Gecmis",  "#e05252"),
         ("yaklasan",     "Yaklasan SKT",   "#f0b429"),
         ("kritik",       "Kritik Stok",    "#fb923c"),
@@ -1643,7 +1643,7 @@ def index():
         )
     kartlar = (
         _kart("toplam_urun",  "Toplam Ürün",    "#f5f5f5")
-        + _kart("toplam_stok",  "Toplam Stok",    "#34d399")
+        + _kart("toplam_stok",  "Toplam Stok",    "#ffffff")
         + _kart("tarihi_gecmis","Tarihi Geçmiş",  "#e05252", alert=True)
         + _kart("yaklasan",     "Yaklaşan SKT",   "#f0b429", alert=True)
         + _kart("kritik",       "Kritik Stok",    "#fb923c", alert=True)
@@ -2964,7 +2964,7 @@ def kullanicilar():
     finally:
         c.close()
 
-    RC = {"admin":"#ffffff","mudur":"#34d399","kasiyer":"#86efac","kullanici":"#a5d8ff","misafir":"#737373"}
+    RC = {"admin":"#ffffff","mudur":"#d4d4d4","kasiyer":"#a3a3a3","kullanici":"#a5d8ff","misafir":"#525252"}
     # Admin her rolü atayabilir; mudur sadece kullanici/kasiyer atayabilir
     if caller_rol == "admin":
         atanabilir = ["kullanici","kasiyer","mudur","admin"]
@@ -3410,7 +3410,7 @@ def ai_okuyucu():
 </div>
 
 <style>
-.step-tab.active{color:var(--g)!important;background:rgba(16,185,129,.06)}
+.step-tab.active{color:var(--g)!important;background:rgba(255,255,255,.04)}
 </style>
 <script>
 var _state = {barkod:'', nutrition:{}, icindekiler:'', allerjenler:'', katki_maddeleri:''};
