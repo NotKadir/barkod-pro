@@ -77,6 +77,67 @@ TRANSLATIONS = {
         # Mesajlar
         "msg.guncellendi": "Guncellendi!", "msg.eklendi": "Eklendi!",
         "msg.silindi": "Silindi!", "msg.basarili": "Basarili!",
+        # Login/Kayit
+        "giris.kullanici_adi_ph": "kullanici_adi",
+        "giris.veya": "VEYA",
+        "giris.hesap_olustur": "Hesap Olustur",
+        "kayit.ad_soyad_ph": "Adiniz Soyadiniz",
+        "kayit.adim1": "Rol & Kimlik",
+        "kayit.sifre_olustur": "Sifre Olustur",
+        "kayit.saglik_profili_kucuk": "Saglik Profili",
+        "kayit.istege_bagli": "(istege bagli)",
+        "kayit.devam": "Devam",
+        "kayit.geri": "Geri",
+        "kayit.zorunlu": "Tum alanlar zorunlu!",
+        # Tarama
+        "tarama.barkod_ph": "Barkod numarasi...",
+        "tarama.okut": "OKUT",
+        "tarama.sekil_okuma": "Sekil Okuma",
+        "tarama.sayi_okuma": "Sayi Okuma",
+        "tarama.toplam_stok": "Toplam Stok",
+        "tarama.parti": "Parti",
+        "tarama.partiler": "Partiler",
+        "tarama.yeni_parti": "+ Yeni Parti Ekle",
+        "tarama.stok_cikis": "- Stok Cikisi",
+        "tarama.son_kullanim": "Son Tuketim Tarihi",
+        "tarama.miktar": "Miktar (Adet)",
+        "tarama.son_taranan": "Son Taranan",
+        # Tablo basliklari (genel)
+        "tbl.barkod": "Barkod", "tbl.urun_adi": "Urun Adi", "tbl.kategori": "Kategori",
+        "tbl.skt": "SKT", "tbl.durum": "Durum", "tbl.stok": "Stok",
+        "tbl.fiyat": "Fiyat", "tbl.miktar": "Miktar", "tbl.tarih": "Tarih",
+        "tbl.tip": "Tip", "tbl.urun": "Urun", "tbl.min": "Min",
+        "tbl.kullanici": "Kullanici", "tbl.rol": "Rol", "tbl.aksiyon": "Aksiyon",
+        "tbl.uyari_yok": "Uyari yok",
+        "tbl.kritik_stok_yok": "Kritik stok yok",
+        "tbl.islem_yok": "Islem yok",
+        "tbl.urun_bulunamadi": "Urun bulunamadi",
+        # AI Okuyucu
+        "ai.adim1": "BARKOD", "ai.adim2": "BESIN",
+        "ai.adim3": "ICINDEKILER", "ai.adim4": "KAYDET",
+        "ai.barkod_ph": "Barkod numarasini girin...",
+        "ai.barkod_fotograf": "Barkodu Fotograflayin (opsiyonel)",
+        "ai.devam_et": "DEVAM ET",
+        "ai.besin_tablosu_fotografla": "Besin Tablosunu Fotografla",
+        "ai.icindekiler_fotografla": "Icindekileri Fotografla",
+        "ai.veritabanina_ekle": "VERITABANINA EKLE",
+        "ai.kaydediliyor": "Kaydediliyor",
+        # Şifremi unuttum
+        "sifremi.aciklama": "Kullanici adin veya kayitli e-mail adresini gir",
+        "sifremi.gonder": "Sifre Sifirlama Maili Gonder",
+        "sifremi.geri": "Giris Yap",
+        # Onay bekleyenler
+        "onay.title": "Onay Bekleyenler",
+        "onay.aciklama": "AI dogrulamasi guvenilir bulmadigi urunler burada. AI'in onerisini gor, manuel onaylayabilir ya da silebilirsin.",
+        "onay.bos": "Onay bekleyen urun yok",
+        "onay.onayla": "ONAYLA", "onay.sil": "SIL",
+        "onay.dis_kaynaklar": "Dis Kaynaklar", "onay.ai_karari": "AI Karari",
+        "onay.skor": "Skor", "onay.ekleyen": "Ekleyen",
+        # Rozet
+        "badge.dogrulaniyor": "DOGRULANIYOR",
+        "badge.dogrulaniyor_title": "Bu urun AI dogrulamasi bekliyor - admin onayina tabidir",
+        # Profil pop-up
+        "yeni_hosgeldin": "Hosgeldin! Google hesabinla giris yaptin. Saglik profilini ayarlayabilirsin.",
     },
     "en": {
         "nav.tarama": "Scan", "nav.dashboard": "Dashboard", "nav.urunler": "Products",
@@ -114,6 +175,59 @@ TRANSLATIONS = {
         "oneri.gonder": "Send Feedback",
         "msg.guncellendi": "Updated!", "msg.eklendi": "Added!",
         "msg.silindi": "Deleted!", "msg.basarili": "Success!",
+        "giris.kullanici_adi_ph": "username",
+        "giris.veya": "OR",
+        "giris.hesap_olustur": "Create Account",
+        "kayit.ad_soyad_ph": "Your Full Name",
+        "kayit.adim1": "Role & Identity",
+        "kayit.sifre_olustur": "Create Password",
+        "kayit.saglik_profili_kucuk": "Health Profile",
+        "kayit.istege_bagli": "(optional)",
+        "kayit.devam": "Continue",
+        "kayit.geri": "Back",
+        "kayit.zorunlu": "All fields are required!",
+        "tarama.barkod_ph": "Barcode number...",
+        "tarama.okut": "SCAN",
+        "tarama.sekil_okuma": "Shape Recognition",
+        "tarama.sayi_okuma": "Number Recognition",
+        "tarama.toplam_stok": "Total Stock",
+        "tarama.parti": "Batch",
+        "tarama.partiler": "Batches",
+        "tarama.yeni_parti": "+ Add New Batch",
+        "tarama.stok_cikis": "- Stock Out",
+        "tarama.son_kullanim": "Expiration Date",
+        "tarama.miktar": "Quantity (Units)",
+        "tarama.son_taranan": "Recently Scanned",
+        "tbl.barkod": "Barcode", "tbl.urun_adi": "Product Name", "tbl.kategori": "Category",
+        "tbl.skt": "Exp.", "tbl.durum": "Status", "tbl.stok": "Stock",
+        "tbl.fiyat": "Price", "tbl.miktar": "Quantity", "tbl.tarih": "Date",
+        "tbl.tip": "Type", "tbl.urun": "Product", "tbl.min": "Min",
+        "tbl.kullanici": "User", "tbl.rol": "Role", "tbl.aksiyon": "Action",
+        "tbl.uyari_yok": "No warnings",
+        "tbl.kritik_stok_yok": "No critical stock",
+        "tbl.islem_yok": "No activity",
+        "tbl.urun_bulunamadi": "No products found",
+        "ai.adim1": "BARCODE", "ai.adim2": "NUTRITION",
+        "ai.adim3": "INGREDIENTS", "ai.adim4": "SAVE",
+        "ai.barkod_ph": "Enter barcode number...",
+        "ai.barkod_fotograf": "Photograph Barcode (optional)",
+        "ai.devam_et": "CONTINUE",
+        "ai.besin_tablosu_fotografla": "Photograph Nutrition Table",
+        "ai.icindekiler_fotografla": "Photograph Ingredients",
+        "ai.veritabanina_ekle": "ADD TO DATABASE",
+        "ai.kaydediliyor": "Saving",
+        "sifremi.aciklama": "Enter your username or registered email",
+        "sifremi.gonder": "Send Password Reset Email",
+        "sifremi.geri": "Sign In",
+        "onay.title": "Pending Approvals",
+        "onay.aciklama": "Products that AI verification did not find reliable. Review the AI suggestion, then manually approve or delete.",
+        "onay.bos": "No products pending approval",
+        "onay.onayla": "APPROVE", "onay.sil": "DELETE",
+        "onay.dis_kaynaklar": "External Sources", "onay.ai_karari": "AI Decision",
+        "onay.skor": "Score", "onay.ekleyen": "Added by",
+        "badge.dogrulaniyor": "VERIFYING",
+        "badge.dogrulaniyor_title": "This product is awaiting AI verification - subject to admin approval",
+        "yeni_hosgeldin": "Welcome! You signed in with Google. You can configure your health profile.",
     }
 }
 
@@ -1175,24 +1289,24 @@ def giris():
 <div class="login-wrap">
   <div class="panel">
     <div class="login-logo">Nex<span style="color:var(--g)">Stock</span></div>
-    <div class="login-sub">Envanter Yonetim Sistemi</div>
+    <div class="login-sub">{t("title.giris")}</div>
     {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
     <form method="POST">
-      <label>KULLANICI ADI</label>
-      <input name="k" placeholder="kullanici_adi" autofocus autocomplete="username">
-      <label>SIFRE</label>
+      <label>{t("label.kullanici_adi")}</label>
+      <input name="k" placeholder="{t('giris.kullanici_adi_ph')}" autofocus autocomplete="username">
+      <label>{t("label.sifre")}</label>
       <input name="s" type="password" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" autocomplete="current-password">
-      <button type="submit" class="btn btn-green" style="width:100%;margin-top:4px;padding:12px">GIRIS YAP</button>
+      <button type="submit" class="btn btn-green" style="width:100%;margin-top:4px;padding:12px">{t("btn.giris_yap").upper()}</button>
     </form>
     <div style="text-align:center;margin-top:16px">
     <div style="margin:16px 0;display:flex;align-items:center;gap:12px">
       <div style="flex:1;height:1px;background:#1a1a1a"></div>
-      <span style="color:#525252;font-size:.75rem;font-family:JetBrains Mono,monospace">VEYA</span>
+      <span style="color:#525252;font-size:.75rem;font-family:JetBrains Mono,monospace">{t("giris.veya")}</span>
       <div style="flex:1;height:1px;background:#1a1a1a"></div>
     </div>
     <button type="button" onclick="googleGiris()" style="width:100%;background:#fff;color:#000;border:none;padding:11px;font-family:inherit;font-size:.85rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;letter-spacing:.5px">
       <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-      Google ile Giris Yap
+      {t("btn.google_giris")}
     </button>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
@@ -1225,8 +1339,8 @@ def giris():
     }}
     </script>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:4px">
-      <a href="/sifremi-unuttum" style="color:#525252;font-size:.78rem;text-decoration:none;font-family:JetBrains Mono,monospace;letter-spacing:.5px">Sifremi Unuttum</a>
-      <a href="/kayit" style="color:var(--g);font-size:.82rem;text-decoration:none;font-family:JetBrains Mono,monospace">Hesap Olustur</a>
+      <a href="/sifremi-unuttum" style="color:#525252;font-size:.78rem;text-decoration:none;font-family:JetBrains Mono,monospace;letter-spacing:.5px">{t("btn.sifremi_unuttum")}</a>
+      <a href="/kayit" style="color:var(--g);font-size:.82rem;text-decoration:none;font-family:JetBrains Mono,monospace">{t("btn.hesap_olustur")}</a>
     </div>
     </div>
   </div>
@@ -1359,7 +1473,7 @@ def kayit():
 <div class="login-wrap" style="max-width:440px">
   <div class="panel" style="padding:36px">
     <div class="login-logo">Nex<span style="color:var(--g)">Stock</span></div>
-    <div class="login-sub" style="margin-bottom:28px">Hesap Oluştur</div>
+    <div class="login-sub" style="margin-bottom:28px">{t("title.kayit")}</div>
     {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
     {'<div class="alert alert-green">'+basari+'</div>' if basari else ''}
     <div class="step-bar">
@@ -1371,16 +1485,16 @@ def kayit():
     </div>
     <form method="POST" id="kayit-form" onsubmit="return checkPw()">
       <div id="step-1" class="step-panel">
-        <div class="step-label">Kimlik</div>
-        <label>İSİM SOYAD</label>
-        <input name="isim" id="isim-input" placeholder="Adınız Soyadınız" autocomplete="name">
-        <label>KULLANICI ADI</label>
+        <div class="step-label">{t("kayit.adim1")}</div>
+        <label>{t("label.ad_soyad").upper()}</label>
+        <input name="isim" id="isim-input" placeholder="{t('kayit.ad_soyad_ph')}" autocomplete="name">
+        <label>{t("label.kullanici_adi").upper()}</label>
         <input name="k" id="k-input" placeholder="kullanici_adi" autocomplete="username">
-        <button type="button" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px" onclick="goStep2()">Devam &#x2192;</button>
+        <button type="button" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px" onclick="goStep2()">{t("kayit.devam")} &#x2192;</button>
       </div>
       <div id="step-2" class="step-panel" style="display:none">
-        <div class="step-label">Şifre Oluştur</div>
-        <label>ŞİFRE</label>
+        <div class="step-label">{t("kayit.sifre_olustur")}</div>
+        <label>{t("label.sifre").upper()}</label>
         <input name="s" id="pw-input" type="password" placeholder="••••••••" autocomplete="new-password" oninput="updateStrength(this.value)">
         <div style="height:3px;background:#1a1a1a;margin:6px 0 4px;overflow:hidden">
           <div id="pw-fill" style="height:100%;width:0%;transition:width .3s,background .3s"></div>
@@ -1394,15 +1508,15 @@ def kayit():
         </ul>
         <div style="display:flex;gap:8px;margin-top:4px">
           <button type="button" class="btn btn-muted" style="padding:12px 16px" onclick="goStep(1)">&#x2190;</button>
-          <button type="button" id="step2-next" class="btn btn-green" style="flex:1;padding:12px;opacity:.4;cursor:not-allowed" disabled onclick="goStep3()">Devam &#x2192;</button>
+          <button type="button" id="step2-next" class="btn btn-green" style="flex:1;padding:12px;opacity:.4;cursor:not-allowed" disabled onclick="goStep3()">{t("kayit.devam")} &#x2192;</button>
         </div>
       </div>
       <div id="step-3" class="step-panel" style="display:none">
-        <div class="step-label">Sağlık Profili <span style="color:#444;font-size:.55rem">(isteğe bağlı)</span></div>
+        <div class="step-label">{t("kayit.saglik_profili_kucuk")} <span style="color:#444;font-size:.55rem">{t("kayit.istege_bagli")}</span></div>
         {profil_acc}
         <div style="display:flex;gap:8px;margin-top:16px">
           <button type="button" class="btn btn-muted" style="padding:12px 16px" onclick="goStep(2)">&#x2190;</button>
-          <button type="submit" class="btn btn-green" style="flex:1;padding:12px">Kayıt Ol</button>
+          <button type="submit" class="btn btn-green" style="flex:1;padding:12px">{t("btn.kayit_ol")}</button>
         </div>
       </div>
     </form>
@@ -1764,16 +1878,16 @@ def sifremi_unuttum():
 <div class="login-wrap">
   <div class="panel">
     <div class="login-logo">Nex<span style="color:var(--g)">Stock</span></div>
-    <div class="login-sub">Sifremi Unuttum</div>
+    <div class="login-sub">{t("title.sifremi_unuttum")}</div>
     {'<div class="alert alert-green">'+basari+'</div>' if basari else ''}
     {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
     <form method="POST">
-      <label>KULLANICI ADI VEYA E-MAIL</label>
-      <input name="k" placeholder="kullanici_adi veya mail@ornek.com" autofocus required>
-      <button type="submit" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px">Sifre Sifirlama Maili Gonder</button>
+      <label>{t("sifremi.aciklama")}</label>
+      <input name="k" placeholder="kullanici_adi / mail@ornek.com" autofocus required>
+      <button type="submit" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px">{t("sifremi.gonder")}</button>
     </form>
     <div style="text-align:center;margin-top:20px">
-      <a href="/giris" style="color:#525252;font-size:.78rem;text-decoration:none;font-family:JetBrains Mono,monospace;letter-spacing:1px">&#x2190; Giris Yap</a>
+      <a href="/giris" style="color:#525252;font-size:.78rem;text-decoration:none;font-family:JetBrains Mono,monospace;letter-spacing:1px">&#x2190; {t("sifremi.geri")}</a>
     </div>
   </div>
 </div>"""
@@ -2966,7 +3080,7 @@ function sayiOkuScan(input){
 .ms-lbl{{font-family:'JetBrains Mono',monospace;font-size:.58rem;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-top:4px}}
 </style>
 <div class="scan-wrap">
-  <div class="page-title">Barkod Tarama</div>
+  <div class="page-title">{t("title.tarama")}</div>
   {stats_html}
   {alert_html}
 
@@ -2985,11 +3099,13 @@ function sayiOkuScan(input){
       <button type="submit" class="btn btn-green" style="white-space:nowrap;padding:9px 18px">OKUT</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:0">
-      <button type="button" onclick="kameraAc()" class="btn btn-muted" style="width:100%;font-size:.8rem;padding:11px 6px">
-        📷 Şekil Okuma
+      <button type="button" onclick="kameraAc()" class="btn btn-muted" style="width:100%;font-size:.8rem;padding:11px 6px;display:flex;align-items:center;justify-content:center;gap:8px">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/><path d="m16 16-1.9-1.9"/></svg>
+        Şekil Okuma
       </button>
-      <button type="button" onclick="document.getElementById('sayiOkuInput').click()" class="btn btn-muted" style="width:100%;font-size:.8rem;padding:11px 6px">
-        🔢 Sayı Okuma
+      <button type="button" onclick="document.getElementById('sayiOkuInput').click()" class="btn btn-muted" style="width:100%;font-size:.8rem;padding:11px 6px;display:flex;align-items:center;justify-content:center;gap:8px">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
+        Sayı Okuma
       </button>
     </div>
     <input type="file" id="sayiOkuInput" accept="image/*" capture="environment" style="display:none" onchange="sayiOkuScan(this)">
@@ -3281,7 +3397,7 @@ def partiler_sayfasi():
 
     content = f"""
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-  <div class="page-title" style="margin:0">Parti Yonetimi</div>
+  <div class="page-title" style="margin:0">{t("title.partiler")}</div>
   <form method="get" style="display:flex;gap:8px">
     <input name="barkod" value="{ara_barkod}" placeholder="Barkod ile filtrele..." style="width:200px;margin:0">
     <button type="submit" class="btn btn-muted">Filtrele</button>
@@ -3334,7 +3450,7 @@ def urunler():
 
     content = f"""
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-  <div class="page-title" style="margin:0">Urunler <span style="color:#525252;font-size:.9rem">({len(liste)})</span></div>
+  <div class="page-title" style="margin:0">{t("title.urunler")} <span style="color:#525252;font-size:.9rem">({len(liste)})</span></div>
   <form method="get" style="display:flex;gap:8px">
     <input name="ara" value="{ara}" placeholder="Urun ara..." style="width:200px;margin:0">
     <button type="submit" class="btn btn-muted">Ara</button>
@@ -3427,9 +3543,9 @@ def hareketler():
         warn_badge = ' <span style="color:#e05252;font-size:.7rem;margin-left:6px" title="Saglik profilinize uygun degil">&#9888;</span>' if warn else ''
         rows += f'<tr{row_style}><td style="color:#525252">{h["hareket_id"]}</td><td class="{cls}" style="font-weight:700">{h["hareket_tipi"]}</td><td>{h.get("urun_adi","—")}{warn_badge}</td><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{h.get("barkod","—")}</td><td style="font-weight:700">{h["miktar"]}</td><td style="color:#a3a3a3">{str(h["tarih"])[:16]}</td><td>{h.get("kullanici","—")}</td></tr>'
 
-    title_suffix = " (Sadece sizin)" if _user_rol in ("kullanici","misafir") else ""
+    _hareket_title = t("title.hareketler_kullanici") if _user_rol in ("kullanici","misafir") else t("title.hareketler")
     content = f"""
-<div class="page-title">Hareket Gecmisi{title_suffix}</div>
+<div class="page-title">{_hareket_title}</div>
 <div class="tbl-wrap"><table>
   <tr><th>#</th><th>Tip</th><th>Urun</th><th>Barkod</th><th>Miktar</th><th>Tarih</th><th>Kullanici</th></tr>
   {rows or '<tr><td colspan=7 class="muted" style="text-align:center;padding:20px">Hareket yok</td></tr>'}
@@ -3458,7 +3574,7 @@ def raporlar():
         c.close()
 
     content = f"""
-<div class="page-title">Raporlar</div>
+<div class="page-title">{t("title.raporlar")}</div>
 <div class="grid2">
   <div class="panel">
     <h2>Envanter Ozeti</h2>
@@ -3540,7 +3656,7 @@ def kullanicilar():
 
     content = f"""
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-  <div class="page-title" style="margin:0">Kullanicilar</div>
+  <div class="page-title" style="margin:0">{t("title.kullanicilar")}</div>
   {temizle_btn}
 </div>
 <div class="tbl-wrap"><table>
@@ -4330,7 +4446,7 @@ def ai_okuyucu():
     if session.get("rol") not in ("admin","mudur","kasiyer","kullanici"):
         return redirect("/")
     content = r"""
-<div class="page-title">AI Okuyucu</div>
+<div class="page-title">{{ t('title.ai_okuyucu') }}</div>
 <div style="max-width:640px;margin:0 auto">
 
 <!-- STEP INDICATOR -->
@@ -4347,8 +4463,9 @@ def ai_okuyucu():
   <input type="text" id="barkod-input" placeholder="Barkod numarasini girin..." inputmode="numeric"
          style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:14px;font-family:JetBrains Mono,monospace;font-size:1rem;margin-bottom:8px">
   <input type="file" id="barkod-file" accept="image/*" capture="environment" style="display:none" onchange="barkodFotoScan(this)">
-  <button onclick="document.getElementById('barkod-file').click()" class="btn btn-muted" style="width:100%;padding:11px;font-size:.82rem;margin-bottom:12px">
-    📷 Barkodu Fotoğrafla (opsiyonel)
+  <button onclick="document.getElementById('barkod-file').click()" class="btn btn-muted" style="width:100%;padding:11px;font-size:.82rem;margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+    Barkodu Fotoğrafla (opsiyonel)
   </button>
   <div id="barkod-loading" style="display:none;text-align:center;padding:12px;font-family:JetBrains Mono,monospace;font-size:.65rem;color:#525252;letter-spacing:2px">BARKOD OKUNUYOR…</div>
   <div id="barkod-err" style="display:none;color:#e05252;font-size:.75rem;margin-bottom:8px"></div>
@@ -4360,7 +4477,10 @@ def ai_okuyucu():
   <div class="panel">
     <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">BESIN ÖGELERİ ETİKETİ</div>
     <input type="file" id="besin-file" accept="image/*" capture="environment" style="display:none" onchange="besинScan(this)">
-    <button onclick="document.getElementById('besin-file').click()" class="btn btn-green" style="width:100%;padding:14px;font-size:1rem">📷 Besin Tablosunu Fotoğrafla</button>
+    <button onclick="document.getElementById('besin-file').click()" class="btn btn-green" style="width:100%;padding:14px;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:10px">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+      Besin Tablosunu Fotoğrafla
+    </button>
   </div>
   <div id="besin-preview-wrap" style="display:none;margin-top:0">
     <img id="besin-preview" style="width:100%;border:1px solid #1a1a1a;display:block">
@@ -4379,7 +4499,10 @@ def ai_okuyucu():
   <div class="panel">
     <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">İÇİNDEKİLER</div>
     <input type="file" id="ic-file" accept="image/*" capture="environment" style="display:none" onchange="icindekilerScan(this)">
-    <button onclick="document.getElementById('ic-file').click()" class="btn btn-green" style="width:100%;padding:14px;font-size:1rem">📷 İçindekileri Fotoğrafla</button>
+    <button onclick="document.getElementById('ic-file').click()" class="btn btn-green" style="width:100%;padding:14px;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:10px">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+      İçindekileri Fotoğrafla
+    </button>
     <button onclick="step3Skip()" class="btn btn-muted" style="width:100%;padding:10px;margin-top:4px;font-size:.8rem">Atla →</button>
   </div>
   <div id="ic-preview-wrap" style="display:none;margin-top:0">
@@ -4419,7 +4542,10 @@ def ai_okuyucu():
       <div id="ozet-ic-text" style="font-size:.78rem;color:#a3a3a3;line-height:1.5"></div>
     </div>
     <div id="kaydet-err" style="display:none;color:#e05252;font-size:.75rem;margin-bottom:8px"></div>
-    <button onclick="kaydet()" class="btn btn-green" style="width:100%;padding:16px;font-size:1rem" id="kaydet-btn">💾 VERİTABANINA EKLE</button>
+    <button onclick="kaydet()" class="btn btn-green" style="width:100%;padding:16px;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:10px" id="kaydet-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      VERİTABANINA EKLE
+    </button>
   </div>
 </div>
 
@@ -4657,7 +4783,7 @@ function kaydet(){
       katki_maddeleri: _state.katki_maddeleri
     })
   }).then(function(r){return r.json();}).then(function(d){
-    if(d.error){err.textContent=d.error;err.style.display='block';btn.textContent='💾 VERİTABANINA EKLE';btn.disabled=false;return;}
+    if(d.error){err.textContent=d.error;err.style.display='block';btn.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> VERİTABANINA EKLE';btn.disabled=false;return;}
     // Duruma göre kullanıcıya bilgi ver
     var status = d.status || '';
     var msg = d.mesaj || '';
@@ -4673,7 +4799,7 @@ function kaydet(){
     window.location.href='/tarama?barkod='+encodeURIComponent(_state.barkod);
   }).catch(function(e){
     err.textContent='Bağlantı hatası: '+e.message;err.style.display='block';
-    btn.textContent='💾 VERİTABANINA EKLE';btn.disabled=false;
+    btn.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> VERİTABANINA EKLE';btn.disabled=false;
   });
 }
 </script>
