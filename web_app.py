@@ -887,13 +887,16 @@ document.addEventListener('DOMContentLoaded',function(){
     {% if session.get('rol') in ['admin','mudur'] %}
     <a href="/raporlar" class="{{ 'active' if page=='raporlar' }}">Raporlar</a>
     {% endif %}
-    {% if session.get('rol') == 'admin' %}
+    {% if session.get('rol') in ['admin','mudur'] %}
     <a href="/kullanicilar" class="{{ 'active' if page=='kullanicilar' }}">Kullanicilar</a>
+    {% endif %}
+    {% if session.get('rol') == 'admin' %}
     <a href="/ai-okuyucu" class="{{ 'active' if page=='ai-okuyucu' }}">AI Okuyucu</a>
     {% endif %}
     <div class="nav-divider"></div>
     <span class="rol-badge">{{ session.get('rol','') }}</span>
     <span class="nav-user">{{ session.get('tam_ad') or session.get('user') }}</span>
+    <a href="/ayarlar" class="{{ 'active' if page=='ayarlar' }}" title="Ayarlar" style="font-size:1.1rem;padding:8px 10px">&#9881;</a>
     <a href="/cikis" class="btn-logout">Cikis</a>
     {% else %}
     <div class="nav-divider"></div>
@@ -1132,21 +1135,13 @@ def giris():
 def kayit():
     hata = ""
     basari = ""
-    ROL_SECENEKLER = [
-        ("misafir",   "Misafir -- sadece tarama goruntuleyebilir"),
-        ("kullanici", "Kullanici -- tarama + besin asistani"),
-        ("kasiyer",   "Kasiyer -- stok okutma ve ekleme"),
-        ("admin",     "Admin -- tam yetki"),
-    ]
     if request.method == "POST":
         isim             = request.form.get("isim", "").strip()
         k                = request.form.get("k", "").strip()
         s                = request.form.get("s", "").strip()
-        rol              = request.form.get("rol", "misafir").strip()
+        rol              = "kullanici"
         hastaliklar      = ",".join(request.form.getlist("hastalik"))
         yeme_aliskanlik  = ",".join(request.form.getlist("yeme"))
-        if rol not in [r[0] for r in ROL_SECENEKLER]:
-            rol = "misafir"
         import re as _sre
         if not isim or not k or not s:
             hata = "Tum alanlar zorunlu!"
@@ -1177,14 +1172,6 @@ def kayit():
                 hata = f"Hata: {str(e)}"
             finally:
                 c.close()
-
-    rol_options = "".join(
-        f'<option value="{r}">{l}</option>'
-        for r, l in [("misafir","Misafir -- sadece tarama"),
-                     ("kullanici","Kullanici -- tarama + asistan"),
-                     ("kasiyer","Kasiyer -- stok yonetimi"),
-                     ("admin","Admin -- tam yetki")]
-    )
 
     def _acc_block(gid, baslik, inp, secenekler):
         pills = "".join(
@@ -1282,11 +1269,7 @@ def kayit():
     </div>
     <form method="POST" id="kayit-form" onsubmit="return checkPw()">
       <div id="step-1" class="step-panel">
-        <div class="step-label">Rol &amp; Kimlik</div>
-        <label>ROL</label>
-        <select name="rol" id="rol-select" style="width:100%;background:#0a0a0a;border:1px solid #1e1e1e;color:#f5f5f5;padding:11px 14px;font-family:inherit;font-size:.85rem;margin-bottom:10px;outline:none;transition:border-color .25s" onfocus="this.style.borderColor='var(--g)'" onblur="this.style.borderColor='#1e1e1e'">
-          {rol_options}
-        </select>
+        <div class="step-label">Kimlik</div>
         <label>İSİM SOYAD</label>
         <input name="isim" id="isim-input" placeholder="Adınız Soyadınız" autocomplete="name">
         <label>KULLANICI ADI</label>
@@ -1343,9 +1326,7 @@ def kayit():
     }}
     function goStep3(){{
       if(!pwValid) return;
-      var rol=document.getElementById('rol-select').value;
-      if(rol==='misafir'||rol==='kullanici'){{goStep(3);}}
-      else{{document.getElementById('kayit-form').submit();}}
+      goStep(3);
     }}
     function updateStrength(v){{
       var rules={{
@@ -1381,6 +1362,146 @@ def kayit():
 </div>"""
     return render(content, page="kayit", title="Kayit Ol")
 
+
+
+@app.route("/ayarlar", methods=["GET","POST"])
+def ayarlar():
+    if not session.get("user"):
+        return redirect("/giris")
+    basari = ""
+    hata   = ""
+    c = get_db()
+    try:
+        row = c.execute("SELECT hastaliklar,yeme_aliskanlik FROM kullanicilar WHERE kullanici_adi=%s",
+                        (session["user"],)).fetchone()
+        mevcut_h = set((row["hastaliklar"] or "").split(",")) if row and row["hastaliklar"] else set()
+        mevcut_y = set((row["yeme_aliskanlik"] or "").split(",")) if row and row["yeme_aliskanlik"] else set()
+        if request.method == "POST":
+            yeni_h = ",".join(request.form.getlist("hastalik"))
+            yeni_y = ",".join(request.form.getlist("yeme"))
+            c.execute("UPDATE kullanicilar SET hastaliklar=%s, yeme_aliskanlik=%s WHERE kullanici_adi=%s",
+                      (yeni_h or None, yeni_y or None, session["user"]))
+            c.commit()
+            mevcut_h = set(yeni_h.split(",")) if yeni_h else set()
+            mevcut_y = set(yeni_y.split(",")) if yeni_y else set()
+            basari = "Profil guncellendi!"
+    except Exception as e:
+        hata = str(e)
+    finally:
+        c.close()
+
+    HASTALIK = [("colyak","Colyak"),("seker","Seker Hastaligi"),("hipertansiyon","Hipertansiyon"),
+                ("kolesterol","Yuksek Kolesterol"),("laktoz","Laktoz Intoleransi"),
+                ("fruktoz","Fruktoz Intoleransi"),("gluten","Gluten Alerjisi"),("hicbiri","Hicbiri")]
+    YEME     = [("vegan","Vegan"),("vejetaryan","Vejetaryan"),("pescatarian","Pescatarian"),
+                ("halal","Helal"),("kosher","Koser"),("glutensiz","Glutensiz"),
+                ("dusuk_seker","Dusuk Seker"),("dusuk_tuz","Dusuk Tuz"),("hicbiri","Hicbiri")]
+
+    def pill(inp, v, l, secili):
+        chk = " checked" if v in secili else ""
+        return (f'<label class="tag-pill">'
+                f'<input type="checkbox" name="{inp}" value="{v}"{chk} onchange="updateBadge(\'{inp}\')">'
+                f'<span>{l}</span></label>')
+
+    def acc(gid, baslik, inp, secenekler, secili):
+        pills = "".join(pill(inp, v, l, secili) for v, l in secenekler)
+        n = len([v for v, _ in secenekler if v in secili])
+        badge_vis = "visible" if n else ""
+        return (f'<div class="acc-item">'
+                f'<button type="button" class="acc-trigger open" onclick="toggleAcc(this,\'{gid}\')">'
+                f'<span>{baslik}</span>'
+                f'<span class="acc-badge {badge_vis}" id="{gid}-badge">{n if n else ""}</span>'
+                f'<span class="acc-arrow" style="transform:rotate(90deg);color:var(--g)">&#8250;</span>'
+                f'</button>'
+                f'<div class="acc-body" id="{gid}-body">'
+                f'<div class="tag-grid">{pills}</div>'
+                f'</div></div>')
+
+    yeni_banner = ""
+    if request.args.get("yeni") == "1":
+        yeni_banner = '<div class="alert alert-green" style="margin-bottom:20px">Hosgeldin! Google hesabinla giris yaptin. Saglik profilini ayarlayabilirsin.</div>'
+
+    acc_css = ('<style>'
+        '.acc-item{margin-bottom:6px}'
+        '.acc-trigger{width:100%;background:rgba(255,255,255,.03);border:1px solid #1a1a1a;'
+        "color:#f5f5f5;padding:11px 14px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:.72rem;"
+        'letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;transition:border-color .25s,background .25s}'
+        '.acc-trigger:hover{border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.05)}'
+        '.acc-trigger.open{border-color:var(--g);background:rgba(16,185,129,.06)}'
+        '.acc-arrow{font-size:1.1rem;transition:transform .3s cubic-bezier(.16,1,.3,1);color:var(--muted);line-height:1}'
+        '.acc-badge{margin-left:8px;margin-right:auto;font-size:.62rem;background:var(--g);color:#060606;'
+        'padding:1px 7px;font-weight:700;letter-spacing:.5px;display:none}'
+        '.acc-badge.visible{display:inline-block}'
+        '.acc-body{border:1px solid #1a1a1a;border-top:none;padding:14px;background:rgba(255,255,255,.015)}'
+        '.tag-grid{display:flex;flex-wrap:wrap;gap:7px}'
+        '.tag-pill{position:relative}'
+        '.tag-pill input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}'
+        '.tag-pill span{display:inline-flex;align-items:center;padding:6px 13px;cursor:pointer;'
+        "font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.5px;text-transform:uppercase;"
+        'border:1px solid #1a1a1a;color:#686868;background:transparent;transition:all .2s cubic-bezier(.16,1,.3,1);user-select:none}'
+        '.tag-pill span:hover{border-color:rgba(255,255,255,.15);color:#a0a0a0}'
+        '.tag-pill input:checked + span{border-color:var(--g);color:#060606;background:var(--g)}'
+        '</style>')
+
+    content = f"""
+{acc_css}
+<div class="page-title">&#9881; Ayarlar</div>
+{yeni_banner}
+{'<div class="alert alert-green">'+basari+'</div>' if basari else ''}
+{'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
+<div class="panel" style="max-width:600px">
+  <h2>Saglik Profili</h2>
+  <form method="POST">
+    {acc("hastalik","Hastalik / Alerji","hastalik",HASTALIK,mevcut_h)}
+    <div style="margin-top:12px"></div>
+    {acc("yeme","Yeme Aliskanligi","yeme",YEME,mevcut_y)}
+    <button type="submit" class="btn btn-green" style="width:100%;margin-top:20px;padding:12px">Kaydet</button>
+  </form>
+</div>
+<script>
+function toggleAcc(btn,gid){{
+  var body=document.getElementById(gid+'-body');
+  var open=body.style.display!=='none'&&body.style.display!=='';
+  body.style.display=open?'none':'block';
+  btn.classList.toggle('open',!open);
+  btn.querySelector('.acc-arrow').style.transform=open?'':'rotate(90deg)';
+  btn.querySelector('.acc-arrow').style.color=open?'var(--muted)':'var(--g)';
+}}
+function updateBadge(inp){{
+  var gid=inp;
+  var n=document.querySelectorAll('input[name="'+inp+'"]:checked').length;
+  var b=document.getElementById(gid+'-badge');
+  b.textContent=n;b.classList.toggle('visible',n>0);
+}}
+</script>"""
+    return render(content, page="ayarlar", title="Ayarlar")
+
+
+@app.route("/admin/rol-degistir", methods=["POST"])
+def admin_rol_degistir():
+    caller = session.get("rol")
+    if caller not in ("admin", "mudur"):
+        return "Yetkisiz", 403
+    hedef_k = request.form.get("uid","").strip()
+    yeni_rol = request.form.get("rol","kullanici").strip()
+    izin_admin  = ["kullanici","kasiyer","mudur","admin"]
+    izin_mudur  = ["kullanici","kasiyer"]
+    if caller == "admin" and yeni_rol not in izin_admin:
+        return "Gecersiz rol", 400
+    if caller == "mudur" and yeni_rol not in izin_mudur:
+        return "Yetkisiz rol", 403
+    c = get_db()
+    try:
+        hedef = c.execute("SELECT rol FROM kullanicilar WHERE kullanici_adi=%s", (hedef_k,)).fetchone()
+        if not hedef:
+            return "Kullanici bulunamadi", 404
+        if caller == "mudur" and hedef["rol"] in ("admin","mudur"):
+            return "Bu kullanicinin rolunu degistiremezsiniz", 403
+        c.execute("UPDATE kullanicilar SET rol=%s WHERE kullanici_adi=%s", (yeni_rol, hedef_k))
+        c.commit()
+    finally:
+        c.close()
+    return redirect("/kullanicilar")
 
 
 @app.route("/admin/temizle-kullanicilar", methods=["POST"])
@@ -1421,7 +1542,9 @@ def firebase_login():
             if row:
                 c.execute("UPDATE kullanicilar SET firebase_uid=%s WHERE id=%s", (uid, row["id"]))
                 c.commit()
+        is_new = False
         if not row:
+            is_new = True
             uname = re.sub(r"[^a-z0-9_]","", (email.split("@")[0] if email else uid).lower())[:24] or "user"
             try:
                 c.execute(
@@ -1440,13 +1563,14 @@ def firebase_login():
                 c.commit()
             row = c.execute("SELECT * FROM kullanicilar WHERE firebase_uid=%s", (uid,)).fetchone()
         if not row or not row["aktif"]:
-            return jsonify({"ok":False,"error":"Hesap pasif veya bulunamadı"}), 403
+            return jsonify({"ok":False,"error":"Hesap pasif veya bulunamadi"}), 403
         session["user"]   = row["kullanici_adi"]
         session["rol"]    = row["rol"]
         session["tam_ad"] = row.get("tam_ad","")
         c.execute("UPDATE kullanicilar SET son_giris=NOW() WHERE id=%s", (row["id"],))
         c.commit()
-        return jsonify({"ok":True, "redirect":"/"})
+        redirect_url = "/ayarlar?yeni=1" if is_new else "/"
+        return jsonify({"ok":True, "redirect": redirect_url})
     finally:
         c.close()
 
@@ -2829,7 +2953,8 @@ def raporlar():
 @app.route("/kullanicilar")
 @yetkili_giris
 def kullanicilar():
-    if session.get("rol") != "admin":
+    caller_rol = session.get("rol")
+    if caller_rol not in ("admin", "mudur"):
         return redirect("/")
     c = get_db()
     try:
@@ -2839,23 +2964,52 @@ def kullanicilar():
     finally:
         c.close()
 
-    RC = {"admin": "#ffffff", "mudur": "#34d399", "kasiyer": "#86efac", "goruntuleyici": "#a3a3a3"}
+    RC = {"admin":"#ffffff","mudur":"#34d399","kasiyer":"#86efac","kullanici":"#a5d8ff","misafir":"#737373"}
+    # Admin her rolü atayabilir; mudur sadece kullanici/kasiyer atayabilir
+    if caller_rol == "admin":
+        atanabilir = ["kullanici","kasiyer","mudur","admin"]
+    else:
+        atanabilir = ["kullanici","kasiyer"]
+
     rows = ""
     for u in liste:
-        rc  = RC.get(u["rol"], "#a3a3a3")
-        akt = '<span class="green">✓ Aktif</span>' if u["aktif"] else '<span class="red">✗ Pasif</span>'
-        rows += f'<tr><td style="font-weight:600">{u["kullanici_adi"]}</td><td>{u.get("tam_ad","—")}</td><td style="color:{rc};font-weight:700">{u["rol"].upper()}</td><td>{akt}</td><td style="color:#a3a3a3">{str(u.get("son_giris","—"))[:16]}</td></tr>'
+        rc  = RC.get(u["rol"], "#737373")
+        akt = '<span class="green">&#10003; Aktif</span>' if u["aktif"] else '<span class="red">&#10007; Pasif</span>'
+        # Rol dropdown — eğer hedef admin ise ve caller mudur ise sadece etiket göster
+        if caller_rol == "mudur" and u["rol"] in ("admin","mudur"):
+            rol_cell = f'<span style="color:{rc};font-weight:700">{u["rol"].upper()}</span>'
+        else:
+            opts = "".join(f'<option value="{r}"{" selected" if r==u["rol"] else ""}>{r.upper()}</option>'
+                           for r in atanabilir)
+            rol_cell = (f'<form method="POST" action="/admin/rol-degistir" style="display:flex;gap:6px;align-items:center">'
+                        f'<input type="hidden" name="uid" value="{u["kullanici_adi"]}">'
+                        f'<select name="rol" style="background:#0a0a0a;border:1px solid #1e1e1e;color:{rc};'
+                        f'font-family:JetBrains Mono,monospace;font-size:.7rem;padding:4px 8px;cursor:pointer">{opts}</select>'
+                        f'<button type="submit" style="background:transparent;border:1px solid #1e1e1e;color:var(--g);'
+                        f'font-family:JetBrains Mono,monospace;font-size:.65rem;padding:4px 10px;cursor:pointer;letter-spacing:1px">KAYDET</button>'
+                        f'</form>')
+        rows += (f'<tr><td style="font-weight:600">{u["kullanici_adi"]}</td>'
+                 f'<td>{u.get("tam_ad","—")}</td>'
+                 f'<td>{rol_cell}</td>'
+                 f'<td>{akt}</td>'
+                 f'<td style="color:#737373">{str(u.get("son_giris","—"))[:16]}</td></tr>')
+
+    temizle_btn = ""
+    if caller_rol == "admin":
+        temizle_btn = ('<form method="POST" action="/admin/temizle-kullanicilar"'
+                       ' onsubmit="return confirm(\'Admin disindaki TUM kullanicilar silinecek. Emin misiniz?\')">'
+                       '<button type="submit" style="background:#3d0f0f;border:1px solid #5a1515;color:#e05252;'
+                       'padding:8px 16px;font-family:JetBrains Mono,monospace;font-size:.72rem;letter-spacing:1px;cursor:pointer">HEPSINI SİL</button>'
+                       '</form>')
 
     content = f"""
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
   <div class="page-title" style="margin:0">Kullanicilar</div>
-  <form method="POST" action="/admin/temizle-kullanicilar" onsubmit="return confirm('Admin disindaki TUM kullanicilar silinecek. Emin misiniz?')">
-    <button type="submit" style="background:#ef4444;border:none;color:#fff;padding:8px 16px;font-family:JetBrains Mono,monospace;font-size:.75rem;letter-spacing:1px;cursor:pointer;border-radius:2px">HEPSINI SİL</button>
-  </form>
+  {temizle_btn}
 </div>
 <div class="tbl-wrap"><table>
   <tr><th>Kullanici Adi</th><th>Tam Ad</th><th>Rol</th><th>Durum</th><th>Son Giris</th></tr>
-  {{rows}}
+  {rows}
 </table></div>"""
     return render(content, page="kullanicilar", title="Kullanicilar")
 
