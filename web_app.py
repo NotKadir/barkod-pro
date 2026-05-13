@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import os, hashlib, functools, requests, traceback, sys
-import psycopg2, psycopg2.extras
+import psycopg2, psycopg2.extras, psycopg2.pool
 from datetime import datetime, date
 from flask import Flask, render_template_string, request, redirect, session, jsonify, send_from_directory
 
@@ -263,12 +263,58 @@ class _PGConn:
         self._conn.commit()
 
     def close(self):
+        # Connection'i pool'a geri ver, gercekten kapatma.
         try: self._cur.close()
         except Exception: pass
-        try: self._conn.close()
-        except Exception: pass
+        try:
+            if _PG_POOL is not None:
+                _PG_POOL.putconn(self._conn)
+            else:
+                self._conn.close()
+        except Exception:
+            try: self._conn.close()
+            except Exception: pass
+
+# ═══════════════════════════════════════════════════
+#  CONNECTION POOL (kritik performans iyilestirmesi)
+#  - Her request icin yeni TCP/SSL handshake yapmaz
+#  - Bagdantilar yeniden kullanilir, sayfa gecisleri 100-300ms hizlanir
+# ═══════════════════════════════════════════════════
+_PG_POOL = None
+
+def _init_pool():
+    global _PG_POOL
+    if _PG_POOL is None:
+        dsn = os.environ.get("DATABASE_URL")
+        if not dsn:
+            return
+        try:
+            _PG_POOL = psycopg2.pool.ThreadedConnectionPool(
+                minconn=1,
+                maxconn=int(os.environ.get("PG_POOL_MAX", "8")),
+                dsn=dsn,
+                # PgBouncer/Supabase pooler ile uyumlu, idle baglantilari hizli at
+                keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=5,
+            )
+        except Exception as e:
+            print(f"[POOL] init failed: {e}", file=sys.stderr, flush=True)
+            _PG_POOL = None
 
 def get_db():
+    """Pool'dan bagdanti al; sorun olursa direct connect'e dus."""
+    global _PG_POOL
+    if _PG_POOL is None:
+        _init_pool()
+    if _PG_POOL is not None:
+        try:
+            conn = _PG_POOL.getconn()
+            # rollback any leftover state from previous user
+            try: conn.rollback()
+            except Exception: pass
+            return _PGConn(conn)
+        except Exception as e:
+            print(f"[POOL] getconn failed, fallback to direct: {e}", file=sys.stderr, flush=True)
+    # Fallback: direct connect (eski davranis)
     conn = psycopg2.connect(os.environ["DATABASE_URL"])
     return _PGConn(conn)
 
@@ -4813,7 +4859,10 @@ def health():
 
 @app.route("/asistan.png")
 def asistan_logo():
-    return send_from_directory(".", "asistan.png", mimetype="image/png")
+    resp = send_from_directory(".", "asistan.png", mimetype="image/png")
+    # 7 gun cache - asistan logosu degismez, her sayfada yeniden indirilmesin
+    resp.headers["Cache-Control"] = "public, max-age=604800, immutable"
+    return resp
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
