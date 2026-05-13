@@ -30,6 +30,24 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "nexstock_secret_2024")
 
 # ═══════════════════════════════════════════════════
+#  SERVER TIMING (DevTools'tan her sayfanin gercek suresini gor)
+# ═══════════════════════════════════════════════════
+import time as _t_mod
+@app.before_request
+def _start_timer():
+    request._t0 = _t_mod.perf_counter()
+
+@app.after_request
+def _server_timing(response):
+    try:
+        if hasattr(request, "_t0"):
+            ms = (_t_mod.perf_counter() - request._t0) * 1000
+            response.headers["Server-Timing"] = f"total;dur={ms:.1f}"
+    except Exception:
+        pass
+    return response
+
+# ═══════════════════════════════════════════════════
 #  GZIP COMPRESSION (network payload %70 daha kucuk)
 # ═══════════════════════════════════════════════════
 import gzip as _gzip, io as _gz_io
@@ -1503,6 +1521,9 @@ def giris():
             session["user"]   = row["kullanici_adi"]
             session["rol"]    = row["rol"]
             session["tam_ad"] = row["tam_ad"] or ""
+            # PERF: Saglik profilini session'a cache'le (her sayfada DB hit'i ortadan kalkar)
+            session["_hastaliklar"]     = row.get("hastaliklar") or ""
+            session["_yeme_aliskanlik"] = row.get("yeme_aliskanlik") or ""
             c2 = get_db()
             c2.execute("UPDATE kullanicilar SET son_giris=NOW() WHERE kullanici_adi=%s", (k,))
             c2.commit()
@@ -1892,6 +1913,9 @@ def ayarlar():
                 c.commit()
                 mevcut_h = set(yeni_h.split(",")) if yeni_h else set()
                 mevcut_y = set(yeni_y.split(",")) if yeni_y else set()
+                # PERF: Session cache'i guncelle (yoksa eski profili kullanmaya devam ederdi)
+                session["_hastaliklar"]     = yeni_h or ""
+                session["_yeme_aliskanlik"] = yeni_y or ""
                 basari = "Saglik profili guncellendi!"
     except Exception as e:
         hata = str(e)
@@ -2209,6 +2233,9 @@ def firebase_login():
         session["user"]   = row["kullanici_adi"]
         session["rol"]    = row["rol"]
         session["tam_ad"] = row.get("tam_ad","")
+        # PERF: Saglik profilini session'a cache'le
+        session["_hastaliklar"]     = row.get("hastaliklar") or ""
+        session["_yeme_aliskanlik"] = row.get("yeme_aliskanlik") or ""
         c.execute("UPDATE kullanicilar SET son_giris=NOW() WHERE id=%s", (row["id"],))
         c.commit()
         redirect_url = "/ayarlar?yeni=1" if is_new else "/"
@@ -2237,24 +2264,40 @@ def index():
     try:
         today = date.today().isoformat()
         if _drol_pre == "kullanici":
+            # PERF: 4 ayri COUNT yerine TEK roundtrip ile FILTER expression kullan
+            _row = c.execute("""
+                SELECT
+                  COUNT(*) FILTER (WHERE DATE(tarih)=CURRENT_DATE) AS bugun_tarama,
+                  COUNT(*) FILTER (WHERE tarih >= NOW() - INTERVAL '7 days') AS hafta_tarama,
+                  COUNT(*) AS toplam_tarama,
+                  COUNT(DISTINCT barkod) FILTER (WHERE barkod IS NOT NULL) AS unique_urun
+                FROM stok_hareketleri WHERE kullanici=%s
+            """, (_duser_pre,)).fetchone()
             s = {
-                "bugun_tarama":  c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE kullanici=%s AND DATE(tarih)=CURRENT_DATE", (_duser_pre,)).fetchone()[0],
-                "hafta_tarama":  c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE kullanici=%s AND tarih >= NOW() - INTERVAL '7 days'", (_duser_pre,)).fetchone()[0],
-                "toplam_tarama": c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE kullanici=%s", (_duser_pre,)).fetchone()[0],
-                "unique_urun":   c.execute("SELECT COUNT(DISTINCT barkod) FROM stok_hareketleri WHERE kullanici=%s AND barkod IS NOT NULL", (_duser_pre,)).fetchone()[0],
+                "bugun_tarama":  _row["bugun_tarama"]  or 0,
+                "hafta_tarama":  _row["hafta_tarama"]  or 0,
+                "toplam_tarama": _row["toplam_tarama"] or 0,
+                "unique_urun":   _row["unique_urun"]   or 0,
             }
             skt_list = []
             dusuk = []
         else:
-            s = {
-                "toplam_urun":   c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0],
-                "toplam_stok":   c.execute("SELECT COALESCE(SUM(miktar),0) FROM partiler").fetchone()[0],
-                "tarihi_gecmis": c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<%s AND miktar>0", (today,)).fetchone()[0],
-                "yaklasan":      c.execute("SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt>=%s AND stt<=%s::date + interval '7 days' AND miktar>0", (today, today)).fetchone()[0],
-                "kritik":        c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) > 0 AND (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= u.min_stok").fetchone()[0],
-                "stoksuz":       c.execute("SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= 0").fetchone()[0],
-                "bugun":         c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE DATE(tarih)=CURRENT_DATE").fetchone()[0],
-                "tedarikci":     c.execute("SELECT COUNT(*) FROM tedarikciler WHERE aktif=1").fetchone()[0],
+            # PERF: 8 ayri sorgu yerine TEK roundtrip
+            # Her metric ayri subquery olarak ayni SELECT'te calistirilir
+            _row = c.execute("""
+                SELECT
+                  (SELECT COUNT(*) FROM urunler) AS toplam_urun,
+                  (SELECT COALESCE(SUM(miktar),0) FROM partiler) AS toplam_stok,
+                  (SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt<%s AND miktar>0) AS tarihi_gecmis,
+                  (SELECT COUNT(DISTINCT barkod) FROM partiler WHERE stt IS NOT NULL AND stt>=%s AND stt<=%s::date + interval '7 days' AND miktar>0) AS yaklasan,
+                  (SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) > 0 AND (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= u.min_stok) AS kritik,
+                  (SELECT COUNT(*) FROM urunler u WHERE (SELECT COALESCE(SUM(miktar),0) FROM partiler WHERE barkod=u.barkod) <= 0) AS stoksuz,
+                  (SELECT COUNT(*) FROM stok_hareketleri WHERE DATE(tarih)=CURRENT_DATE) AS bugun,
+                  (SELECT COUNT(*) FROM tedarikciler WHERE aktif=1) AS tedarikci
+            """, (today, today, today)).fetchone()
+            s = dict(_row) if _row else {
+                "toplam_urun":0,"toplam_stok":0,"tarihi_gecmis":0,"yaklasan":0,
+                "kritik":0,"stoksuz":0,"bugun":0,"tedarikci":0
             }
         if _drol_pre != "kullanici":
             skt_list = [dict(r) for r in c.execute("""
@@ -2288,18 +2331,27 @@ def index():
         _user_hastalik = set()
         _user_yeme = set()
         if _drol == "kullanici":
-            try:
-                _urow = c.execute(
-                    "SELECT hastaliklar, yeme_aliskanlik FROM kullanicilar WHERE kullanici_adi=%s",
-                    (_duser,)
-                ).fetchone()
-                if _urow:
-                    if _urow.get("hastaliklar"):
-                        _user_hastalik = set(x.strip() for x in _urow["hastaliklar"].split(",") if x.strip())
-                    if _urow.get("yeme_aliskanlik"):
-                        _user_yeme = set(x.strip() for x in _urow["yeme_aliskanlik"].split(",") if x.strip())
-            except Exception:
-                pass
+            # PERF: Session cache'den oku, DB hit'i yok
+            _hc = session.get("_hastaliklar")
+            _yc = session.get("_yeme_aliskanlik")
+            if _hc is None or _yc is None:
+                # Cache yok - bir kez DB'den cek
+                try:
+                    _urow = c.execute(
+                        "SELECT hastaliklar, yeme_aliskanlik FROM kullanicilar WHERE kullanici_adi=%s",
+                        (_duser,)
+                    ).fetchone()
+                    if _urow:
+                        _hc = _urow.get("hastaliklar") or ""
+                        _yc = _urow.get("yeme_aliskanlik") or ""
+                        session["_hastaliklar"]     = _hc
+                        session["_yeme_aliskanlik"] = _yc
+                except Exception:
+                    _hc = _hc or ""; _yc = _yc or ""
+            if _hc:
+                _user_hastalik = set(x.strip() for x in _hc.split(",") if x.strip())
+            if _yc:
+                _user_yeme = set(x.strip() for x in _yc.split(",") if x.strip())
     finally:
         c.close()
 
@@ -2473,20 +2525,26 @@ def tarama():
     else:
         barkod = None
 
-    # Kullanıcı sağlık profili
+    # Kullanıcı sağlık profili - PERF: session cache'den oku (DB hit'i ortadan kalkti)
     _user_rol = session.get("rol", "misafir")
     _show_price_skt = _user_rol not in ("kullanici", "misafir")
     _user_hastalik = set()
-    if session.get("user"):
+    _h_cache = session.get("_hastaliklar")
+    if _h_cache is None and session.get("user"):
+        # Cache yok (eski login session'i) - bir kez DB'den cek, session'a koy
         try:
             _uc = get_db()
-            _ur = _uc.execute("SELECT hastaliklar FROM kullanicilar WHERE kullanici_adi=%s",
+            _ur = _uc.execute("SELECT hastaliklar, yeme_aliskanlik FROM kullanicilar WHERE kullanici_adi=%s",
                               (session["user"],)).fetchone()
             _uc.close()
-            if _ur and _ur["hastaliklar"]:
-                _user_hastalik = set(_ur["hastaliklar"].split(","))
+            if _ur:
+                session["_hastaliklar"]     = _ur["hastaliklar"] or ""
+                session["_yeme_aliskanlik"] = _ur["yeme_aliskanlik"] or ""
+                _h_cache = session["_hastaliklar"]
         except Exception:
             pass
+    if _h_cache:
+        _user_hastalik = set(x.strip() for x in _h_cache.split(",") if x.strip())
 
     HASTALIK_ALLERJEN = {
         "colyak":       ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum"],
@@ -3704,20 +3762,29 @@ def hareketler():
     _user_hastalik = set()
     _user_yeme = set()
     if _user_rol in ("kullanici", "misafir"):
-        try:
-            c0 = get_db()
-            _row = c0.execute(
-                "SELECT hastaliklar, yeme_aliskanlik FROM kullanicilar WHERE kullanici_adi=%s",
-                (_user_name,)
-            ).fetchone()
-            c0.close()
-            if _row:
-                if _row.get("hastaliklar"):
-                    _user_hastalik = set(x.strip() for x in _row["hastaliklar"].split(",") if x.strip())
-                if _row.get("yeme_aliskanlik"):
-                    _user_yeme = set(x.strip() for x in _row["yeme_aliskanlik"].split(",") if x.strip())
-        except Exception:
-            pass
+        # PERF: Session cache'den oku, DB hit'i yok
+        _hc = session.get("_hastaliklar")
+        _yc = session.get("_yeme_aliskanlik")
+        if _hc is None or _yc is None:
+            # Cache yok - bir kez DB'den cek
+            try:
+                c0 = get_db()
+                _row = c0.execute(
+                    "SELECT hastaliklar, yeme_aliskanlik FROM kullanicilar WHERE kullanici_adi=%s",
+                    (_user_name,)
+                ).fetchone()
+                c0.close()
+                if _row:
+                    _hc = _row.get("hastaliklar") or ""
+                    _yc = _row.get("yeme_aliskanlik") or ""
+                    session["_hastaliklar"]     = _hc
+                    session["_yeme_aliskanlik"] = _yc
+            except Exception:
+                _hc = _hc or ""; _yc = _yc or ""
+        if _hc:
+            _user_hastalik = set(x.strip() for x in _hc.split(",") if x.strip())
+        if _yc:
+            _user_yeme = set(x.strip() for x in _yc.split(",") if x.strip())
 
     HASTALIK_ALLERJEN = {
         "colyak": ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum"],
