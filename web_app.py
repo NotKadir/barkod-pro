@@ -1323,12 +1323,12 @@ document.querySelectorAll('.stat-card .val').forEach(function(el){
 </script>
 
 <!-- ═══════════════ CHATBOT WIDGET ═══════════════ -->
-{% if session.get('rol') in ['kullanici', 'admin'] and page != 'ai-okuyucu' %}
+{% if session.get('rol') in ['kullanici', 'admin'] %}
 <style>
 #cb-btn{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--g);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.4rem;box-shadow:0 4px 24px rgba(255,255,255,.12);z-index:9000;transition:transform .2s}
 #cb-btn:hover{transform:scale(1.1)}
-#cb-panel{position:fixed;bottom:88px;right:24px;width:340px;max-width:calc(100vw - 48px);height:420px;max-height:calc(100vh - 180px);background:#0d0d0d;border:1px solid #1e1e1e;display:flex;flex-direction:column;z-index:9000;box-shadow:0 8px 40px rgba(0,0,0,.6);border-radius:4px;display:none}
-@media(max-width:480px){ #cb-panel{right:12px;bottom:80px;width:calc(100vw - 24px);max-height:calc(100vh - 140px)} }
+#cb-panel{position:fixed;bottom:88px;right:24px;width:340px;max-width:calc(100vw - 48px);max-height:calc(100vh - 160px);background:#0d0d0d;border:1px solid #1e1e1e;display:flex;flex-direction:column;z-index:9000;box-shadow:0 8px 40px rgba(0,0,0,.6);border-radius:4px;overflow:hidden;display:none}
+@media(max-width:480px){ #cb-panel{right:12px;bottom:80px;width:calc(100vw - 24px)} }
 #cb-header{padding:14px 16px;border-bottom:1px solid #1a1a1a;font-family:JetBrains Mono,monospace;font-size:.65rem;letter-spacing:2px;color:var(--g);text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 #cb-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
 #cb-messages::-webkit-scrollbar{width:3px}
@@ -1364,9 +1364,14 @@ var _cbLoading=false;
 
 function cbToggle(){
   _cbOpen=!_cbOpen;
-  document.getElementById('cb-panel').style.display=_cbOpen?'flex':'none';
+  var panel=document.getElementById('cb-panel');
+  panel.style.display=_cbOpen?'flex':'none';
   document.getElementById('cb-btn').innerHTML=_cbOpen?'<span style="font-size:1.4rem;line-height:1">✕</span>':'<img src="/asistan.png" alt="Asistan" style="width:100%;height:100%;object-fit:cover;display:block">';
-  if(_cbOpen) setTimeout(function(){document.getElementById('cb-input').focus();},100);
+  if(_cbOpen){
+    var safeH=window.innerHeight-88-60;
+    panel.style.height=Math.min(420,safeH)+'px';
+    setTimeout(function(){document.getElementById('cb-input').focus();},100);
+  }
 }
 function cbAppend(text,cls){
   var el=document.createElement('div');
