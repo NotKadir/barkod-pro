@@ -2356,19 +2356,23 @@ def index():
         c.close()
 
     _DH_HASTALIK = {
-        "colyak": ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum"],
-        "gluten": ["gluten","bugday","wheat","arpa","cavdar","rye","barley","triticum"],
-        "laktoz": ["sut","milk","laktoz","lactose","peynir","cheese","krema","cream","dairy","whey"],
-        "fruktoz": ["fruktoz","fructose","sorbitol","meyve sekeri"],
-        "hipertansiyon": ["sodyum","sodium","tuz","salt"],
-        "kolesterol": ["doymus yag","saturated","trans yag","trans fat"],
+        "colyak":       ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum","siyez","spelt","kamut"],
+        "gluten":       ["gluten","bugday","wheat","arpa","cavdar","rye","barley","triticum","siyez","spelt","kamut"],
+        "laktoz":       ["sut","milk","laktoz","lactose","peynir","cheese","krema","cream","dairy","whey","yogurt","tereyag","butter","kazein","casein"],
+        "fruktoz":      ["fruktoz","fructose","sorbitol","meyve sekeri","agave","fruit sugar"],
+        "seker":        ["seker","sugar","glikoz","glucose","fruktoz","fructose","misir surubu","corn syrup","sukroz","sucrose","dekstroz","dextrose","maltoz","maltodextrin","agave"],
+        "hipertansiyon":["sodyum","sodium","tuz","salt","msg","monosodyum"],
+        "kolesterol":   ["doymus yag","saturated","trans yag","trans fat","kolesterol","cholesterol"],
     }
     _DH_YEME = {
-        "vegan": ["et","tavuk","balik","sut","milk","yumurta","egg","peynir","tereyag","jelatin","gelatin","bal","honey"],
-        "vejetaryan": ["et","tavuk","balik","jelatin","gelatin"],
-        "glutensiz": ["gluten","bugday","wheat","arpa","yulaf","cavdar"],
-        "dusuk_seker": ["seker","sugar","glikoz","fruktoz","misir surubu","syrup"],
-        "dusuk_tuz": ["sodyum","sodium","tuz","salt"],
+        "vegan":       ["et","tavuk","balik","sut","milk","yumurta","egg","peynir","tereyag","jelatin","gelatin","bal","honey","dairy","whey","kazein","casein","laktoz","lactose","hayvansal"],
+        "vejetaryan":  ["et","tavuk","balik","jelatin","gelatin","sosis","sucuk","pastirma","bacon","meat","chicken","fish","beef","pork"],
+        "pescatarian": ["et","tavuk","chicken","beef","pork","sosis","sucuk","pastirma","bacon","meat","dana","kuzu","lamb"],
+        "halal":       ["domuz","pork","jelatin","gelatin","alkol","alcohol","sogan suyu","wine","beer","lard","bacon"],
+        "kosher":      ["domuz","pork","lard","shellfish","kabuklu deniz","karides","shrimp","midye","istakoz"],
+        "glutensiz":   ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum","siyez","spelt"],
+        "dusuk_seker": ["seker","sugar","glikoz","glucose","fruktoz","fructose","misir surubu","corn syrup","sukroz","sucrose","dekstroz","dextrose","maltoz","maltodextrin"],
+        "dusuk_tuz":   ["sodyum","sodium","tuz","salt","msg","monosodyum"],
     }
     def _dh_match(allerjen_txt):
         if not allerjen_txt or _drol != "kullanici":
@@ -2545,15 +2549,29 @@ def tarama():
             pass
     if _h_cache:
         _user_hastalik = set(x.strip() for x in _h_cache.split(",") if x.strip())
+    _user_yeme = set()
+    _y_cache = session.get("_yeme_aliskanlik")
+    if _y_cache:
+        _user_yeme = set(x.strip() for x in _y_cache.split(",") if x.strip())
 
     HASTALIK_ALLERJEN = {
-        "colyak":       ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum"],
-        "gluten":       ["gluten","bugday","wheat","arpa","cavdar","rye","barley","triticum"],
-        "laktoz":       ["sut","milk","laktoz","lactose","peynir","cheese","krema","cream","dairy","whey"],
-        "fruktoz":      ["fruktoz","fructose","sorbitol","meyve sekeri"],
-        "seker":        ["seker","sugar","glikoz","glucose","fruktoz","fructose","misir surubu","corn syrup","sukroz","sucrose","dekstroz","dextrose"],
-        "hipertansiyon":["sodyum","sodium","tuz","salt"],
-        "kolesterol":   ["doymus yag","saturated","trans yag","trans fat"],
+        "colyak":       ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum","siyez","spelt","kamut"],
+        "gluten":       ["gluten","bugday","wheat","arpa","cavdar","rye","barley","triticum","siyez","spelt","kamut"],
+        "laktoz":       ["sut","milk","laktoz","lactose","peynir","cheese","krema","cream","dairy","whey","yogurt","tereyag","butter","kazein","casein"],
+        "fruktoz":      ["fruktoz","fructose","sorbitol","meyve sekeri","agave","fruit sugar"],
+        "seker":        ["seker","sugar","glikoz","glucose","fruktoz","fructose","misir surubu","corn syrup","sukroz","sucrose","dekstroz","dextrose","maltoz","maltodextrin","agave"],
+        "hipertansiyon":["sodyum","sodium","tuz","salt","msg","monosodyum"],
+        "kolesterol":   ["doymus yag","saturated","trans yag","trans fat","kolesterol","cholesterol"],
+    }
+    YEME_ALLERJEN = {
+        "vegan":       ["et","tavuk","balik","sut","milk","yumurta","egg","peynir","tereyag","jelatin","gelatin","bal","honey","dairy","whey","kazein","casein","laktoz","lactose","hayvansal"],
+        "vejetaryan":  ["et","tavuk","balik","jelatin","gelatin","sosis","sucuk","pastirma","bacon","meat","chicken","fish","beef","pork"],
+        "pescatarian": ["et","tavuk","chicken","beef","pork","sosis","sucuk","pastirma","bacon","meat","dana","kuzu","lamb"],
+        "halal":       ["domuz","pork","jelatin","gelatin","alkol","alcohol","wine","beer","lard","bacon"],
+        "kosher":      ["domuz","pork","lard","shellfish","kabuklu deniz","karides","shrimp","midye","istakoz"],
+        "glutensiz":   ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum","siyez","spelt"],
+        "dusuk_seker": ["seker","sugar","glikoz","glucose","fruktoz","fructose","misir surubu","corn syrup","sukroz","sucrose","dekstroz","dextrose","maltoz","maltodextrin"],
+        "dusuk_tuz":   ["sodyum","sodium","tuz","salt","msg","monosodyum"],
     }
 
     if barkod:
@@ -2738,7 +2756,7 @@ def tarama():
                 # Eger lokal DB'de yeterli veri varsa besin icin OFF'a gitmeye gerek yok
                 # AMA kullanicinin saglik profili varsa izler/allerjen icin OFF'a git
                 _local_has_data = _has_local or bool(_local_ic) or bool(_local_allerjenler)
-                _need_off_for_allergen = bool(_user_hastalik)  # saglik profili varsa izleri kontrol et
+                _need_off_for_allergen = bool(_user_hastalik) or bool(_user_yeme)  # saglik/yeme profili varsa izleri kontrol et
                 _off = off_allerjen(barkod) if (not _local_has_data or _need_off_for_allergen) else None
                 if _off or _has_local:
                     # Besin verisini belirle: lokal varsa onu kullan, yoksa OFF
@@ -2872,15 +2890,27 @@ def tarama():
                     if _kw in _urun_allerjen_str:
                         _al_uyari_listesi.append(_hastalik)
                         break
+            # Yeme alışkanlığı kontrolü de ekle
+            _yeme_uyari_listesi = []
+            for _yeme in _user_yeme:
+                for _kw in YEME_ALLERJEN.get(_yeme, []):
+                    if _kw in _urun_allerjen_str:
+                        _yeme_uyari_listesi.append(_yeme)
+                        break
             _allerjen_uyari_html = ""
-            if _al_uyari_listesi:
+            if _al_uyari_listesi or _yeme_uyari_listesi:
                 _al_labels = {"colyak":"Çölyak","gluten":"Gluten Alerjisi","laktoz":"Laktoz İntoleransı",
                               "fruktoz":"Fruktoz İntoleransı","seker":"Şeker Hastalığı","hipertansiyon":"Hipertansiyon","kolesterol":"Kolesterol"}
-                _uyari_text = ", ".join(_al_labels.get(h,h.upper()) for h in _al_uyari_listesi)
+                _yeme_labels = {"vegan":"Vegan","vejetaryan":"Vejetaryen","pescatarian":"Pescatarian",
+                               "halal":"Helal","kosher":"Koşer","glutensiz":"Glutensiz","dusuk_seker":"Düşük Şeker","dusuk_tuz":"Düşük Tuz"}
+                _all_warnings = []
+                _all_warnings.extend(_al_labels.get(h,h.upper()) for h in _al_uyari_listesi)
+                _all_warnings.extend(_yeme_labels.get(y,y.upper()) for y in _yeme_uyari_listesi)
+                _uyari_text = ", ".join(_all_warnings)
                 _allerjen_uyari_html = (
                     '<div class="alerjen-uyari" id="alerjen-uyari-banner">'
                     f'<span style="font-size:1.3rem">&#9888;</span>'
-                    f'<div><strong>ALERJEN UYARISI</strong><br>'
+                    f'<div><strong>UYARI</strong><br>'
                     f'<span style="font-size:.78rem">Bu ürün senin için risk taşıyor: {_uyari_text}</span></div>'
                     '</div>'
                     '<style>'
@@ -3797,19 +3827,23 @@ def hareketler():
             _user_yeme = set(x.strip() for x in _yc.split(",") if x.strip())
 
     HASTALIK_ALLERJEN = {
-        "colyak": ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum"],
-        "gluten": ["gluten","bugday","wheat","arpa","cavdar","rye","barley","triticum"],
-        "laktoz": ["sut","milk","laktoz","lactose","peynir","cheese","krema","cream","dairy","whey"],
-        "fruktoz": ["fruktoz","fructose","sorbitol","meyve sekeri"],
-        "hipertansiyon": ["sodyum","sodium","tuz","salt"],
-        "kolesterol": ["doymus yag","saturated","trans yag","trans fat"],
+        "colyak":       ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum","siyez","spelt","kamut"],
+        "gluten":       ["gluten","bugday","wheat","arpa","cavdar","rye","barley","triticum","siyez","spelt","kamut"],
+        "laktoz":       ["sut","milk","laktoz","lactose","peynir","cheese","krema","cream","dairy","whey","yogurt","tereyag","butter","kazein","casein"],
+        "fruktoz":      ["fruktoz","fructose","sorbitol","meyve sekeri","agave","fruit sugar"],
+        "seker":        ["seker","sugar","glikoz","glucose","fruktoz","fructose","misir surubu","corn syrup","sukroz","sucrose","dekstroz","dextrose","maltoz","maltodextrin","agave"],
+        "hipertansiyon":["sodyum","sodium","tuz","salt","msg","monosodyum"],
+        "kolesterol":   ["doymus yag","saturated","trans yag","trans fat","kolesterol","cholesterol"],
     }
     YEME_KEYWORDS = {
-        "vegan": ["et","tavuk","balik","sut","milk","yumurta","egg","peynir","tereyag","jelatin","gelatin","bal","honey"],
-        "vejetaryan": ["et","tavuk","balik","jelatin","gelatin"],
-        "glutensiz": ["gluten","bugday","wheat","arpa","yulaf","cavdar"],
-        "dusuk_seker": ["seker","sugar","glikoz","fruktoz","misir surubu","syrup"],
-        "dusuk_tuz": ["sodyum","sodium","tuz","salt"],
+        "vegan":       ["et","tavuk","balik","sut","milk","yumurta","egg","peynir","tereyag","jelatin","gelatin","bal","honey","dairy","whey","kazein","casein","laktoz","lactose","hayvansal"],
+        "vejetaryan":  ["et","tavuk","balik","jelatin","gelatin","sosis","sucuk","pastirma","bacon","meat","chicken","fish","beef","pork"],
+        "pescatarian": ["et","tavuk","chicken","beef","pork","sosis","sucuk","pastirma","bacon","meat","dana","kuzu","lamb"],
+        "halal":       ["domuz","pork","jelatin","gelatin","alkol","alcohol","sogan suyu","wine","beer","lard","bacon"],
+        "kosher":      ["domuz","pork","lard","shellfish","kabuklu deniz","karides","shrimp","midye","istakoz"],
+        "glutensiz":   ["gluten","bugday","wheat","arpa","yulaf","cavdar","rye","barley","oat","triticum","siyez","spelt"],
+        "dusuk_seker": ["seker","sugar","glikoz","glucose","fruktoz","fructose","misir surubu","corn syrup","sukroz","sucrose","dekstroz","dextrose","maltoz","maltodextrin"],
+        "dusuk_tuz":   ["sodyum","sodium","tuz","salt","msg","monosodyum"],
     }
 
     def _allerjen_match(allerjen_txt):
