@@ -2551,6 +2551,7 @@ def tarama():
         "gluten":       ["gluten","bugday","wheat","arpa","cavdar","rye","barley","triticum"],
         "laktoz":       ["sut","milk","laktoz","lactose","peynir","cheese","krema","cream","dairy","whey"],
         "fruktoz":      ["fruktoz","fructose","sorbitol","meyve sekeri"],
+        "seker":        ["seker","sugar","glikoz","glucose","fruktoz","fructose","misir surubu","corn syrup","sukroz","sucrose","dekstroz","dextrose"],
         "hipertansiyon":["sodyum","sodium","tuz","salt"],
         "kolesterol":   ["doymus yag","saturated","trans yag","trans fat"],
     }
@@ -2734,10 +2735,11 @@ def tarama():
                 _local_katki = urun.get("katki_maddeleri") or ""
 
                 # ── PERF: OFF API'ye HER tarama icin gitme!
-                # Eger lokal DB'de yeterli veri varsa OFF'a gitmeye gerek yok (200ms-2sn tasarruf)
-                # Sadece lokal'de hicbir besin/icindekiler/allerjen yoksa OFF'a sor
+                # Eger lokal DB'de yeterli veri varsa besin icin OFF'a gitmeye gerek yok
+                # AMA kullanicinin saglik profili varsa izler/allerjen icin OFF'a git
                 _local_has_data = _has_local or bool(_local_ic) or bool(_local_allerjenler)
-                _off = off_allerjen(barkod) if not _local_has_data else None
+                _need_off_for_allergen = bool(_user_hastalik)  # saglik profili varsa izleri kontrol et
+                _off = off_allerjen(barkod) if (not _local_has_data or _need_off_for_allergen) else None
                 if _off or _has_local:
                     # Besin verisini belirle: lokal varsa onu kullan, yoksa OFF
                     if _has_local:
@@ -2854,8 +2856,16 @@ def tarama():
                         '</div>',
                     ])
 
-            # Allerjen çakışma kontrolü
-            _urun_allerjen_str = (urun.get("allerjenler") or "").lower()
+            # Allerjen çakışma kontrolü — DB allerjenler + OFF izler + icindekiler hepsini kontrol et
+            _chk_parts = []
+            _chk_parts.append((urun.get("allerjenler") or "").lower())
+            _chk_parts.append((urun.get("icindekiler") or "").lower())
+            _chk_parts.append((urun.get("katki_maddeleri") or "").lower())
+            if _off:
+                _chk_parts.extend(a.lower() for a in (_off.get("allerjenler") or []))
+                _chk_parts.extend(z.lower() for z in (_off.get("izler") or []))
+                _chk_parts.append((_off.get("icerik") or "").lower())
+            _urun_allerjen_str = " ".join(_chk_parts)
             _al_uyari_listesi = []
             for _hastalik in _user_hastalik:
                 for _kw in HASTALIK_ALLERJEN.get(_hastalik, []):
@@ -2865,7 +2875,7 @@ def tarama():
             _allerjen_uyari_html = ""
             if _al_uyari_listesi:
                 _al_labels = {"colyak":"Çölyak","gluten":"Gluten Alerjisi","laktoz":"Laktoz İntoleransı",
-                              "fruktoz":"Fruktoz İntoleransı","hipertansiyon":"Hipertansiyon","kolesterol":"Kolesterol"}
+                              "fruktoz":"Fruktoz İntoleransı","seker":"Şeker Hastalığı","hipertansiyon":"Hipertansiyon","kolesterol":"Kolesterol"}
                 _uyari_text = ", ".join(_al_labels.get(h,h.upper()) for h in _al_uyari_listesi)
                 _allerjen_uyari_html = (
                     '<div class="alerjen-uyari" id="alerjen-uyari-banner">'
