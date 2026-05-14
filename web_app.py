@@ -1323,7 +1323,7 @@ document.querySelectorAll('.stat-card .val').forEach(function(el){
 </script>
 
 <!-- ═══════════════ CHATBOT WIDGET ═══════════════ -->
-{% if session.get('rol') in ['kullanici', 'admin'] %}
+{% if session.get('rol') in ['kullanici', 'admin'] and page != 'ai-okuyucu' %}
 <style>
 #cb-btn{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--g);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.4rem;box-shadow:0 4px 24px rgba(255,255,255,.12);z-index:9000;transition:transform .2s}
 #cb-btn:hover{transform:scale(1.1)}
