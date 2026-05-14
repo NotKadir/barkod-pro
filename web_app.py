@@ -1327,7 +1327,8 @@ document.querySelectorAll('.stat-card .val').forEach(function(el){
 <style>
 #cb-btn{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:var(--g);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.4rem;box-shadow:0 4px 24px rgba(255,255,255,.12);z-index:9000;transition:transform .2s}
 #cb-btn:hover{transform:scale(1.1)}
-#cb-panel{position:fixed;bottom:88px;right:24px;width:340px;max-width:calc(100vw - 32px);height:480px;max-height:calc(100vh - 120px);background:#0d0d0d;border:1px solid #1e1e1e;display:flex;flex-direction:column;z-index:9000;box-shadow:0 8px 40px rgba(0,0,0,.6);display:none}
+#cb-panel{position:fixed;bottom:88px;right:24px;width:340px;max-width:calc(100vw - 48px);height:420px;max-height:calc(100vh - 180px);background:#0d0d0d;border:1px solid #1e1e1e;display:flex;flex-direction:column;z-index:9000;box-shadow:0 8px 40px rgba(0,0,0,.6);border-radius:4px;display:none}
+@media(max-width:480px){#cb-panel{right:12px;bottom:80px;width:calc(100vw - 24px);max-height:calc(100vh - 140px)}}
 #cb-header{padding:14px 16px;border-bottom:1px solid #1a1a1a;font-family:JetBrains Mono,monospace;font-size:.65rem;letter-spacing:2px;color:var(--g);text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 #cb-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
 #cb-messages::-webkit-scrollbar{width:3px}
