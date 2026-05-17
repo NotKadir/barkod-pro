@@ -102,7 +102,7 @@ TRANSLATIONS = {
         # Nav
         "nav.tarama": "Tarama", "nav.dashboard": "Dashboard", "nav.urunler": "Urunler",
         "nav.partiler": "Partiler", "nav.hareketler": "Hareketler", "nav.raporlar": "Raporlar",
-        "nav.kullanicilar": "Kullanicilar", "nav.ai_okuyucu": "AI Okuyucu", "nav.oneri": "Oneri",
+        "nav.kullanicilar": "Kullanicilar", "nav.ai_okuyucu": "AI Okuyucu", "nav.ara": "Ara", "nav.oneri": "Oneri",
         "nav.cikis": "Cikis", "nav.giris_yap": "Giris Yap", "nav.ayarlar": "Ayarlar",
         # Page titles
         "title.dashboard": "Dashboard", "title.tarama": "Tarama", "title.urunler": "Urunler",
@@ -207,7 +207,7 @@ TRANSLATIONS = {
     "en": {
         "nav.tarama": "Scan", "nav.dashboard": "Dashboard", "nav.urunler": "Products",
         "nav.partiler": "Batches", "nav.hareketler": "Activity", "nav.raporlar": "Reports",
-        "nav.kullanicilar": "Users", "nav.ai_okuyucu": "AI Reader", "nav.oneri": "Feedback",
+        "nav.kullanicilar": "Users", "nav.ai_okuyucu": "AI Reader", "nav.ara": "Search", "nav.oneri": "Feedback",
         "nav.cikis": "Logout", "nav.giris_yap": "Sign In", "nav.ayarlar": "Settings",
         "title.dashboard": "Dashboard", "title.tarama": "Scan", "title.urunler": "Products",
         "title.partiler": "Batches", "title.hareketler": "Activity History",
@@ -463,6 +463,13 @@ def init_db():
                 c.commit()
             except Exception:
                 pass
+        # Pro plan kolonları migration
+        for _col, _typ in [("plan","TEXT DEFAULT 'free'"), ("katki_sayisi","INTEGER DEFAULT 0"), ("pro_verilis","TIMESTAMPTZ")]:
+            try:
+                c.execute(f"ALTER TABLE kullanicilar ADD COLUMN IF NOT EXISTS {_col} {_typ}")
+                c.commit()
+            except Exception:
+                pass
 
         # ── PERF: KRITIK INDEX'LER (dashboard/hareketler/tarama sorgu hizini 10-50x arttirir)
         # Bu index'ler olmadan PostgreSQL "sequential scan" yapar (tum tabloyu okur)
@@ -482,6 +489,8 @@ def init_db():
             # kullanicilar - firebase_uid icin (login)
             "CREATE INDEX IF NOT EXISTS idx_kullanicilar_firebase ON kullanicilar (firebase_uid)",
             "CREATE INDEX IF NOT EXISTS idx_kullanicilar_email ON kullanicilar (email)",
+            # urunler - urun_adi arama icin (Pro search)
+            "CREATE INDEX IF NOT EXISTS idx_urunler_urun_adi ON urunler (urun_adi)",
         ]
         for _idx_sql in _INDEXES:
             try:
@@ -490,6 +499,14 @@ def init_db():
             except Exception as _ie:
                 # Index olusturma hatasi uygulamayi durdurmamali
                 print(f"[INDEX] {_ie}", file=sys.stderr, flush=True)
+
+        # pg_trgm trigram index (arama performansi icin, extension yoksa atla)
+        try:
+            c.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+            c.execute("CREATE INDEX IF NOT EXISTS idx_urunler_urun_adi_trgm ON urunler USING gin (urun_adi gin_trgm_ops)")
+            c.commit()
+        except Exception:
+            pass
 
         # PostgreSQL query planner istatistikleri guncelle (yeni index'leri kullanmasi icin)
         try:
@@ -756,7 +773,13 @@ BASE = r"""<!DOCTYPE html>
   --g:#ffffff;--g2:#e5e5e5;--bg:#060606;--panel:#0e0e0e;
   --card:#111111;--border:#1e1e1e;--text:#f5f5f5;--sub:#d4d4d4;--muted:#525252;
   --accent:#a5d8ff;--red:#e05252;--yellow:#f0b429;--orange:#fb923c;--purple:#a78bfa;
+  --pro: #8B5CF6;--pro-glow:rgba(139,92,246,.4);--pro-gradient:linear-gradient(135deg,#7C3AED,#A855F7,#7C3AED);
 }
+.pro-badge{display:inline-block;background:var(--pro-gradient);color:#fff;font-family:JetBrains Mono,monospace;font-size:.5rem;letter-spacing:2px;padding:2px 8px;border-radius:3px;margin-left:8px;vertical-align:middle}
+.btn-pro{position:relative}
+.btn-pro::after{content:'PRO';position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);font-family:JetBrains Mono,monospace;font-size:.45rem;letter-spacing:2px;color:var(--pro);opacity:.15}
+.btn-pro:hover{background:var(--pro-gradient)!important;box-shadow:0 0 20px var(--pro-glow);border-color:var(--pro)!important;transition:all .3s}
+.pro-glow:hover{box-shadow:0 0 24px var(--pro-glow);border-color:var(--pro)!important}
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 html{overflow-x:hidden}
@@ -1256,9 +1279,12 @@ document.addEventListener('DOMContentLoaded',function(){
     {% if session.get('rol') in ['admin','mudur','kasiyer','kullanici'] %}
     <a href="/ai-okuyucu" class="{{ 'active' if page=='ai-okuyucu' }}">{{ t('nav.ai_okuyucu') }}</a>
     {% endif %}
+    {% if session.get('plan') == 'pro' or session.get('rol') in ['admin','mudur'] %}
+    <a href="/ara" class="{{ 'active' if page=='ara' }}">{{ t('nav.ara') }}</a>
+    {% endif %}
     <a href="/oneri" class="{{ 'active' if page=='oneri' }}">{{ t('nav.oneri') }}</a>
     <div class="nav-divider"></div>
-    <span class="rol-badge">{{ session.get('rol','') }}</span>
+    <span class="rol-badge">{{ session.get('rol','') }}</span>{% if session.get('plan') == 'pro' %}<span class="pro-badge">PRO</span>{% endif %}
     <span class="nav-user">{{ session.get('tam_ad') or session.get('user') }}</span>
     <a href="/ayarlar" class="{{ 'active' if page=='ayarlar' }}" title="{{ t('nav.ayarlar') }}" style="font-size:1.1rem;padding:8px 10px">&#9881;</a>
     <a href="/cikis" class="btn-logout">{{ t('nav.cikis') }}</a>
@@ -1530,6 +1556,8 @@ def giris():
             # PERF: Saglik profilini session'a cache'le (her sayfada DB hit'i ortadan kalkar)
             session["_hastaliklar"]     = row.get("hastaliklar") or ""
             session["_yeme_aliskanlik"] = row.get("yeme_aliskanlik") or ""
+            session["plan"] = row.get("plan") or "free"
+            session["katki_sayisi"] = row.get("katki_sayisi") or 0
             c2 = get_db()
             c2.execute("UPDATE kullanicilar SET son_giris=NOW() WHERE kullanici_adi=%s", (k,))
             c2.commit()
@@ -2242,6 +2270,8 @@ def firebase_login():
         # PERF: Saglik profilini session'a cache'le
         session["_hastaliklar"]     = row.get("hastaliklar") or ""
         session["_yeme_aliskanlik"] = row.get("yeme_aliskanlik") or ""
+        session["plan"] = row.get("plan") or "free"
+        session["katki_sayisi"] = row.get("katki_sayisi") or 0
         c.execute("UPDATE kullanicilar SET son_giris=NOW() WHERE id=%s", (row["id"],))
         c.commit()
         redirect_url = "/ayarlar?yeni=1" if is_new else "/"
@@ -2935,6 +2965,26 @@ def tarama():
                     '</script>'
                 )
 
+            # ── Eksik veri uyarisi (admin/mudur icin) ──
+            eksik_veri_html = ""
+            if session.get("rol") in ("admin","mudur"):
+                _eksik = []
+                if not urun.get("icindekiler"):
+                    _eksik.append("Icindekiler")
+                if not urun.get("allerjenler"):
+                    _eksik.append("Alerjenler")
+                if not urun.get("kalori"):
+                    _eksik.append("Besin Degerleri")
+                if not urun.get("katki_maddeleri"):
+                    _eksik.append("Katki Maddeleri")
+                if _eksik:
+                    eksik_veri_html = (
+                        '<div style="margin-top:12px;padding:10px;border:1px solid #f0b42944;background:#f0b42908">'
+                        '<div style="font-family:JetBrains Mono,monospace;font-size:.55rem;color:#f0b429;letter-spacing:2px;margin-bottom:4px">&#9888; EKSIK VERI</div>'
+                        f'<div style="font-size:.75rem;color:#a3a3a3">{", ".join(_eksik)}</div>'
+                        '</div>'
+                    )
+
             fiyat_html = (f'<div style="font-size:1.7rem;font-weight:800;color:#ffffff">'
                           f'{float(urun.get("fiyat") or 0):.2f} TL</div>'
                           if _show_price_skt else '')
@@ -3018,6 +3068,7 @@ def tarama():
       </form>
     </div>
     {allerjen_section}
+    {eksik_veri_html}
   </div>
 </div>
 <script>
@@ -4661,6 +4712,18 @@ def api_urun_ai_ekle():
         )
         c.commit()
 
+        # Katki sayisini artir ve 5'e ulasinca otomatik Pro ver
+        try:
+            c.execute("UPDATE kullanicilar SET katki_sayisi = katki_sayisi + 1 WHERE kullanici_adi=%s", (eklenme_kullanici,))
+            _new_katki = c.execute("SELECT katki_sayisi, plan FROM kullanicilar WHERE kullanici_adi=%s", (eklenme_kullanici,)).fetchone()
+            if _new_katki and (_new_katki["katki_sayisi"] or 0) >= 5 and (_new_katki["plan"] or "free") == "free":
+                c.execute("UPDATE kullanicilar SET plan='pro', pro_verilis=NOW() WHERE kullanici_adi=%s", (eklenme_kullanici,))
+                session["plan"] = "pro"
+            session["katki_sayisi"] = _new_katki["katki_sayisi"] if _new_katki else 0
+            c.commit()
+        except Exception:
+            pass
+
         # 4) Teşekkür maili sadece onaylanmis ürünler için (yoksa spam olur)
         if dogrulama["onaylanmis"]:
             try:
@@ -4786,11 +4849,147 @@ def admin_urun_reddet():
         c.close()
     return redirect("/admin/onay-bekleyenler")
 
+@app.route("/api/ara")
+@yetkili_giris
+def api_ara():
+    q = (request.args.get("q") or "").strip()
+    if not q or len(q) < 2:
+        return jsonify({"sonuclar": []})
+
+    # Split query into words for flexible matching
+    words = q.lower().split()
+
+    c = get_db()
+    try:
+        # Build WHERE clause: each word must appear in urun_adi
+        conditions = []
+        params = []
+        for w in words:
+            conditions.append("LOWER(urun_adi) LIKE %s")
+            params.append(f"%{w}%")
+
+        where = " AND ".join(conditions)
+        rows = c.execute(
+            f"SELECT barkod, urun_adi, kategori FROM urunler WHERE {where} ORDER BY urun_adi LIMIT 15",
+            tuple(params)
+        ).fetchall()
+
+        sonuclar = [{"barkod": r["barkod"], "urun_adi": r["urun_adi"], "kategori": r["kategori"] or "", "kaynak": "db"} for r in rows]
+
+        # If less than 5 local results, also search OFF
+        if len(sonuclar) < 5:
+            try:
+                import requests as req
+                off_r = req.get(f"https://world.openfoodfacts.org/cgi/search.pl?search_terms={q}&json=1&page_size=5&fields=code,product_name,categories", timeout=3)
+                if off_r.status_code == 200:
+                    off_data = off_r.json()
+                    for p in (off_data.get("products") or []):
+                        code = p.get("code","")
+                        name = p.get("product_name","")
+                        if code and name and not any(s["barkod"]==code for s in sonuclar):
+                            sonuclar.append({"barkod": code, "urun_adi": name, "kategori": (p.get("categories") or "").split(",")[0].strip()[:30], "kaynak": "off"})
+            except Exception:
+                pass
+
+        return jsonify({"sonuclar": sonuclar[:15]})
+    finally:
+        c.close()
+
+@app.route("/ara")
+@yetkili_giris
+def ara():
+    if session.get("rol") not in ("admin","mudur","kasiyer","kullanici"):
+        return redirect("/")
+    if session.get("plan","free") == "free" and session.get("rol") not in ("admin","mudur"):
+        return redirect("/tarama")
+    content = r"""
+<div class="page-title">Ara</div>
+<div style="max-width:640px;margin:0 auto">
+  <div style="position:relative">
+    <input type="text" id="ara-input" placeholder="Urun adi ile ara..." autofocus autocomplete="off"
+           style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:14px 14px 14px 40px;font-family:JetBrains Mono,monospace;font-size:.9rem"
+           oninput="araDebounce()">
+    <svg style="position:absolute;left:12px;top:50%;transform:translateY(-50%);opacity:.3" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+  </div>
+  <div id="ara-son" style="margin-top:8px;display:none">
+    <div style="font-family:JetBrains Mono,monospace;font-size:.5rem;color:#525252;letter-spacing:2px;margin-bottom:6px;padding:0 4px">SON ARAMALAR</div>
+    <div id="ara-son-list"></div>
+  </div>
+  <div id="ara-loading" style="display:none;text-align:center;padding:24px;font-family:JetBrains Mono,monospace;font-size:.65rem;color:#525252;letter-spacing:2px">ARANIYOR...</div>
+  <div id="ara-sonuclar" style="margin-top:12px"></div>
+  <div id="ara-bos" style="display:none;text-align:center;padding:40px;color:#525252;font-family:JetBrains Mono,monospace;font-size:.7rem;letter-spacing:1px">Sonuc bulunamadi</div>
+</div>
+<script>
+var _araTimer=null;
+var _sonAramalar=JSON.parse(localStorage.getItem('nexstock_son_aramalar')||'[]');
+
+function araRenderSon(){
+  if(!_sonAramalar.length){document.getElementById('ara-son').style.display='none';return;}
+  document.getElementById('ara-son').style.display='block';
+  document.getElementById('ara-son-list').innerHTML=_sonAramalar.slice(0,5).map(function(s){
+    return '<div onclick="document.getElementById(\'ara-input\').value=\''+s+'\';araYap()" style="padding:8px 12px;cursor:pointer;font-size:.8rem;color:#a3a3a3;border-bottom:1px solid #0d0d0d;transition:background .15s" onmouseover="this.style.background=\'#111\'" onmouseout="this.style.background=\'none\'">'+s+'</div>';
+  }).join('');
+}
+function araDebounce(){
+  clearTimeout(_araTimer);
+  var q=document.getElementById('ara-input').value.trim();
+  if(!q){document.getElementById('ara-sonuclar').innerHTML='';document.getElementById('ara-bos').style.display='none';araRenderSon();return;}
+  document.getElementById('ara-son').style.display='none';
+  _araTimer=setTimeout(function(){araYap();},300);
+}
+function araYap(){
+  var q=document.getElementById('ara-input').value.trim();
+  if(!q) return;
+  document.getElementById('ara-loading').style.display='block';
+  document.getElementById('ara-bos').style.display='none';
+  _sonAramalar=_sonAramalar.filter(function(s){return s!==q;});
+  _sonAramalar.unshift(q);
+  if(_sonAramalar.length>5)_sonAramalar.pop();
+  localStorage.setItem('nexstock_son_aramalar',JSON.stringify(_sonAramalar));
+
+  fetch('/api/ara?q='+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(d){
+    document.getElementById('ara-loading').style.display='none';
+    if(!d.sonuclar||!d.sonuclar.length){
+      document.getElementById('ara-sonuclar').innerHTML='';
+      document.getElementById('ara-bos').style.display='block';
+      return;
+    }
+    document.getElementById('ara-bos').style.display='none';
+    document.getElementById('ara-sonuclar').innerHTML=d.sonuclar.map(function(u){
+      var nutri='';
+      if(u.nutriscore) nutri='<span style="display:inline-block;padding:1px 6px;border-radius:2px;font-size:.6rem;font-family:JetBrains Mono,monospace;letter-spacing:1px;background:'+(u.nutriscore==='A'?'#22c55e':u.nutriscore==='B'?'#84cc16':u.nutriscore==='C'?'#f59e0b':u.nutriscore==='D'?'#f97316':'#ef4444')+';color:#000;font-weight:700">'+u.nutriscore+'</span>';
+      var kat=u.kategori?'<span style="color:#525252;font-size:.7rem"> · '+u.kategori+'</span>':'';
+      var src=u.kaynak==='off'?'<span style="font-size:.5rem;color:#525252;font-family:JetBrains Mono,monospace;letter-spacing:1px;margin-left:6px">OFF</span>':'';
+      return '<a href="/tarama?barkod='+u.barkod+'" style="display:block;padding:12px;border-bottom:1px solid #111;text-decoration:none;color:inherit;transition:background .15s" onmouseover="this.style.background=\'#111\'" onmouseout="this.style.background=\'none\'">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center">'
+        +'<div><span style="color:#f5f5f5;font-size:.85rem">'+u.urun_adi+'</span>'+kat+src+'</div>'
+        +'<div style="display:flex;align-items:center;gap:8px">'+nutri+'<span style="color:#525252;font-size:.65rem;font-family:JetBrains Mono,monospace">'+u.barkod+'</span></div>'
+        +'</div></a>';
+    }).join('');
+  }).catch(function(){
+    document.getElementById('ara-loading').style.display='none';
+  });
+}
+document.getElementById('ara-input').addEventListener('focus',function(){
+  if(!this.value.trim()) araRenderSon();
+});
+araRenderSon();
+</script>
+"""
+    return render(content, page="ara", title="Ara")
+
 @app.route("/ai-okuyucu")
 @yetkili_giris
 def ai_okuyucu():
     if session.get("rol") not in ("admin","mudur","kasiyer","kullanici"):
         return redirect("/")
+    c = get_db()
+    try:
+        _row = c.execute("SELECT katki_sayisi, plan FROM kullanicilar WHERE kullanici_adi=%s", (session.get("user"),)).fetchone()
+        _katki = min((_row["katki_sayisi"] or 0) if _row else 0, 5)
+        _plan = (_row["plan"] or "free") if _row else "free"
+    finally:
+        c.close()
     content = r"""
 <div class="page-title">{{ t('title.ai_okuyucu') }}</div>
 <div style="max-width:640px;margin:0 auto">
@@ -4802,6 +5001,18 @@ def ai_okuyucu():
   <div class="step-tab" id="tab3" style="flex:1;text-align:center;padding:10px 4px;font-size:.65rem;font-family:JetBrains Mono,monospace;letter-spacing:1px;color:#525252;text-transform:uppercase;border-left:1px solid #1a1a1a;transition:all .2s">3 · İÇİNDEKİLER</div>
   <div class="step-tab" id="tab4" style="flex:1;text-align:center;padding:10px 4px;font-size:.65rem;font-family:JetBrains Mono,monospace;letter-spacing:1px;color:#525252;text-transform:uppercase;border-left:1px solid #1a1a1a;transition:all .2s">4 · KAYDET</div>
 </div>
+
+{% if _plan == 'free' %}
+<div style="margin-bottom:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+    <span style="font-family:JetBrains Mono,monospace;font-size:.55rem;color:#525252;letter-spacing:2px">URUN KATKIN</span>
+    <span style="font-family:JetBrains Mono,monospace;font-size:.55rem;color:{{ '#8B5CF6' if _katki>=5 else '#e05252' if _katki>=1 else '#525252' }};letter-spacing:1px">{{ _katki }}/5{% if _katki>=5 %} · PRO KAZANILDI!{% endif %}</span>
+  </div>
+  <div style="width:100%;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden">
+    <div style="width:{{ (_katki/5)*100 }}%;height:100%;border-radius:2px;background:{{ 'linear-gradient(90deg,#e05252,#8B5CF6)' if _katki>=2 else '#e05252' if _katki>=1 else '#1a1a1a' }};transition:width .6s"></div>
+  </div>
+</div>
+{% endif %}
 
 <!-- STEP 1: BARKOD -->
 <div id="step1" class="panel">
@@ -5150,7 +5361,7 @@ function kaydet(){
 }
 </script>
 """
-    return render(content, page="ai-okuyucu", title="AI Okuyucu")
+    return render(content, page="ai-okuyucu", title="AI Okuyucu", _katki=_katki, _plan=_plan)
 
 @app.route("/health")
 def health():
