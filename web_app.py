@@ -780,6 +780,8 @@ BASE = r"""<!DOCTYPE html>
 .btn-pro::after{content:'PRO';position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);font-family:JetBrains Mono,monospace;font-size:.45rem;letter-spacing:2px;color:var(--pro);opacity:.15}
 .btn-pro:hover{background:var(--pro-gradient)!important;box-shadow:0 0 20px var(--pro-glow);border-color:var(--pro)!important;transition:all .3s}
 .pro-glow:hover{box-shadow:0 0 24px var(--pro-glow);border-color:var(--pro)!important}
+.btn-muted:hover{background:var(--pro-gradient)!important;color:#fff!important;box-shadow:0 0 18px var(--pro-glow);border-color:var(--pro)!important;transition:all .3s}
+.btn-muted:active{background:var(--pro-gradient)!important;color:#fff!important;box-shadow:0 0 24px var(--pro-glow);border-color:var(--pro)!important}
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 html{overflow-x:hidden}
@@ -901,9 +903,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:50;
 .nav a::after{content:'';position:absolute;bottom:0;left:9px;right:9px;height:1px;
   background:linear-gradient(90deg,transparent,var(--g),transparent);transform:scaleX(0);transition:transform .35s cubic-bezier(.16,1,.3,1)}
 .nav a::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.03);opacity:0;transition:opacity .25s}
-.nav a:hover{color:var(--text)}
-.nav a:hover::before{opacity:1}
+.nav a:hover{color:var(--pro);text-shadow:0 0 12px var(--pro-glow)}
+.nav a:hover::before{opacity:1;background:rgba(139,92,246,.05)}
 .nav a:hover::after,.nav a.active::after{transform:scaleX(1)}
+.nav a:hover::after{background:linear-gradient(90deg,transparent,var(--pro),transparent)!important}
 .nav a.active{color:var(--g)}
 .nav-divider{width:1px;height:20px;background:var(--border);margin:0 10px}
 .rol-badge{
@@ -5043,7 +5046,7 @@ def ai_okuyucu():
   <div class="panel">
     <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">BESIN ÖGELERİ ETİKETİ</div>
     <input type="file" id="besin-file" accept="image/*" capture="environment" style="display:none" onchange="besинScan(this)">
-    <button onclick="document.getElementById('besin-file').click()" class="btn btn-green" style="width:100%;padding:14px;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:10px">
+    <button onclick="document.getElementById('besin-file').click()" class="btn btn-green pro-glow" style="width:100%;padding:14px;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:10px">
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
       Besin Tablosunu Fotoğrafla
     </button>
@@ -5065,7 +5068,7 @@ def ai_okuyucu():
   <div class="panel">
     <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;text-transform:uppercase;margin-bottom:16px">İÇİNDEKİLER</div>
     <input type="file" id="ic-file" accept="image/*" capture="environment" style="display:none" onchange="icindekilerScan(this)">
-    <button onclick="document.getElementById('ic-file').click()" class="btn btn-green" style="width:100%;padding:14px;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:10px">
+    <button onclick="document.getElementById('ic-file').click()" class="btn btn-green pro-glow" style="width:100%;padding:14px;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:10px">
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
       İçindekileri Fotoğrafla
     </button>
