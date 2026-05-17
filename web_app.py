@@ -4876,20 +4876,29 @@ def api_ara():
 
         sonuclar = [{"barkod": r["barkod"], "urun_adi": r["urun_adi"], "kategori": r["kategori"] or "", "kaynak": "db"} for r in rows]
 
-        # If less than 5 local results, also search OFF
-        if len(sonuclar) < 5:
-            try:
-                import requests as req
-                off_r = req.get(f"https://world.openfoodfacts.org/cgi/search.pl?search_terms={q}&json=1&page_size=5&fields=code,product_name,categories", timeout=3)
-                if off_r.status_code == 200:
-                    off_data = off_r.json()
-                    for p in (off_data.get("products") or []):
-                        code = p.get("code","")
-                        name = p.get("product_name","")
-                        if code and name and not any(s["barkod"]==code for s in sonuclar):
-                            sonuclar.append({"barkod": code, "urun_adi": name, "kategori": (p.get("categories") or "").split(",")[0].strip()[:30], "kaynak": "off"})
-            except Exception:
-                pass
+        # Always search OFF too (user wants to find products NOT in local DB)
+        try:
+            import requests as req
+            from urllib.parse import quote
+            off_r = req.get(
+                f"https://world.openfoodfacts.org/cgi/search.pl?search_terms={quote(q)}&json=1&page_size=10&fields=code,product_name,categories,nutriscore_grade",
+                timeout=6, headers={"User-Agent": "NexStock/1.0"}
+            )
+            if off_r.status_code == 200:
+                off_data = off_r.json()
+                for p in (off_data.get("products") or []):
+                    code = p.get("code","")
+                    name = p.get("product_name","")
+                    if code and name and not any(s["barkod"]==code for s in sonuclar):
+                        sonuclar.append({
+                            "barkod": code,
+                            "urun_adi": name,
+                            "kategori": (p.get("categories") or "").split(",")[0].strip()[:30],
+                            "nutriscore": (p.get("nutriscore_grade") or "").upper(),
+                            "kaynak": "off"
+                        })
+        except Exception as _e:
+            print(f"[OFF-SEARCH] {_e}", flush=True)
 
         return jsonify({"sonuclar": sonuclar[:15]})
     finally:
