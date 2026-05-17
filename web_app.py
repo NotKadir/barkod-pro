@@ -1284,7 +1284,7 @@ document.addEventListener('DOMContentLoaded',function(){
     {% endif %}
     <a href="/oneri" class="{{ 'active' if page=='oneri' }}">{{ t('nav.oneri') }}</a>
     <div class="nav-divider"></div>
-    <span class="rol-badge">{{ session.get('rol','') }}</span>{% if session.get('plan') == 'pro' %}<span class="pro-badge">PRO</span>{% endif %}
+    <span class="rol-badge">{{ session.get('rol','') }}</span>{% if session.get('plan') == 'pro' or session.get('rol') in ['admin','mudur'] %}<span class="pro-badge">PRO</span>{% endif %}
     <span class="nav-user">{{ session.get('tam_ad') or session.get('user') }}</span>
     <a href="/ayarlar" class="{{ 'active' if page=='ayarlar' }}" title="{{ t('nav.ayarlar') }}" style="font-size:1.1rem;padding:8px 10px">&#9881;</a>
     <a href="/cikis" class="btn-logout">{{ t('nav.cikis') }}</a>
@@ -5002,7 +5002,7 @@ def ai_okuyucu():
   <div class="step-tab" id="tab4" style="flex:1;text-align:center;padding:10px 4px;font-size:.65rem;font-family:JetBrains Mono,monospace;letter-spacing:1px;color:#525252;text-transform:uppercase;border-left:1px solid #1a1a1a;transition:all .2s">4 · KAYDET</div>
 </div>
 
-{% if _plan == 'free' %}
+{% if _plan == 'free' and session.get('rol') not in ['admin','mudur'] %}
 <div style="margin-bottom:20px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
     <span style="font-family:JetBrains Mono,monospace;font-size:.55rem;color:#525252;letter-spacing:2px">URUN KATKIN</span>
