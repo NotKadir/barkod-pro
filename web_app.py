@@ -2313,8 +2313,7 @@ def firebase_login():
 @app.route("/cikis")
 def cikis():
     session.clear()
-    misafir_yap()
-    return redirect("/tarama")
+    return redirect("/giris")
 
 # ═══════════════════════════════════════════════════
 #  ANA SAYFA
