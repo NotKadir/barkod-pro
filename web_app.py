@@ -1657,12 +1657,15 @@ def kayit():
         isim             = request.form.get("isim", "").strip()
         k                = request.form.get("k", "").strip()
         s                = request.form.get("s", "").strip()
+        email            = request.form.get("email", "").strip()
         rol              = "kullanici"
         hastaliklar      = ",".join(request.form.getlist("hastalik"))
         yeme_aliskanlik  = ",".join(request.form.getlist("yeme"))
         import re as _sre
-        if not isim or not k or not s:
+        if not isim or not k or not s or not email:
             hata = "Tum alanlar zorunlu!"
+        elif "@" not in email or "." not in email.split("@")[-1]:
+            hata = "Gecerli bir e-mail adresi giriniz!"
         elif len(s) < 8:
             hata = "Sifre en az 8 karakter olmali!"
         elif not _sre.search(r"[A-Z]", s):
@@ -1679,10 +1682,12 @@ def kayit():
                 mevcut = c.execute("SELECT id FROM kullanicilar WHERE kullanici_adi=%s", (k,)).fetchone()
                 if mevcut:
                     hata = "Bu kullanici adi zaten alinmis!"
+                elif c.execute("SELECT id FROM kullanicilar WHERE email=%s", (email,)).fetchone():
+                    hata = "Bu e-mail adresi zaten kayitli!"
                 else:
                     c.execute(
-                        "INSERT INTO kullanicilar (kullanici_adi,sifre_hash,tam_ad,rol,hastaliklar,yeme_aliskanlik) VALUES (%s,%s,%s,%s,%s,%s)",
-                        (k, sh(s), isim, rol, hastaliklar or None, yeme_aliskanlik or None)
+                        "INSERT INTO kullanicilar (kullanici_adi,sifre_hash,tam_ad,rol,email,hastaliklar,yeme_aliskanlik) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                        (k, sh(s), isim, rol, email, hastaliklar or None, yeme_aliskanlik or None)
                     )
                     c.commit()
                     basari = "Hesap olusturuldu! Giris yapabilirsin."
@@ -1792,6 +1797,8 @@ def kayit():
         <input name="isim" id="isim-input" placeholder="{t('kayit.ad_soyad_ph')}" autocomplete="name">
         <label>{t("label.kullanici_adi").upper()}</label>
         <input name="k" id="k-input" placeholder="kullanici_adi" autocomplete="username">
+        <label>{t("label.email").upper()}</label>
+        <input name="email" id="email-input" type="email" placeholder="ornek@mail.com" autocomplete="email">
         <button type="button" class="btn btn-green" style="width:100%;margin-top:8px;padding:12px" onclick="goStep2()">{t("kayit.devam")} &#x2192;</button>
       </div>
       <div id="step-2" class="step-panel" style="display:none">
@@ -1837,8 +1844,10 @@ def kayit():
     function goStep2(){{
       var isim=document.getElementById('isim-input').value.trim();
       var k=document.getElementById('k-input').value.trim();
+      var em=document.getElementById('email-input').value.trim();
       if(!isim){{document.getElementById('isim-input').focus();document.getElementById('isim-input').style.borderColor='#e05252';return;}}
       if(!k){{document.getElementById('k-input').focus();document.getElementById('k-input').style.borderColor='#e05252';return;}}
+      if(!em||em.indexOf('@')<1){{document.getElementById('email-input').focus();document.getElementById('email-input').style.borderColor='#e05252';return;}}
       goStep(2);
       setTimeout(function(){{document.getElementById('pw-input').focus();}},100);
     }}
