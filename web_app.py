@@ -779,9 +779,9 @@ BASE = r"""<!DOCTYPE html>
 .btn-pro{position:relative}
 .btn-pro::after{content:'PRO';position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);font-family:JetBrains Mono,monospace;font-size:.45rem;letter-spacing:2px;color:var(--pro);opacity:.15}
 .btn-pro:hover{background:var(--pro-gradient)!important;box-shadow:0 0 20px var(--pro-glow);border-color:var(--pro)!important;transition:all .3s}
-.pro-glow:hover{box-shadow:0 0 24px var(--pro-glow);border-color:var(--pro)!important}
-.btn-muted:hover{background:var(--pro-gradient)!important;color:#fff!important;box-shadow:0 0 18px var(--pro-glow);border-color:var(--pro)!important;transition:all .3s}
-.btn-muted:active{background:var(--pro-gradient)!important;color:#fff!important;box-shadow:0 0 24px var(--pro-glow);border-color:var(--pro)!important}
+body.is-pro .pro-glow:hover{box-shadow:0 0 24px var(--pro-glow);border-color:var(--pro)!important}
+body.is-pro .btn-muted:hover{background:var(--pro-gradient)!important;color:#fff!important;box-shadow:0 0 18px var(--pro-glow);border-color:var(--pro)!important;transition:all .3s}
+body.is-pro .btn-muted:active{background:var(--pro-gradient)!important;color:#fff!important;box-shadow:0 0 24px var(--pro-glow);border-color:var(--pro)!important}
 /* ── Pro Aurora Side Effect ── */
 .aurora-wrap{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
 .aurora-wrap .a-orb{position:absolute;border-radius:50%;filter:blur(90px);opacity:0;will-change:transform,opacity}
@@ -917,10 +917,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:50;
 .nav a::after{content:'';position:absolute;bottom:0;left:9px;right:9px;height:1px;
   background:linear-gradient(90deg,transparent,var(--g),transparent);transform:scaleX(0);transition:transform .35s cubic-bezier(.16,1,.3,1)}
 .nav a::before{content:'';position:absolute;inset:0;background:rgba(255,255,255,.03);opacity:0;transition:opacity .25s}
-.nav a:hover{color:var(--pro);text-shadow:0 0 12px var(--pro-glow)}
-.nav a:hover::before{opacity:1;background:rgba(139,92,246,.05)}
+.nav a:hover{color:var(--text)}
+body.is-pro .nav a:hover{color:var(--pro);text-shadow:0 0 12px var(--pro-glow)}
+.nav a:hover::before{opacity:1}
+body.is-pro .nav a:hover::before{background:rgba(139,92,246,.05)}
 .nav a:hover::after,.nav a.active::after{transform:scaleX(1)}
-.nav a:hover::after{background:linear-gradient(90deg,transparent,var(--pro),transparent)!important}
+body.is-pro .nav a:hover::after{background:linear-gradient(90deg,transparent,var(--pro),transparent)!important}
 .nav a.active{color:var(--g)}
 .nav-divider{width:1px;height:20px;background:var(--border);margin:0 10px}
 .rol-badge{
@@ -1257,7 +1259,7 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 </script>
 </head>
-<body>
+<body{% if session.get('plan')=='pro' or session.get('rol') in ['admin','mudur'] %} class="is-pro"{% endif %}>
 <div id="loader">
   <canvas id="loader-canvas"></canvas>
   <div class="ld-wrap">
@@ -1293,9 +1295,8 @@ document.addEventListener('DOMContentLoaded',function(){
     <a href="/kullanicilar" class="{{ 'active' if page=='kullanicilar' }}">{{ t('nav.kullanicilar') }}</a>
     <a href="/admin/onay-bekleyenler" class="{{ 'active' if page=='onay-bekleyenler' }}" style="color:#f0b429">Onay</a>
     {% endif %}
-    {% if session.get('rol') in ['admin','mudur','kasiyer','kullanici'] %}
-    <a href="/ai-okuyucu" class="{{ 'active' if page=='ai-okuyucu' }}">{{ t('nav.ai_okuyucu') }}</a>
     {% endif %}
+    <a href="/ai-okuyucu" class="{{ 'active' if page=='ai-okuyucu' }}">{{ t('nav.ai_okuyucu') }}</a>
     {% if session.get('plan') == 'pro' or session.get('rol') in ['admin','mudur'] %}
     <a href="/ara" class="{{ 'active' if page=='ara' }}">{{ t('nav.ara') }}</a>
     {% endif %}
@@ -3148,15 +3149,32 @@ function cikisPanelKapat(){{ document.getElementById('cikis-panel').style.displa
 
     # ── Mini istatistik ──
     stats_html = ""
+    _rol = session.get("rol", "misafir")
     try:
         c = get_db()
         try:
-            toplam     = c.execute("SELECT COUNT(*) FROM urunler").fetchone()[0]
-            dusuk_sayisi = c.execute("SELECT COUNT(*) FROM urunler u WHERE COALESCE((SELECT SUM(miktar) FROM partiler WHERE barkod=u.barkod), 0) <= u.min_stok").fetchone()[0]
-            bugun_scan = c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE hareket_tipi='Okutma' AND date(tarih)=CURRENT_DATE").fetchone()[0]
+            if _rol in ("misafir", "goruntuleyici"):
+                bugun_scan = c.execute(
+                    "SELECT COUNT(*) FROM stok_hareketleri WHERE hareket_tipi='Okutma' AND date(tarih)=CURRENT_DATE AND kullanici=%s",
+                    (session.get("user", "misafir"),)
+                ).fetchone()[0]
+            else:
+                bugun_scan = c.execute("SELECT COUNT(*) FROM stok_hareketleri WHERE hareket_tipi='Okutma' AND date(tarih)=CURRENT_DATE").fetchone()[0]
         finally:
             c.close()
-        stats_html = f'''
+        if _rol in ("misafir", "goruntuleyici"):
+            stats_html = f'''
+<div class="mini-stats" style="grid-template-columns:1fr">
+  <div class="ms-card" style="animation-delay:.05s"><div class="ms-val">{bugun_scan}</div><div class="ms-lbl">Bugun Taramalarim</div></div>
+</div>'''
+        else:
+            c2 = get_db()
+            try:
+                toplam     = c2.execute("SELECT COUNT(*) FROM urunler").fetchone()[0]
+                dusuk_sayisi = c2.execute("SELECT COUNT(*) FROM urunler u WHERE COALESCE((SELECT SUM(miktar) FROM partiler WHERE barkod=u.barkod), 0) <= u.min_stok").fetchone()[0]
+            finally:
+                c2.close()
+            stats_html = f'''
 <div class="mini-stats">
   <div class="ms-card" style="animation-delay:.05s"><div class="ms-val">{toplam}</div><div class="ms-lbl">Toplam Urun</div></div>
   <div class="ms-card" style="animation-delay:.1s"><div class="ms-val" style="color:#e05252">{dusuk_sayisi}</div><div class="ms-lbl">Dusuk Stok</div></div>
@@ -5022,8 +5040,7 @@ araRenderSon();
 @app.route("/ai-okuyucu")
 @yetkili_giris
 def ai_okuyucu():
-    if session.get("rol") not in ("admin","mudur","kasiyer","kullanici"):
-        return redirect("/")
+    _is_guest = session.get("rol") in ("misafir", "goruntuleyici")
     c = get_db()
     try:
         _row = c.execute("SELECT katki_sayisi, plan FROM kullanicilar WHERE kullanici_adi=%s", (session.get("user"),)).fetchone()
@@ -5151,6 +5168,8 @@ def ai_okuyucu():
 .step-tab.active{color:var(--g)!important;background:rgba(255,255,255,.04)}
 </style>
 <script>
+var _isGuest = {{ 'true' if _is_guest else 'false' }};
+function _guestGate(){if(_isGuest){alert('Bu özelliği kullanmak için kayıt olmanız gerekiyor. Ürün katkısı yaparak Pro üyelik kazanabilirsiniz!');window.location.href='/kayit';return true;}return false;}
 var _state = {barkod:'', nutrition:{}, icindekiler:'', allerjenler:'', katki_maddeleri:''};
 var NUT_KEYS = ['kalori','protein','yag','karbonhidrat','seker','tuz','lif'];
 var NUT_LABELS = {kalori:'Kalori (kcal)',protein:'Protein (g)',yag:'Yağ (g)',karbonhidrat:'Karbonhidrat (g)',seker:'Şeker (g)',tuz:'Tuz (g)',lif:'Lif (g)'};
@@ -5166,6 +5185,7 @@ function showStep(n){
 
 // STEP 1
 function barkodFotoScan(input){
+  if(_guestGate()) return;
   if(!input.files||!input.files[0]) return;
   var file=input.files[0];
   var loadEl=document.getElementById('barkod-loading');
@@ -5218,6 +5238,7 @@ function barkodFotoScan(input){
   }
 }
 function step1Next(){
+  if(_guestGate()) return;
   var b = document.getElementById('barkod-input').value.trim();
   var err = document.getElementById('barkod-err');
   if(!b){err.textContent='Barkod zorunlu';err.style.display='block';return;}
@@ -5402,7 +5423,7 @@ function kaydet(){
 }
 </script>
 """
-    return render(content, page="ai-okuyucu", title="AI Okuyucu", _katki=_katki, _plan=_plan)
+    return render(content, page="ai-okuyucu", title="AI Okuyucu", _katki=_katki, _plan=_plan, _is_guest=_is_guest)
 
 @app.route("/health")
 def health():
