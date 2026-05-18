@@ -19,6 +19,8 @@ def send_mail(to_email, subject, html_body):
             "subject": subject,
             "html": html_body
         }, headers={"Authorization": f"Bearer {RESEND_KEY}"}, timeout=10)
+        if r.status_code not in (200, 201):
+            print(f"[MAIL] {r.status_code} {r.text}", flush=True)
         return r.status_code in (200, 201)
     except Exception as e:
         print(f"[MAIL] {e}", flush=True)
