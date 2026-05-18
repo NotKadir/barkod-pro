@@ -5,6 +5,69 @@ from datetime import datetime, date
 from flask import Flask, render_template_string, request, redirect, session, jsonify, send_from_directory
 
 
+# ── Resend Mail ────────────────────────────
+RESEND_KEY = os.environ.get("RESEND_API_KEY", "")
+
+def send_mail(to_email, subject, html_body):
+    """Send email via Resend API. Returns True on success."""
+    if not RESEND_KEY or not to_email:
+        return False
+    try:
+        r = requests.post("https://api.resend.com/emails", json={
+            "from": "NexStock <noreply@nexstock.app>",
+            "to": [to_email],
+            "subject": subject,
+            "html": html_body
+        }, headers={"Authorization": f"Bearer {RESEND_KEY}"}, timeout=10)
+        return r.status_code in (200, 201)
+    except Exception as e:
+        print(f"[MAIL] {e}", flush=True)
+        return False
+
+def hosgeldin_maili(email, isim):
+    """Send welcome email to new user."""
+    html = f"""
+    <div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;margin:0 auto;background:#060606;color:#f5f5f5;padding:32px;border:1px solid #1e1e1e">
+      <div style="font-family:monospace;font-size:28px;font-weight:800;letter-spacing:4px;margin-bottom:24px">NEX<span style="color:#a3a3a3">STOCK</span></div>
+      <div style="height:1px;background:linear-gradient(90deg,transparent,#333,transparent);margin-bottom:24px"></div>
+      <h2 style="font-size:18px;margin:0 0 16px;color:#fff">Hosgeldin, {isim}!</h2>
+      <p style="color:#a3a3a3;line-height:1.7;font-size:14px;margin:0 0 16px">
+        NexStock ailesine katildigin icin cok mutluyuz! Barkod tarama, besin analizi ve
+        yapay zeka destekli urun okuma ozelliklerini hemen kullanmaya baslayabilirsin.
+      </p>
+      <div style="background:#111;border:1px solid #1e1e1e;padding:16px;margin:16px 0">
+        <div style="font-family:monospace;font-size:11px;color:#525252;letter-spacing:2px;margin-bottom:8px">PRO UYELIK NASIL KAZANILIR?</div>
+        <p style="color:#a3a3a3;font-size:13px;line-height:1.6;margin:0">
+          AI Okuyucu ile <strong style="color:#8B5CF6">5 farkli urun</strong> okutarak ucretsiz Pro uyelik kazanabilirsin!
+          Ya da aylik sadece <strong style="color:#8B5CF6">$1</strong> ile hemen Pro ol.
+        </p>
+      </div>
+      <p style="color:#525252;font-size:12px;margin-top:24px;font-family:monospace;letter-spacing:1px">DFC TURKIYE 2026 — HORTOR</p>
+    </div>"""
+    return send_mail(email, "NexStock'a Hosgeldin!", html)
+
+def tesekkur_maili(email, isim):
+    """Send thank-you email to existing user."""
+    html = f"""
+    <div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;margin:0 auto;background:#060606;color:#f5f5f5;padding:32px;border:1px solid #1e1e1e">
+      <div style="font-family:monospace;font-size:28px;font-weight:800;letter-spacing:4px;margin-bottom:24px">NEX<span style="color:#a3a3a3">STOCK</span></div>
+      <div style="height:1px;background:linear-gradient(90deg,transparent,#333,transparent);margin-bottom:24px"></div>
+      <h2 style="font-size:18px;margin:0 0 16px;color:#fff">Tesekkurler, {isim}!</h2>
+      <p style="color:#a3a3a3;line-height:1.7;font-size:14px;margin:0 0 16px">
+        NexStock'un ilk kullanicilari arasinda oldugun icin sana ozel tesekkur etmek istedik.
+        Senin gibi kullanicilar sayesinde platform her gun daha iyi bir hale geliyor.
+      </p>
+      <div style="background:#111;border:1px solid #1e1e1e;padding:16px;margin:16px 0">
+        <div style="font-family:monospace;font-size:11px;color:#525252;letter-spacing:2px;margin-bottom:8px">BILGILENDIRME</div>
+        <p style="color:#a3a3a3;font-size:13px;line-height:1.6;margin:0">
+          Yakin zamanda <strong style="color:#8B5CF6">Pro uyelik</strong> sistemi geliyor!
+          AI Okuyucu ile 5 urun okutarak ucretsiz Pro kazanabilir ya da aylik $1 ile tum ozelliklere erisebilirsin.
+        </p>
+      </div>
+      <p style="color:#525252;font-size:12px;margin-top:24px;font-family:monospace;letter-spacing:1px">DFC TURKIYE 2026 — HORTOR</p>
+    </div>"""
+    return send_mail(email, "NexStock'tan Tesekkurler!", html)
+
 # ── Firebase Admin ──────────────────────────
 import firebase_admin
 from firebase_admin import credentials as _fb_creds, auth as _fb_auth
@@ -1691,6 +1754,11 @@ def kayit():
                     )
                     c.commit()
                     basari = "Hesap olusturuldu! Giris yapabilirsin."
+                    # Send welcome email (async-ish, don't block registration)
+                    try:
+                        hosgeldin_maili(email, isim)
+                    except Exception:
+                        pass
             except Exception as e:
                 hata = f"Hata: {str(e)}"
             finally:
@@ -4800,6 +4868,23 @@ def api_urun_ai_ekle():
         c.close()
 
 
+@app.route("/admin/toplu-tesekkur", methods=["POST"])
+@yetkili_giris
+def admin_toplu_tesekkur():
+    if session.get("rol") != "admin":
+        return jsonify({"error": "Yetkisiz"}), 403
+    c = get_db()
+    try:
+        rows = c.execute("SELECT email, tam_ad, kullanici_adi FROM kullanicilar WHERE email IS NOT NULL AND email != ''").fetchall()
+    finally:
+        c.close()
+    sent = 0
+    for r in rows:
+        isim = r["tam_ad"] or r["kullanici_adi"]
+        if tesekkur_maili(r["email"], isim):
+            sent += 1
+    return jsonify({"mesaj": f"{sent}/{len(rows)} kullaniciya tesekkur maili gonderildi"})
+
 @app.route("/admin/onay-bekleyenler")
 @yetkili_giris
 def admin_onay_bekleyenler():
@@ -5078,6 +5163,7 @@ def ai_okuyucu():
   <div style="width:100%;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden">
     <div style="width:{{ (_katki/5)*100 }}%;height:100%;border-radius:2px;background:{{ 'linear-gradient(90deg,#e05252,#8B5CF6)' if _katki>=2 else '#e05252' if _katki>=1 else '#1a1a1a' }};transition:width .6s"></div>
   </div>
+  <a href="/pro" style="display:block;text-align:center;margin-top:6px;font-family:JetBrains Mono,monospace;font-size:.5rem;color:#525252;letter-spacing:1px;text-decoration:none">veya <span style="color:#8B5CF6">$1/ay Pro</span> satin al →</a>
 </div>
 {% endif %}
 
@@ -5445,6 +5531,306 @@ def asistan_logo():
     # 7 gun cache - asistan logosu degismez, her sayfada yeniden indirilmesin
     resp.headers["Cache-Control"] = "public, max-age=604800, immutable"
     return resp
+
+# ═══════════════════════════════════════════════════
+#  STRIPE ÖDEME
+# ═══════════════════════════════════════════════════
+STRIPE_SECRET   = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID", "")   # monthly $1 price id
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+@app.route("/api/stripe-checkout", methods=["POST"])
+@yetkili_giris
+def stripe_checkout():
+    if not STRIPE_SECRET or not STRIPE_PRICE_ID:
+        return jsonify({"error": "Stripe yapilandirilmamis"}), 500
+    import stripe
+    stripe.api_key = STRIPE_SECRET
+    user = session.get("user")
+    try:
+        checkout = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
+            mode="subscription",
+            success_url=request.host_url + "pro-basarili?session_id={CHECKOUT_SESSION_ID}",
+            cancel_url=request.host_url + "ayarlar",
+            client_reference_id=user,
+            metadata={"user": user}
+        )
+        return jsonify({"url": checkout.url})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/stripe-webhook", methods=["POST"])
+def stripe_webhook():
+    import stripe
+    stripe.api_key = STRIPE_SECRET
+    payload = request.get_data()
+    sig = request.headers.get("Stripe-Signature", "")
+    try:
+        if STRIPE_WEBHOOK_SECRET:
+            event = stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+        else:
+            event = stripe.Event.construct_from(request.get_json(), stripe.api_key)
+    except Exception as e:
+        print(f"[STRIPE-WH] {e}", flush=True)
+        return "Bad signature", 400
+
+    if event["type"] == "checkout.session.completed":
+        ses = event["data"]["object"]
+        user = ses.get("client_reference_id") or (ses.get("metadata") or {}).get("user")
+        if user:
+            c = get_db()
+            try:
+                c.execute("UPDATE kullanicilar SET plan='pro', pro_verilis=NOW() WHERE kullanici_adi=%s", (user,))
+                c.commit()
+            finally:
+                c.close()
+            print(f"[STRIPE] {user} -> PRO", flush=True)
+
+    elif event["type"] in ("customer.subscription.deleted", "invoice.payment_failed"):
+        # Downgrade on cancel/fail
+        cust = event["data"]["object"].get("customer")
+        if cust:
+            try:
+                import stripe as _st
+                _st.api_key = STRIPE_SECRET
+                sessions = _st.checkout.Session.list(customer=cust, limit=1)
+                if sessions.data:
+                    user = sessions.data[0].client_reference_id
+                    if user:
+                        c = get_db()
+                        try:
+                            c.execute("UPDATE kullanicilar SET plan='free' WHERE kullanici_adi=%s", (user,))
+                            c.commit()
+                        finally:
+                            c.close()
+            except Exception:
+                pass
+
+    return "ok", 200
+
+@app.route("/pro-basarili")
+@yetkili_giris
+def pro_basarili():
+    session["plan"] = "pro"
+    content = r"""
+<div style="text-align:center;padding:60px 20px">
+  <div style="font-size:4rem;margin-bottom:16px">🎉</div>
+  <div style="font-family:'Bebas Neue',sans-serif;font-size:2.5rem;letter-spacing:3px;margin-bottom:8px">
+    PRO <span style="background:var(--pro-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent">AKTIF</span>
+  </div>
+  <p style="color:#a3a3a3;max-width:400px;margin:0 auto 24px;line-height:1.6">
+    Tebrikler! Pro uyeligin basariyla aktif edildi. Tum premium ozelliklere erisimin var.
+  </p>
+  <a href="/tarama" class="btn btn-green" style="padding:14px 32px;display:inline-block;text-decoration:none">TARAMAYA BASLA</a>
+</div>"""
+    return render(content, page="pro", title="Pro Aktif")
+
+
+# ═══════════════════════════════════════════════════
+#  IYZICO ÖDEME
+# ═══════════════════════════════════════════════════
+IYZICO_API_KEY    = os.environ.get("IYZICO_API_KEY", "")
+IYZICO_SECRET_KEY = os.environ.get("IYZICO_SECRET_KEY", "")
+IYZICO_BASE_URL   = os.environ.get("IYZICO_BASE_URL", "https://sandbox-api.iyzipay.com")
+
+@app.route("/api/iyzico-checkout", methods=["POST"])
+@yetkili_giris
+def iyzico_checkout():
+    if not IYZICO_API_KEY or not IYZICO_SECRET_KEY:
+        return jsonify({"error": "Iyzico yapilandirilmamis"}), 500
+    import hashlib, base64, hmac, json as _json, time
+    user = session.get("user")
+    c = get_db()
+    try:
+        row = c.execute("SELECT email, tam_ad FROM kullanicilar WHERE kullanici_adi=%s", (user,)).fetchone()
+    finally:
+        c.close()
+    if not row or not row["email"]:
+        return jsonify({"error": "Email gerekli"}), 400
+
+    conversation_id = f"pro-{user}-{int(time.time())}"
+    basket_id = f"B-{user}"
+    req_body = {
+        "locale": "tr",
+        "conversationId": conversation_id,
+        "price": "1.00",
+        "paidPrice": "1.00",
+        "currency": "USD",
+        "basketId": basket_id,
+        "paymentGroup": "SUBSCRIPTION",
+        "callbackUrl": request.host_url + "iyzico-callback",
+        "enabledInstallments": [1],
+        "buyer": {
+            "id": user,
+            "name": (row["tam_ad"] or user).split()[0],
+            "surname": (row["tam_ad"] or user).split()[-1] if " " in (row["tam_ad"] or "") else user,
+            "email": row["email"],
+            "identityNumber": "11111111111",
+            "registrationAddress": "Istanbul, Turkey",
+            "ip": request.remote_addr or "127.0.0.1",
+            "city": "Istanbul",
+            "country": "Turkey"
+        },
+        "shippingAddress": {
+            "contactName": row["tam_ad"] or user,
+            "city": "Istanbul",
+            "country": "Turkey",
+            "address": "Istanbul, Turkey"
+        },
+        "billingAddress": {
+            "contactName": row["tam_ad"] or user,
+            "city": "Istanbul",
+            "country": "Turkey",
+            "address": "Istanbul, Turkey"
+        },
+        "basketItems": [{
+            "id": "PRO_MONTHLY",
+            "name": "NexStock Pro Aylik",
+            "category1": "Abonelik",
+            "itemType": "VIRTUAL",
+            "price": "1.00"
+        }]
+    }
+
+    # Iyzico auth header
+    def _iyzico_auth(uri, body_str):
+        rand = str(int(time.time()))
+        hash_str = IYZICO_SECRET_KEY + rand + uri + body_str
+        sha = base64.b64encode(hashlib.sha1(hash_str.encode()).digest()).decode()
+        return {
+            "Authorization": f"IYZWS {IYZICO_API_KEY}:{sha}",
+            "x-iyzi-rnd": rand,
+            "Content-Type": "application/json"
+        }
+
+    uri = "/payment/iyzipos/checkoutform/initialize/auth/ecom"
+    body_str = _json.dumps(req_body, separators=(',',':'))
+    try:
+        r = requests.post(
+            IYZICO_BASE_URL + uri,
+            data=body_str,
+            headers=_iyzico_auth(uri, body_str),
+            timeout=15
+        )
+        data = r.json()
+        if data.get("status") == "success":
+            # Store conversation_id for callback
+            session["_iyzico_conv"] = conversation_id
+            return jsonify({"formContent": data.get("checkoutFormContent"), "token": data.get("token")})
+        else:
+            return jsonify({"error": data.get("errorMessage", "Iyzico hatasi")}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/iyzico-callback", methods=["POST"])
+def iyzico_callback():
+    import json as _json, time
+    token = request.form.get("token", "")
+    if not token:
+        return redirect("/ayarlar")
+
+    uri = "/payment/iyzipos/checkoutform/auth/ecom/detail"
+    req_body = {"locale": "tr", "conversationId": session.get("_iyzico_conv", ""), "token": token}
+
+    def _iyzico_auth(uri, body_str):
+        rand = str(int(time.time()))
+        hash_str = IYZICO_SECRET_KEY + rand + uri + body_str
+        sha = base64.b64encode(hashlib.sha1(hash_str.encode()).digest()).decode()
+        return {
+            "Authorization": f"IYZWS {IYZICO_API_KEY}:{sha}",
+            "x-iyzi-rnd": rand,
+            "Content-Type": "application/json"
+        }
+
+    body_str = _json.dumps(req_body, separators=(',',':'))
+    try:
+        r = requests.post(
+            IYZICO_BASE_URL + uri,
+            data=body_str,
+            headers=_iyzico_auth(uri, body_str),
+            timeout=15
+        )
+        data = r.json()
+        if data.get("status") == "success" and data.get("paymentStatus") == "SUCCESS":
+            # Extract user from basket
+            user = session.get("user")
+            if user:
+                c = get_db()
+                try:
+                    c.execute("UPDATE kullanicilar SET plan='pro', pro_verilis=NOW() WHERE kullanici_adi=%s", (user,))
+                    c.commit()
+                finally:
+                    c.close()
+                session["plan"] = "pro"
+                print(f"[IYZICO] {user} -> PRO", flush=True)
+            return redirect("/pro-basarili")
+    except Exception as e:
+        print(f"[IYZICO-CB] {e}", flush=True)
+    return redirect("/ayarlar")
+
+
+# ═══════════════════════════════════════════════════
+#  PRO UPGRADE SAYFASI
+# ═══════════════════════════════════════════════════
+@app.route("/pro")
+@yetkili_giris
+def pro_sayfa():
+    if session.get("plan") == "pro" or session.get("rol") in ("admin", "mudur"):
+        return redirect("/tarama")
+    content = r"""
+<div style="max-width:540px;margin:0 auto;text-align:center;padding:40px 16px">
+  <div style="font-family:'Bebas Neue',sans-serif;font-size:3rem;letter-spacing:4px;margin-bottom:4px">
+    <span style="background:var(--pro-gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent">PRO</span>
+  </div>
+  <p style="color:#525252;font-family:JetBrains Mono,monospace;font-size:.65rem;letter-spacing:2px;margin-bottom:32px">AYLIK $1 · TUM OZELLIKLER</p>
+
+  <div style="text-align:left;background:var(--card);border:1px solid var(--border);padding:20px;margin-bottom:24px">
+    <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:2px;margin-bottom:12px">PRO OZELLIKLERI</div>
+    <div style="display:grid;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px;font-size:.85rem"><span style="color:#8B5CF6">✓</span> Urun Arama (OpenFoodFacts)</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:.85rem"><span style="color:#8B5CF6">✓</span> Aurora Tema Efektleri</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:.85rem"><span style="color:#8B5CF6">✓</span> Mor Hover Animasyonlari</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:.85rem"><span style="color:#8B5CF6">✓</span> Pro Rozeti</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:.85rem"><span style="color:#8B5CF6">✓</span> Oncelikli Destek</div>
+    </div>
+  </div>
+
+  <div style="display:grid;gap:10px">
+    <button onclick="stripeCheckout()" class="btn btn-green" style="width:100%;padding:16px;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:10px" id="stripe-btn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      Kart ile Ode (Stripe)
+    </button>
+    <button onclick="iyzicoCheckout()" class="btn btn-muted" style="width:100%;padding:16px;font-size:1rem" id="iyzico-btn">
+      iyzico ile Ode
+    </button>
+  </div>
+  <p style="color:#525252;font-size:.7rem;margin-top:16px">veya AI Okuyucu ile 5 urun okutarak ucretsiz Pro kazan!</p>
+  <div id="iyzico-form-area"></div>
+</div>
+<script>
+function stripeCheckout(){
+  var btn=document.getElementById('stripe-btn');
+  btn.textContent='Yonlendiriliyor...';btn.disabled=true;
+  fetch('/api/stripe-checkout',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    if(d.url) window.location.href=d.url;
+    else{alert(d.error||'Hata');btn.textContent='Kart ile Ode (Stripe)';btn.disabled=false;}
+  }).catch(function(){btn.textContent='Kart ile Ode (Stripe)';btn.disabled=false;});
+}
+function iyzicoCheckout(){
+  var btn=document.getElementById('iyzico-btn');
+  btn.textContent='Yukleniyor...';btn.disabled=true;
+  fetch('/api/iyzico-checkout',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    if(d.formContent){
+      document.getElementById('iyzico-form-area').innerHTML=d.formContent;
+    } else{alert(d.error||'Hata');btn.textContent='iyzico ile Ode';btn.disabled=false;}
+  }).catch(function(){btn.textContent='iyzico ile Ode';btn.disabled=false;});
+}
+</script>
+"""
+    return render(content, page="pro", title="Pro Uyelik")
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
