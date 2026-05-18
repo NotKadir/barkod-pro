@@ -14,7 +14,7 @@ def send_mail(to_email, subject, html_body):
         return False
     try:
         r = requests.post("https://api.resend.com/emails", json={
-            "from": "NexStock <noreply@nexstock.app>",
+            "from": "NexStock <onboarding@resend.dev>",
             "to": [to_email],
             "subject": subject,
             "html": html_body
@@ -5798,11 +5798,8 @@ def pro_sayfa():
   </div>
 
   <div style="display:grid;gap:10px">
-    <button onclick="stripeCheckout()" class="btn btn-green" style="width:100%;padding:16px;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:10px" id="stripe-btn">
+    <button onclick="iyzicoCheckout()" class="btn btn-green" style="width:100%;padding:16px;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:10px" id="iyzico-btn">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-      Kart ile Ode (Stripe)
-    </button>
-    <button onclick="iyzicoCheckout()" class="btn btn-muted" style="width:100%;padding:16px;font-size:1rem" id="iyzico-btn">
       iyzico ile Ode
     </button>
   </div>
@@ -5810,14 +5807,6 @@ def pro_sayfa():
   <div id="iyzico-form-area"></div>
 </div>
 <script>
-function stripeCheckout(){
-  var btn=document.getElementById('stripe-btn');
-  btn.textContent='Yonlendiriliyor...';btn.disabled=true;
-  fetch('/api/stripe-checkout',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
-    if(d.url) window.location.href=d.url;
-    else{alert(d.error||'Hata');btn.textContent='Kart ile Ode (Stripe)';btn.disabled=false;}
-  }).catch(function(){btn.textContent='Kart ile Ode (Stripe)';btn.disabled=false;});
-}
 function iyzicoCheckout(){
   var btn=document.getElementById('iyzico-btn');
   btn.textContent='Yukleniyor...';btn.disabled=true;
