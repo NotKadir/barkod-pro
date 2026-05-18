@@ -782,6 +782,20 @@ BASE = r"""<!DOCTYPE html>
 .pro-glow:hover{box-shadow:0 0 24px var(--pro-glow);border-color:var(--pro)!important}
 .btn-muted:hover{background:var(--pro-gradient)!important;color:#fff!important;box-shadow:0 0 18px var(--pro-glow);border-color:var(--pro)!important;transition:all .3s}
 .btn-muted:active{background:var(--pro-gradient)!important;color:#fff!important;box-shadow:0 0 24px var(--pro-glow);border-color:var(--pro)!important}
+/* ── Pro Aurora Side Effect ── */
+.aurora-wrap{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.aurora-wrap .a-orb{position:absolute;border-radius:50%;filter:blur(90px);opacity:0;will-change:transform,opacity}
+.aurora-wrap .a1{width:420px;height:420px;background:radial-gradient(circle,#7C3AED 0%,transparent 70%);top:10%;left:-120px;animation:aOrb1 12s ease-in-out infinite}
+.aurora-wrap .a2{width:350px;height:350px;background:radial-gradient(circle,#A855F7 0%,transparent 70%);top:40%;right:-100px;animation:aOrb2 14s ease-in-out infinite 2s}
+.aurora-wrap .a3{width:300px;height:300px;background:radial-gradient(circle,#6D28D9 0%,transparent 70%);bottom:10%;left:-80px;animation:aOrb3 16s ease-in-out infinite 4s}
+.aurora-wrap .a4{width:380px;height:380px;background:radial-gradient(circle,#C084FC 0%,transparent 70%);top:60%;right:-140px;animation:aOrb4 13s ease-in-out infinite 1s}
+.aurora-wrap .a5{width:260px;height:260px;background:radial-gradient(circle,#9333EA 0%,transparent 70%);top:5%;right:-60px;animation:aOrb5 15s ease-in-out infinite 3s}
+@keyframes aOrb1{0%,100%{opacity:0;transform:translate(0,0) scale(.8)}25%{opacity:.18;transform:translate(60px,40px) scale(1.1)}50%{opacity:.12;transform:translate(30px,80px) scale(.95)}75%{opacity:.2;transform:translate(80px,20px) scale(1.05)}}
+@keyframes aOrb2{0%,100%{opacity:0;transform:translate(0,0) scale(.9)}30%{opacity:.16;transform:translate(-50px,30px) scale(1.1)}60%{opacity:.22;transform:translate(-80px,-20px) scale(1)}80%{opacity:.1;transform:translate(-30px,50px) scale(.9)}}
+@keyframes aOrb3{0%,100%{opacity:0;transform:translate(0,0) scale(.85)}20%{opacity:.15;transform:translate(50px,-30px) scale(1.05)}55%{opacity:.2;transform:translate(70px,-60px) scale(1.15)}80%{opacity:.08;transform:translate(20px,-10px) scale(.9)}}
+@keyframes aOrb4{0%,100%{opacity:0;transform:translate(0,0) scale(.9)}35%{opacity:.14;transform:translate(-60px,-40px) scale(1.1)}65%{opacity:.19;transform:translate(-40px,30px) scale(1)}85%{opacity:.06;transform:translate(-70px,-10px) scale(.85)}}
+@keyframes aOrb5{0%,100%{opacity:0;transform:translate(0,0) scale(.8)}30%{opacity:.12;transform:translate(-40px,50px) scale(1.05)}60%{opacity:.17;transform:translate(-20px,20px) scale(1.1)}80%{opacity:.08;transform:translate(-60px,40px) scale(.9)}}
+@media(max-width:768px){.aurora-wrap{display:none}}
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
 html{overflow-x:hidden}
@@ -1297,6 +1311,9 @@ document.addEventListener('DOMContentLoaded',function(){
     {% endif %}
 </div>
 <div class="main">
+{% if (session.get('plan')=='pro' or session.get('rol') in ['admin','mudur']) and page in ['tarama','hareketler','ai-okuyucu','ara','oneri'] %}
+<div class="aurora-wrap"><div class="a-orb a1"></div><div class="a-orb a2"></div><div class="a-orb a3"></div><div class="a-orb a4"></div><div class="a-orb a5"></div></div>
+{% endif %}
 CONTENT_BLOCK
 </div>
 <script>
@@ -4856,30 +4873,33 @@ def admin_urun_reddet():
 @yetkili_giris
 def api_ara():
     q = (request.args.get("q") or "").strip()
+    src = request.args.get("src", "all")  # "db", "off", or "all"
     if not q or len(q) < 2:
         return jsonify({"sonuclar": []})
 
-    # Split query into words for flexible matching
-    words = q.lower().split()
+    sonuclar = []
 
-    c = get_db()
-    try:
-        # Build WHERE clause: each word must appear in urun_adi
-        conditions = []
-        params = []
-        for w in words:
-            conditions.append("LOWER(urun_adi) LIKE %s")
-            params.append(f"%{w}%")
+    # --- Local DB search (fast) ---
+    if src in ("db", "all"):
+        words = q.lower().split()
+        c = get_db()
+        try:
+            conditions = []
+            params = []
+            for w in words:
+                conditions.append("LOWER(urun_adi) LIKE %s")
+                params.append(f"%{w}%")
+            where = " AND ".join(conditions)
+            rows = c.execute(
+                f"SELECT barkod, urun_adi, kategori FROM urunler WHERE {where} ORDER BY urun_adi LIMIT 15",
+                tuple(params)
+            ).fetchall()
+            sonuclar = [{"barkod": r["barkod"], "urun_adi": r["urun_adi"], "kategori": r["kategori"] or "", "kaynak": "db"} for r in rows]
+        finally:
+            c.close()
 
-        where = " AND ".join(conditions)
-        rows = c.execute(
-            f"SELECT barkod, urun_adi, kategori FROM urunler WHERE {where} ORDER BY urun_adi LIMIT 15",
-            tuple(params)
-        ).fetchall()
-
-        sonuclar = [{"barkod": r["barkod"], "urun_adi": r["urun_adi"], "kategori": r["kategori"] or "", "kaynak": "db"} for r in rows]
-
-        # Always search OFF too (user wants to find products NOT in local DB)
+    # --- OFF search (slower, skipped if src=db) ---
+    if src in ("off", "all"):
         try:
             import requests as req
             from urllib.parse import quote
@@ -4888,11 +4908,11 @@ def api_ara():
                 timeout=6, headers={"User-Agent": "NexStock/1.0"}
             )
             if off_r.status_code == 200:
-                off_data = off_r.json()
-                for p in (off_data.get("products") or []):
+                existing = {s["barkod"] for s in sonuclar}
+                for p in (off_r.json().get("products") or []):
                     code = p.get("code","")
                     name = p.get("product_name","")
-                    if code and name and not any(s["barkod"]==code for s in sonuclar):
+                    if code and name and code not in existing:
                         sonuclar.append({
                             "barkod": code,
                             "urun_adi": name,
@@ -4903,9 +4923,7 @@ def api_ara():
         except Exception as _e:
             print(f"[OFF-SEARCH] {_e}", flush=True)
 
-        return jsonify({"sonuclar": sonuclar[:15]})
-    finally:
-        c.close()
+    return jsonify({"sonuclar": sonuclar[:15]})
 
 @app.route("/ara")
 @yetkili_giris
@@ -4949,37 +4967,48 @@ function araDebounce(){
   document.getElementById('ara-son').style.display='none';
   _araTimer=setTimeout(function(){araYap();},300);
 }
+var _araSeq=0;
+function _araRender(items,empty){
+  if(!items.length&&empty){document.getElementById('ara-sonuclar').innerHTML='';document.getElementById('ara-bos').style.display='block';return;}
+  document.getElementById('ara-bos').style.display='none';
+  document.getElementById('ara-sonuclar').innerHTML=items.map(function(u){
+    var nutri='';
+    if(u.nutriscore) nutri='<span style="display:inline-block;padding:1px 6px;border-radius:2px;font-size:.6rem;font-family:JetBrains Mono,monospace;letter-spacing:1px;background:'+(u.nutriscore==='A'?'#22c55e':u.nutriscore==='B'?'#84cc16':u.nutriscore==='C'?'#f59e0b':u.nutriscore==='D'?'#f97316':'#ef4444')+';color:#000;font-weight:700">'+u.nutriscore+'</span>';
+    var kat=u.kategori?'<span style="color:#525252;font-size:.7rem"> · '+u.kategori+'</span>':'';
+    var src=u.kaynak==='off'?'<span style="font-size:.5rem;color:#525252;font-family:JetBrains Mono,monospace;letter-spacing:1px;margin-left:6px">OFF</span>':'';
+    return '<a href="/tarama?barkod='+u.barkod+'" style="display:block;padding:12px;border-bottom:1px solid #111;text-decoration:none;color:inherit;transition:background .15s" onmouseover="this.style.background=\'#111\'" onmouseout="this.style.background=\'none\'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center">'
+      +'<div><span style="color:#f5f5f5;font-size:.85rem">'+u.urun_adi+'</span>'+kat+src+'</div>'
+      +'<div style="display:flex;align-items:center;gap:8px">'+nutri+'<span style="color:#525252;font-size:.65rem;font-family:JetBrains Mono,monospace">'+u.barkod+'</span></div>'
+      +'</div></a>';
+  }).join('');
+}
 function araYap(){
   var q=document.getElementById('ara-input').value.trim();
   if(!q) return;
+  var seq=++_araSeq;
   document.getElementById('ara-loading').style.display='block';
   document.getElementById('ara-bos').style.display='none';
   _sonAramalar=_sonAramalar.filter(function(s){return s!==q;});
   _sonAramalar.unshift(q);
   if(_sonAramalar.length>5)_sonAramalar.pop();
   localStorage.setItem('nexstock_son_aramalar',JSON.stringify(_sonAramalar));
-
-  fetch('/api/ara?q='+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(d){
-    document.getElementById('ara-loading').style.display='none';
-    if(!d.sonuclar||!d.sonuclar.length){
-      document.getElementById('ara-sonuclar').innerHTML='';
-      document.getElementById('ara-bos').style.display='block';
-      return;
-    }
-    document.getElementById('ara-bos').style.display='none';
-    document.getElementById('ara-sonuclar').innerHTML=d.sonuclar.map(function(u){
-      var nutri='';
-      if(u.nutriscore) nutri='<span style="display:inline-block;padding:1px 6px;border-radius:2px;font-size:.6rem;font-family:JetBrains Mono,monospace;letter-spacing:1px;background:'+(u.nutriscore==='A'?'#22c55e':u.nutriscore==='B'?'#84cc16':u.nutriscore==='C'?'#f59e0b':u.nutriscore==='D'?'#f97316':'#ef4444')+';color:#000;font-weight:700">'+u.nutriscore+'</span>';
-      var kat=u.kategori?'<span style="color:#525252;font-size:.7rem"> · '+u.kategori+'</span>':'';
-      var src=u.kaynak==='off'?'<span style="font-size:.5rem;color:#525252;font-family:JetBrains Mono,monospace;letter-spacing:1px;margin-left:6px">OFF</span>':'';
-      return '<a href="/tarama?barkod='+u.barkod+'" style="display:block;padding:12px;border-bottom:1px solid #111;text-decoration:none;color:inherit;transition:background .15s" onmouseover="this.style.background=\'#111\'" onmouseout="this.style.background=\'none\'">'
-        +'<div style="display:flex;justify-content:space-between;align-items:center">'
-        +'<div><span style="color:#f5f5f5;font-size:.85rem">'+u.urun_adi+'</span>'+kat+src+'</div>'
-        +'<div style="display:flex;align-items:center;gap:8px">'+nutri+'<span style="color:#525252;font-size:.65rem;font-family:JetBrains Mono,monospace">'+u.barkod+'</span></div>'
-        +'</div></a>';
-    }).join('');
+  var enc=encodeURIComponent(q);
+  /* Phase 1: fast local DB results */
+  fetch('/api/ara?src=db&q='+enc).then(function(r){return r.json();}).then(function(d){
+    if(seq!==_araSeq) return;
+    var items=d.sonuclar||[];
+    _araRender(items,false);
+    /* Phase 2: OFF results (slower, appended) */
+    fetch('/api/ara?src=off&q='+enc).then(function(r2){return r2.json();}).then(function(d2){
+      if(seq!==_araSeq) return;
+      document.getElementById('ara-loading').style.display='none';
+      var existing={};items.forEach(function(u){existing[u.barkod]=1;});
+      (d2.sonuclar||[]).forEach(function(u){if(!existing[u.barkod]){items.push(u);existing[u.barkod]=1;}});
+      _araRender(items,true);
+    }).catch(function(){if(seq===_araSeq){document.getElementById('ara-loading').style.display='none';_araRender(items,true);}});
   }).catch(function(){
-    document.getElementById('ara-loading').style.display='none';
+    if(seq===_araSeq) document.getElementById('ara-loading').style.display='none';
   });
 }
 document.getElementById('ara-input').addEventListener('focus',function(){
