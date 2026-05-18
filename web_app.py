@@ -1281,6 +1281,7 @@ document.addEventListener('DOMContentLoaded',function(){
 </div>
 <div class="nav" id="mob-nav">
     <a href="/tarama" class="{{ 'active' if page=='tarama' }}">{{ t('nav.tarama') }}</a>
+    {% if session.get('user') %}
     {% if session.get('rol') not in ['misafir','goruntuleyici'] %}
     <a href="/" class="{{ 'active' if page=='dashboard' }}">{{ t('nav.dashboard') }}</a>
     {% if session.get('rol') in ['admin','mudur','kasiyer'] %}
