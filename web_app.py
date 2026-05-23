@@ -14,7 +14,7 @@ def send_mail(to_email, subject, html_body):
         return False
     try:
         r = requests.post("https://api.resend.com/emails", json={
-            "from": "NexStock <onboarding@resend.dev>",
+            "from": "NexStock <noreply@nexstock.tech>",
             "to": [to_email],
             "subject": subject,
             "html": html_body
