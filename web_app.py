@@ -5737,34 +5737,40 @@ def api_eksik_urunler():
     """OFF veritabanindan eksik bilgili urunleri getir. Arama destekli."""
     q = (request.args.get("q") or "").strip()
     page = max(int(request.args.get("page", 1)), 1)
-    limit = 50
+    limit = 24
     offset = (page - 1) * limit
 
     try:
         import requests as _rq
         headers = {"User-Agent": "NexStock/1.0 (nexstock.tech)"}
 
+        _fields = "code,product_name,brands,categories,nutriments,ingredients_text,image_front_url,completeness"
         if q:
-            # Arama modunda: OFF v2 API
             url = "https://world.openfoodfacts.org/api/v2/search"
-            params = {
-                "search_terms": q,
-                "sort_by": "unique_scans_n",
-                "page_size": limit,
-                "page": page,
-                "fields": "code,product_name,brands,categories,nutriments,ingredients_text,image_front_url,completeness"
-            }
-            resp = _rq.get(url, params=params, timeout=15, headers=headers)
+            params = {"search_terms": q, "sort_by": "unique_scans_n", "page_size": limit, "page": page, "fields": _fields}
         else:
-            # Varsayilan: state tag ile eksik urunler — OFF REST API
             url = f"https://world.openfoodfacts.org/state/to-be-completed/{page}.json"
-            params = {
-                "fields": "code,product_name,brands,categories,nutriments,ingredients_text,image_front_url,completeness",
-                "page_size": limit
-            }
-            resp = _rq.get(url, params=params, timeout=15, headers=headers)
+            params = {"fields": _fields, "page_size": limit}
 
-        data = resp.json()
+        # Retry mantigi — OFF API bazen bos yanit doner
+        import json as _json, time as _time
+        data = None
+        for _attempt in range(2):
+            try:
+                resp = _rq.get(url, params=params, timeout=15, headers=headers)
+                if resp.status_code == 200:
+                    raw = resp.text.strip()
+                    if raw and raw[0] == '{':
+                        data = _json.loads(raw)
+                        break
+            except Exception:
+                pass
+            if _attempt == 0:
+                _time.sleep(1)
+
+        if data is None:
+            return jsonify({"urunler": [], "hata": "OFF API yanit vermedi, lutfen tekrar deneyin"}), 200
+
         products = data.get("products", [])
 
         result = []
