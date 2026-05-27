@@ -5745,15 +5745,13 @@ def api_eksik_urunler():
         headers = {"User-Agent": "NexStock/1.0 (nexstock.tech)"}
 
         if q:
-            # Arama modunda: OFF search API
-            url = "https://world.openfoodfacts.org/cgi/search.pl"
+            # Arama modunda: OFF v2 API
+            url = "https://world.openfoodfacts.org/api/v2/search"
             params = {
-                "action": "process",
                 "search_terms": q,
                 "sort_by": "unique_scans_n",
                 "page_size": limit,
                 "page": page,
-                "json": 1,
                 "fields": "code,product_name,brands,categories,nutriments,ingredients_text,image_front_url,completeness"
             }
             resp = _rq.get(url, params=params, timeout=15, headers=headers)
