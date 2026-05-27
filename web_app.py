@@ -5745,12 +5745,12 @@ def api_eksik_urunler():
         headers = {"User-Agent": "NexStock/1.0 (nexstock.tech)"}
 
         _fields = "code,product_name,brands,categories,nutriments,ingredients_text,image_front_url,completeness"
+        url = "https://world.openfoodfacts.org/api/v2/search"
         if q:
-            url = "https://world.openfoodfacts.org/api/v2/search"
             params = {"search_terms": q, "sort_by": "unique_scans_n", "page_size": limit, "page": page, "fields": _fields}
         else:
-            url = f"https://world.openfoodfacts.org/state/to-be-completed/{page}.json"
-            params = {"fields": _fields, "page_size": limit}
+            # Eksik urunler: states_tags ile filtrele
+            params = {"states_tags": "en:to-be-completed", "sort_by": "last_modified_t", "page_size": limit, "page": page, "fields": _fields}
 
         # Retry mantigi — OFF API bazen bos yanit doner
         import json as _json, time as _time
