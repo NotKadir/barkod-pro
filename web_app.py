@@ -5742,26 +5742,30 @@ def api_eksik_urunler():
 
     try:
         import requests as _rq
-        # OFF v2 search API — daha guvenilir
-        url = "https://world.openfoodfacts.org/cgi/search.pl"
-        params = {
-            "action": "process",
-            "sort_by": "last_modified_t",
-            "page_size": limit,
-            "page": page,
-            "json": 1,
-            "fields": "code,product_name,brands,categories,nutriments,ingredients_text,image_front_url,completeness"
-        }
-        if q:
-            params["search_terms"] = q
-        else:
-            # Varsayilan: dusuk tamamlanma oranli urunler
-            params["search_terms"] = ""
-            params["tagtype_0"] = "states"
-            params["tag_contains_0"] = "contains"
-            params["tag_0"] = "en:to-be-completed"
+        headers = {"User-Agent": "NexStock/1.0 (nexstock.tech)"}
 
-        resp = _rq.get(url, params=params, timeout=15, headers={"User-Agent": "NexStock/1.0"})
+        if q:
+            # Arama modunda: OFF search API
+            url = "https://world.openfoodfacts.org/cgi/search.pl"
+            params = {
+                "action": "process",
+                "search_terms": q,
+                "sort_by": "unique_scans_n",
+                "page_size": limit,
+                "page": page,
+                "json": 1,
+                "fields": "code,product_name,brands,categories,nutriments,ingredients_text,image_front_url,completeness"
+            }
+            resp = _rq.get(url, params=params, timeout=15, headers=headers)
+        else:
+            # Varsayilan: state tag ile eksik urunler — OFF REST API
+            url = f"https://world.openfoodfacts.org/state/to-be-completed/{page}.json"
+            params = {
+                "fields": "code,product_name,brands,categories,nutriments,ingredients_text,image_front_url,completeness",
+                "page_size": limit
+            }
+            resp = _rq.get(url, params=params, timeout=15, headers=headers)
+
         data = resp.json()
         products = data.get("products", [])
 
