@@ -1669,7 +1669,7 @@ def giris():
     {'<div class="alert alert-red">'+hata+'</div>' if hata else ''}
     <form method="POST">
       <label>{t("label.kullanici_adi")}</label>
-      <input name="k" placeholder="{t('giris.kullanici_adi_ph')}" autofocus autocomplete="username">
+      <input name="k" autofocus autocomplete="username">
       <label>{t("label.sifre")}</label>
       <input name="s" type="password" placeholder="&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;&#x2022;" autocomplete="current-password">
       <button type="submit" class="btn btn-green" style="width:100%;margin-top:4px;padding:12px">{t("btn.giris_yap").upper()}</button>
