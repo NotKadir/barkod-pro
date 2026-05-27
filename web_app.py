@@ -5483,13 +5483,15 @@ def ai_okuyucu():
 .step-tab.active{color:var(--g)!important;background:rgba(255,255,255,.04)}
 .eksik-card{background:var(--card);border:1px solid var(--border);padding:14px;margin-bottom:8px;transition:border-color .3s}
 .eksik-card:hover{border-color:rgba(255,255,255,.08)}
+.eksik-foto{width:80px;height:80px;object-fit:cover;border:1px solid #1a1a1a;flex-shrink:0;border-radius:4px;background:#0d0d0d}
+.eksik-foto-ph{display:flex;align-items:center;justify-content:center;background:#0d0d0d}
 .eksik-tag{display:inline-block;font-family:JetBrains Mono,monospace;font-size:.55rem;letter-spacing:.5px;padding:2px 8px;margin:2px;border:1px solid}
 .eksik-tag.missing{color:#e05252;border-color:#e0525233;background:#e0525211}
 .eksik-tag.has{color:#10b981;border-color:#10b98133;background:#10b98111}
 @keyframes eksikShimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
 .skeleton-card{background:var(--card);border:1px solid var(--border);padding:14px;margin-bottom:8px;display:flex;gap:12px;align-items:center}
 .skeleton-bone{background:linear-gradient(90deg,#141414 25%,#1f1f1f 37%,#141414 63%);background-size:800px 100%;animation:eksikShimmer 1.4s ease-in-out infinite;border-radius:3px}
-.skeleton-img{width:48px;height:48px;flex-shrink:0}
+.skeleton-img{width:80px;height:80px;flex-shrink:0;border-radius:4px}
 .skeleton-line{height:10px;margin-bottom:8px}
 .skeleton-line:last-child{margin-bottom:0}
 .skeleton-tags{display:flex;gap:6px;margin-top:8px}
@@ -5554,16 +5556,19 @@ function eksikYukle(more){
         var missing=u.eksikler.indexOf(f)>=0;
         tags+='<span class="eksik-tag '+(missing?'missing':'has')+'">'+labels[f]+(missing?' eksik':' var')+'</span>';
       });
-      var foto=u.foto?'<img src="'+u.foto+'" style="width:48px;height:48px;object-fit:cover;border:1px solid #1a1a1a;flex-shrink:0" onerror="this.style.display=\'none\'">':'';
+      var _ph='<div class="eksik-foto eksik-foto-ph"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#525252" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></div>';
+      var fotoEl=u.foto
+        ?'<img src="'+u.foto+'" class="eksik-foto" onerror="this.style.display=\'none\';this.insertAdjacentHTML(\'afterend\',\''+_ph.replace(/'/g,'\\x27')+'\')">'
+        :_ph;
       html+='<div class="eksik-card">'
-        +'<div style="display:flex;gap:12px;align-items:center">'
-        +foto
+        +'<div style="display:flex;gap:14px;align-items:center">'
+        +fotoEl
         +'<div style="min-width:0;flex:1">'
         +'<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">'
         +'<strong style="font-size:.9rem">'+u.isim+'</strong>'
-        +'<span style="font-family:JetBrains Mono,monospace;font-size:.55rem;color:#525252">'+u.barkod+'</span>'
         +(u.marka?'<span style="font-size:.7rem;color:#a3a3a3">'+u.marka+'</span>':'')
         +'</div>'
+        +'<div style="font-family:JetBrains Mono,monospace;font-size:.5rem;color:#525252;margin-top:2px">'+u.barkod+'</div>'
         +'<div style="margin-top:6px">'+tags+'</div>'
         +'<div style="margin-top:6px;display:flex;align-items:center;gap:8px">'
         +'<div style="flex:1;height:3px;background:#1a1a1a;border-radius:2px;overflow:hidden"><div style="width:'+u.tamamlanma+'%;height:100%;background:'+(u.tamamlanma>=70?'#10b981':u.tamamlanma>=40?'#f0b429':'#e05252')+'"></div></div>'
