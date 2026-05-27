@@ -5746,11 +5746,13 @@ def api_eksik_urunler():
 
         _fields = "code,product_name,brands,categories,nutriments,ingredients_text,image_front_url,completeness"
         url = "https://world.openfoodfacts.org/api/v2/search"
+        # page_size fazla al cunku lokal filtre sonrasi azalir
+        fetch_size = limit * 3
         if q:
-            params = {"search_terms": q, "sort_by": "unique_scans_n", "page_size": limit, "page": page, "fields": _fields}
+            params = {"search_terms": q, "sort_by": "unique_scans_n", "page_size": fetch_size, "page": page, "fields": _fields}
         else:
-            # Eksik urunler: states_tags ile filtrele
-            params = {"states_tags": "en:to-be-completed", "sort_by": "last_modified_t", "page_size": limit, "page": page, "fields": _fields}
+            # Son guncellenen urunleri al, lokal olarak eksik olanlari filtrele
+            params = {"sort_by": "last_modified_t", "page_size": fetch_size, "page": page, "fields": _fields}
 
         # Retry mantigi — OFF API bazen bos yanit doner
         import json as _json, time as _time
