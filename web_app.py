@@ -5471,7 +5471,7 @@ def ai_okuyucu():
     <input type="text" id="eksik-ara" placeholder="Urun ara..." oninput="eksikAraDebounce()"
            style="flex:1 1 auto;min-width:0;width:auto;margin-bottom:0;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-family:JetBrains Mono,monospace;font-size:.85rem">
   </div>
-  <div id="eksik-loading" style="display:none;text-align:center;padding:20px;font-family:JetBrains Mono,monospace;font-size:.65rem;color:#525252;letter-spacing:2px">YUKLENIYOR...</div>
+  <div id="eksik-skeleton" style="display:none"></div>
   <div id="eksik-liste"></div>
   <div id="eksik-more" style="display:none;text-align:center;margin-top:12px">
     <button onclick="eksikYukle(true)" class="btn btn-muted" style="padding:10px 32px;font-size:.75rem">DAHA FAZLA</button>
@@ -5486,6 +5486,15 @@ def ai_okuyucu():
 .eksik-tag{display:inline-block;font-family:JetBrains Mono,monospace;font-size:.55rem;letter-spacing:.5px;padding:2px 8px;margin:2px;border:1px solid}
 .eksik-tag.missing{color:#e05252;border-color:#e0525233;background:#e0525211}
 .eksik-tag.has{color:#10b981;border-color:#10b98133;background:#10b98111}
+@keyframes eksikShimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.skeleton-card{background:var(--card);border:1px solid var(--border);padding:14px;margin-bottom:8px;display:flex;gap:12px;align-items:center}
+.skeleton-bone{background:linear-gradient(90deg,#141414 25%,#1f1f1f 37%,#141414 63%);background-size:800px 100%;animation:eksikShimmer 1.4s ease-in-out infinite;border-radius:3px}
+.skeleton-img{width:48px;height:48px;flex-shrink:0}
+.skeleton-line{height:10px;margin-bottom:8px}
+.skeleton-line:last-child{margin-bottom:0}
+.skeleton-tags{display:flex;gap:6px;margin-top:8px}
+.skeleton-tag{width:52px;height:16px;border-radius:2px}
+.skeleton-bar{height:3px;margin-top:8px;border-radius:2px;width:70%}
 </style>
 <script>
 var _isGuest = {{ 'true' if _is_guest else 'false' }};
@@ -5494,6 +5503,30 @@ var _state = {barkod:'', nutrition:{}, icindekiler:'', allerjenler:'', katki_mad
 
 // Eksik Urun sistemi
 var _eksikPage=1, _eksikOpen=false, _eksikTimer=null;
+function _eksikSkeletonCount(){var h=window.innerHeight||700;return Math.max(3,Math.floor((h-300)/90));}
+function _showSkeleton(){
+  var n=_eksikSkeletonCount(),html='';
+  for(var i=0;i<n;i++){
+    var w1=60+Math.floor(Math.random()*30);
+    var w2=40+Math.floor(Math.random()*25);
+    html+='<div class="skeleton-card">'
+      +'<div class="skeleton-bone skeleton-img"></div>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div class="skeleton-bone skeleton-line" style="width:'+w1+'%"></div>'
+      +'<div class="skeleton-bone skeleton-line" style="width:'+w2+'%"></div>'
+      +'<div class="skeleton-tags">'
+      +'<div class="skeleton-bone skeleton-tag"></div>'
+      +'<div class="skeleton-bone skeleton-tag" style="width:60px"></div>'
+      +'<div class="skeleton-bone skeleton-tag" style="width:44px"></div>'
+      +'<div class="skeleton-bone skeleton-tag" style="width:56px"></div>'
+      +'</div>'
+      +'<div class="skeleton-bone skeleton-bar"></div>'
+      +'</div></div>';
+  }
+  var el=document.getElementById('eksik-skeleton');
+  el.innerHTML=html;el.style.display='block';
+}
+function _hideSkeleton(){var el=document.getElementById('eksik-skeleton');el.style.display='none';el.innerHTML='';}
 function eksikToggle(){
   _eksikOpen=!_eksikOpen;
   document.getElementById('eksik-panel').style.display=_eksikOpen?'block':'none';
@@ -5506,12 +5539,11 @@ function eksikAraDebounce(){
 function eksikYukle(more){
   if(more) _eksikPage++; else _eksikPage=1;
   var q=document.getElementById('eksik-ara').value.trim();
-  document.getElementById('eksik-loading').style.display='block';
-  if(!more) document.getElementById('eksik-liste').innerHTML='';
+  if(!more){document.getElementById('eksik-liste').innerHTML='';_showSkeleton();}
   var ulke=document.getElementById('eksik-ulke').value;
   fetch('/api/eksik-urunler?q='+encodeURIComponent(q)+'&page='+_eksikPage+'&ulke='+encodeURIComponent(ulke))
   .then(function(r){return r.json();}).then(function(d){
-    document.getElementById('eksik-loading').style.display='none';
+    _hideSkeleton();
     var list=d.urunler||[];
     var html='';
     var fields=['isim','kalori','protein','yag','karbonhidrat','icindekiler'];
@@ -5547,7 +5579,7 @@ function eksikYukle(more){
     document.getElementById('eksik-more').style.display=list.length>=20?'block':'none';
     if(!list.length && !more){var msg=d.hata||'Sonuc bulunamadi';document.getElementById('eksik-liste').innerHTML='<div style="text-align:center;padding:30px;color:#525252;font-size:.8rem">'+msg+'</div>';}
   }).catch(function(e){
-    document.getElementById('eksik-loading').style.display='none';
+    _hideSkeleton();
     document.getElementById('eksik-liste').innerHTML='<div style="color:#e05252;text-align:center;padding:20px">Hata: '+e.message+'</div>';
   });
 }
