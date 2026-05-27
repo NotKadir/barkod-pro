@@ -5448,9 +5448,9 @@ def ai_okuyucu():
 
 <!-- EKSIK URUN PANELI -->
 <div id="eksik-panel" style="display:none;margin-top:16px">
-  <div style="margin-bottom:12px;display:flex;gap:8px">
+  <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap">
     <select id="eksik-ulke" onchange="_eksikPage=1;eksikYukle(false)"
-            style="background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-family:JetBrains Mono,monospace;font-size:.8rem;min-width:140px;flex-shrink:0">
+            style="background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-family:JetBrains Mono,monospace;font-size:.8rem;width:160px;flex-shrink:0">
       <option value="">Tum Ulkeler</option>
       <option value="turkey" selected>Turkiye</option>
       <option value="germany">Almanya</option>
@@ -5468,8 +5468,8 @@ def ai_okuyucu():
       <option value="japan">Japonya</option>
       <option value="brazil">Brezilya</option>
     </select>
-    <input type="text" id="eksik-ara" placeholder="Urun ara (isim veya barkod)..." oninput="eksikAraDebounce()"
-           style="flex:1;min-width:0;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-family:JetBrains Mono,monospace;font-size:.85rem">
+    <input type="text" id="eksik-ara" placeholder="Urun ara..." oninput="eksikAraDebounce()"
+           style="flex:1;min-width:120px;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-family:JetBrains Mono,monospace;font-size:.85rem">
   </div>
   <div id="eksik-loading" style="display:none;text-align:center;padding:20px;font-family:JetBrains Mono,monospace;font-size:.65rem;color:#525252;letter-spacing:2px">YUKLENIYOR...</div>
   <div id="eksik-liste"></div>
