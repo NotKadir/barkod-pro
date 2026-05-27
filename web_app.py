@@ -536,6 +536,13 @@ def init_db():
             except Exception:
                 pass
 
+        # Auto-approve products not from AI Okuyucu (OFF-sourced, no user)
+        try:
+            c.execute("UPDATE urunler SET onaylanmis=TRUE WHERE eklenme_kullanici IS NULL AND onaylanmis=FALSE")
+            c.commit()
+        except Exception:
+            pass
+
         # ── PERF: KRITIK INDEX'LER (dashboard/hareketler/tarama sorgu hizini 10-50x arttirir)
         # Bu index'ler olmadan PostgreSQL "sequential scan" yapar (tum tabloyu okur)
         # Index ile direkt B-tree lookup (O(log n)) yapilir
@@ -1029,9 +1036,11 @@ body.is-pro .nav a:hover::after{background:linear-gradient(90deg,transparent,var
 .page-title::before{content:'';display:block;width:4px;height:36px;background:var(--g);animation:barGrow .5s .2s cubic-bezier(.16,1,.3,1) both}
 @keyframes barGrow{from{height:0}to{height:36px}}
 
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:32px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:32px}
+@media(min-width:900px){.stat-grid{grid-template-columns:repeat(8,1fr)}}
+@media(max-width:599px){.stat-grid{grid-template-columns:repeat(4,1fr)}}
 .stat-card{
-  background:var(--card);padding:22px 18px 18px;text-align:center;
+  background:var(--card);padding:14px 8px 12px;text-align:center;
   border:1px solid var(--border);
   position:relative;overflow:hidden;transition:all .35s cubic-bezier(.16,1,.3,1);
 }
@@ -1040,9 +1049,10 @@ body.is-pro .nav a:hover::after{background:linear-gradient(90deg,transparent,var
 .stat-card:hover::after{opacity:1;height:3px}
 .stat-card.pulse-alert{animation:cardPulse 2.5s ease-in-out infinite}
 @keyframes cardPulse{0%,100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}50%{box-shadow:0 0 18px 2px var(--alert-color,rgba(224,82,82,.25))}}
-.stat-card .val{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;line-height:1;margin-bottom:4px;transition:transform .3s cubic-bezier(.16,1,.3,1)}
+.stat-card .val{font-family:'Bebas Neue',sans-serif;font-size:2rem;line-height:1;margin-bottom:2px;transition:transform .3s cubic-bezier(.16,1,.3,1)}
 .stat-card:hover .val{transform:scale(1.1)}
-.stat-card .lbl{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase}
+.stat-card .lbl{font-family:'JetBrains Mono',monospace;font-size:.55rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+@media(max-width:599px){.stat-card .val{font-size:1.6rem}.stat-card .lbl{font-size:.5rem;letter-spacing:.5px}.stat-card{padding:10px 4px 8px}}
 
 .tbl-wrap{background:var(--card);border:1px solid var(--border);overflow:hidden;margin-bottom:20px;transition:border-color .3s}
 .tbl-wrap:hover{border-color:rgba(255,255,255,.1)}
@@ -2221,6 +2231,45 @@ def oneri():
 <div style="margin-top:24px;text-align:center;color:#525252;font-size:.76rem;font-family:JetBrains Mono,monospace;letter-spacing:1.5px">
   Tum oneriler: <span style="color:#a3a3a3">nexstock@zohomail.eu</span>
 </div>"""
+
+    # Admin toplu mail paneli
+    admin_panel = ""
+    if session.get("rol") == "admin":
+        admin_panel = """
+<div style="margin-top:40px;border-top:1px solid #1a1a1a;padding-top:32px">
+  <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px">ADMIN · TOPLU MAIL ISLEMLERI</div>
+  <div class="panel" style="max-width:680px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <h3 style="margin:0;font-size:1rem">Sadakat Tesekkur Maili</h3>
+        <p style="color:#a3a3a3;margin:4px 0 0;font-size:.78rem">Tum kayitli kullanicilara tesekkur maili gonder</p>
+      </div>
+      <button onclick="topluMail(this)" class="btn btn-green" style="padding:10px 24px;font-size:.75rem;white-space:nowrap">GONDER</button>
+    </div>
+    <div id="toplu-mail-sonuc" style="display:none;font-family:JetBrains Mono,monospace;font-size:.75rem;padding:10px;margin-top:8px;border:1px solid #1a1a1a"></div>
+  </div>
+</div>
+<script>
+function topluMail(btn){
+  if(!confirm('Tum kullanicilara tesekkur maili gonderilecek. Emin misin?')) return;
+  btn.disabled=true;btn.textContent='GONDERILIYOR...';
+  fetch('/admin/toplu-tesekkur',{method:'POST',headers:{'Content-Type':'application/json'}})
+  .then(r=>r.json()).then(d=>{
+    var el=document.getElementById('toplu-mail-sonuc');
+    el.style.display='block';
+    el.style.color='#10b981';
+    el.textContent=d.mesaj||d.error||'Tamamlandi';
+    if(d.error) el.style.color='#e05252';
+    btn.textContent='GONDER';btn.disabled=false;
+  }).catch(e=>{
+    var el=document.getElementById('toplu-mail-sonuc');
+    el.style.display='block';el.style.color='#e05252';el.textContent='Hata: '+e.message;
+    btn.textContent='GONDER';btn.disabled=false;
+  });
+}
+</script>"""
+
+    content += admin_panel
     return render(content, page="oneri", title="Oneri Kutusu")
 
 
@@ -4890,21 +4939,23 @@ def admin_toplu_tesekkur():
 @app.route("/admin/onay-bekleyenler")
 @yetkili_giris
 def admin_onay_bekleyenler():
-    """Onaylanmamis urun listesi - admin/mudur icin gorebilir, manuel onay/red yapabilir."""
+    """Onaylanmamis urun listesi - sadece AI Okuyucu ile eklenenler."""
     if session.get("rol") not in ("admin","mudur"):
         return redirect("/")
     c = get_db()
     try:
         liste = [dict(r) for r in c.execute(
-            "SELECT barkod, urun_adi, dogrulama_skor, dogrulama_kaynak, eklenme_kullanici, eklenme_tarihi "
-            "FROM urunler WHERE onaylanmis=FALSE ORDER BY eklenme_tarihi DESC LIMIT 200"
+            "SELECT barkod, urun_adi, dogrulama_skor, dogrulama_kaynak, eklenme_kullanici, eklenme_tarihi, "
+            "kalori, protein, yag, karbonhidrat, seker, tuz, lif, icindekiler, allerjenler, katki_maddeleri, kategori "
+            "FROM urunler WHERE onaylanmis=FALSE AND eklenme_kullanici IS NOT NULL "
+            "ORDER BY eklenme_tarihi DESC LIMIT 200"
         ).fetchall()]
     finally:
         c.close()
 
-    rows = ""
+    import json as _json_p
+    cards = ""
     for u in liste:
-        import json as _json_p
         try:
             kj = _json_p.loads(u.get("dogrulama_kaynak") or "{}")
         except Exception:
@@ -4913,38 +4964,94 @@ def admin_onay_bekleyenler():
         upc = kj.get("upc") or "—"
         ai_o = (kj.get("ai") or {}).get("onayla") if kj.get("ai") else None
         ai_neden = (kj.get("ai") or {}).get("neden", "") if kj.get("ai") else ""
-        ai_text = ("✓ ONAYLA" if ai_o else "✗ RED") if ai_o is not None else "—"
+        ai_text = ("ONAYLA" if ai_o else "RED") if ai_o is not None else "—"
         ai_color = "#10b981" if ai_o else "#e05252" if ai_o is False else "#525252"
-        rows += (
-            f'<tr>'
-            f'<td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td>'
-            f'<td><strong>{u["urun_adi"]}</strong></td>'
-            f'<td style="color:#a3a3a3;font-size:.82rem">OFF: {off}<br>UPC: {upc}</td>'
-            f'<td style="color:{ai_color};font-weight:700">{ai_text}<br><span style="font-weight:400;color:#a3a3a3;font-size:.7rem">{ai_neden}</span></td>'
-            f'<td style="color:#a3a3a3">{u.get("dogrulama_skor","—")}</td>'
-            f'<td style="color:#a3a3a3;font-size:.82rem">{u.get("eklenme_kullanici","—")}</td>'
-            f'<td>'
-            f'<form method="POST" action="/admin/urun-onayla" style="display:inline">'
+        skor = u.get("dogrulama_skor") or 0
+        skor_pct = min(int(float(skor) * 100), 100) if skor else 0
+
+        # Detail panel data
+        kal = u.get("kalori") or "—"
+        pro = u.get("protein") or "—"
+        yag = u.get("yag") or "—"
+        karb = u.get("karbonhidrat") or "—"
+        ic = u.get("icindekiler") or "—"
+        alr = u.get("allerjenler") or "—"
+
+        cards += (
+            f'<div class="onay-card" style="background:var(--card);border:1px solid var(--border);margin-bottom:10px;overflow:hidden;transition:border-color .3s">'
+            # Header row - always visible
+            f'<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer" onclick="this.parentElement.classList.toggle(\'open\')">'
+            f'<div style="display:flex;align-items:center;gap:12px;min-width:0">'
+            f'<span style="font-family:Bebas Neue,sans-serif;font-size:1.1rem;white-space:nowrap">{u["urun_adi"]}</span>'
+            f'<span style="font-family:JetBrains Mono,monospace;font-size:.55rem;color:#525252;letter-spacing:1px;flex-shrink:0">{u["barkod"]}</span>'
+            f'</div>'
+            f'<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">'
+            f'<span style="font-family:JetBrains Mono,monospace;font-size:.55rem;color:#525252;letter-spacing:1px">{u.get("eklenme_kullanici","—")}</span>'
+            f'<span style="color:{ai_color};font-family:JetBrains Mono,monospace;font-size:.6rem;font-weight:700;padding:2px 8px;border:1px solid {ai_color}33">{ai_text}</span>'
+            f'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#525252" stroke-width="2" class="onay-chevron" style="transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>'
+            f'</div>'
+            f'</div>'
+            # Detail panel - hidden by default
+            f'<div class="onay-detail" style="display:none;padding:0 16px 16px;border-top:1px solid #1a1a1a">'
+            f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">'
+            # Left: Verification
+            f'<div>'
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:.55rem;color:#525252;letter-spacing:2px;margin-bottom:8px">DOGRULAMA</div>'
+            f'<div style="margin-bottom:6px"><span style="color:#a3a3a3;font-size:.75rem">OFF:</span> <span style="font-size:.75rem">{off}</span></div>'
+            f'<div style="margin-bottom:6px"><span style="color:#a3a3a3;font-size:.75rem">UPC:</span> <span style="font-size:.75rem">{upc}</span></div>'
+            f'<div style="margin-bottom:6px"><span style="color:#a3a3a3;font-size:.75rem">AI:</span> <span style="color:{ai_color};font-size:.75rem;font-weight:600">{ai_text}</span></div>'
+            f'<div style="font-size:.7rem;color:#a3a3a3;font-style:italic">{ai_neden}</div>'
+            f'<div style="margin-top:8px">'
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:.5rem;color:#525252;letter-spacing:1px;margin-bottom:4px">SKOR: {skor_pct}%</div>'
+            f'<div style="width:100%;height:3px;background:#1a1a1a;border-radius:2px;overflow:hidden"><div style="width:{skor_pct}%;height:100%;background:{"#10b981" if skor_pct >= 70 else "#f0b429" if skor_pct >= 40 else "#e05252"}"></div></div>'
+            f'</div>'
+            f'</div>'
+            # Right: Nutrition
+            f'<div>'
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:.55rem;color:#525252;letter-spacing:2px;margin-bottom:8px">BESIN DEGERLERI</div>'
+            f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:.75rem">'
+            f'<div><span style="color:#a3a3a3">Kalori:</span> {kal}</div>'
+            f'<div><span style="color:#a3a3a3">Protein:</span> {pro}g</div>'
+            f'<div><span style="color:#a3a3a3">Yag:</span> {yag}g</div>'
+            f'<div><span style="color:#a3a3a3">Karb:</span> {karb}g</div>'
+            f'</div>'
+            f'<div style="margin-top:8px;font-size:.7rem;color:#a3a3a3">'
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:.5rem;color:#525252;letter-spacing:1px;margin-bottom:4px">ICINDEKILER</div>'
+            f'<div style="max-height:60px;overflow:auto;font-size:.7rem;color:#737373">{ic[:200]}{"..." if len(str(ic))>200 else ""}</div>'
+            f'</div>'
+            f'</div>'
+            f'</div>'
+            # Actions row
+            f'<div style="display:flex;gap:8px;margin-top:14px">'
+            f'<form method="POST" action="/admin/urun-onayla" style="flex:1">'
             f'<input type="hidden" name="barkod" value="{u["barkod"]}">'
-            f'<button type="submit" class="btn btn-green" style="padding:4px 10px;font-size:.7rem">ONAYLA</button>'
-            f'</form> '
-            f'<form method="POST" action="/admin/urun-reddet" style="display:inline" onsubmit="return confirm(\'Urun silinsin mi?\')">'
-            f'<input type="hidden" name="barkod" value="{u["barkod"]}">'
-            f'<button type="submit" class="btn btn-muted" style="padding:4px 10px;font-size:.7rem;border-color:#e05252;color:#e05252">SIL</button>'
+            f'<button type="submit" class="btn btn-green" style="width:100%;padding:10px;font-size:.75rem">ONAYLA</button>'
             f'</form>'
-            f'</td></tr>'
+            f'<form method="POST" action="/admin/urun-reddet" style="flex:1" onsubmit="return confirm(\'Urun silinsin mi?\')">'
+            f'<input type="hidden" name="barkod" value="{u["barkod"]}">'
+            f'<button type="submit" class="btn btn-muted" style="width:100%;padding:10px;font-size:.75rem;border-color:#e05252;color:#e05252">SIL</button>'
+            f'</form>'
+            f'</div>'
+            f'</div>'
+            f'</div>'
         )
 
     content = f"""
+<style>
+.onay-card.open .onay-detail{{display:block!important}}
+.onay-card.open .onay-chevron{{transform:rotate(180deg)}}
+.onay-card:hover{{border-color:rgba(255,255,255,.08)}}
+@media(max-width:599px){{
+  .onay-card .onay-detail>div{{grid-template-columns:1fr!important}}
+}}
+</style>
 <div class="page-title">Onay Bekleyenler <span style="color:#525252;font-size:.9rem">({len(liste)})</span></div>
 <div style="color:#a3a3a3;margin-bottom:18px;font-size:.85rem;line-height:1.6">
-  AI dogrulamasi guvenilir bulmadigi urunler burada. AI'in onerisini gor, manuel onaylayabilir ya da silebilirsin.<br>
-  <span style="color:#525252">Onaylanmis urunler tarama'da normal gosterilir; onaylanmamislar 'Dogrulaniyor' rozetiyle isaretli kalır.</span>
+  AI Okuyucu ile eklenen ve dogrulama bekleyen urunler. Adi tikla, detaylari incele, onayla veya sil.<br>
+  <span style="color:#525252">OFF veritabanindan otomatik cekilen urunler burada gosterilmez.</span>
 </div>
-<div class="tbl-wrap"><table>
-  <tr><th>Barkod</th><th>Urun Adi</th><th>Dis Kaynaklar</th><th>AI Karari</th><th>Skor</th><th>Ekleyen</th><th>Aksiyon</th></tr>
-  {rows or '<tr><td colspan=7 class="muted" style="text-align:center;padding:20px">Onay bekleyen urun yok ✓</td></tr>'}
-</table></div>"""
+{cards or '<div class="panel" style="text-align:center;padding:40px;color:#525252"><div style="font-size:1.5rem;margin-bottom:8px">&#10003;</div>Onay bekleyen urun yok</div>'}
+"""
     return render(content, page="onay-bekleyenler", title="Onay Bekleyenler")
 
 
@@ -5261,13 +5368,112 @@ def ai_okuyucu():
   </div>
 </div>
 
+<!-- EKSIK URUN BUTONU -->
+<div style="margin-top:32px;border-top:1px solid #1a1a1a;padding-top:24px">
+  <button onclick="eksikToggle()" id="eksik-btn" class="btn btn-muted" style="width:100%;padding:14px;font-size:.85rem;display:flex;align-items:center;justify-content:center;gap:10px;border-color:#f0b42944;color:#f0b429">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    Eksik Bilgili Urunler
+  </button>
+  <p style="text-align:center;font-family:JetBrains Mono,monospace;font-size:.5rem;color:#525252;letter-spacing:1px;margin-top:6px">OFF veritabaninda eksik bilgisi olan urunleri tamamla, katki sayini artir</p>
+</div>
+
+<!-- EKSIK URUN PANELI -->
+<div id="eksik-panel" style="display:none;margin-top:16px">
+  <div style="margin-bottom:12px">
+    <input type="text" id="eksik-ara" placeholder="Urun ara (isim veya barkod)..." oninput="eksikAraDebounce()"
+           style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-family:JetBrains Mono,monospace;font-size:.85rem">
+  </div>
+  <div id="eksik-loading" style="display:none;text-align:center;padding:20px;font-family:JetBrains Mono,monospace;font-size:.65rem;color:#525252;letter-spacing:2px">YUKLENIYOR...</div>
+  <div id="eksik-liste"></div>
+  <div id="eksik-more" style="display:none;text-align:center;margin-top:12px">
+    <button onclick="eksikYukle(true)" class="btn btn-muted" style="padding:10px 32px;font-size:.75rem">DAHA FAZLA</button>
+  </div>
+</div>
+</div>
+
 <style>
 .step-tab.active{color:var(--g)!important;background:rgba(255,255,255,.04)}
+.eksik-card{background:var(--card);border:1px solid var(--border);padding:14px;margin-bottom:8px;transition:border-color .3s}
+.eksik-card:hover{border-color:rgba(255,255,255,.08)}
+.eksik-tag{display:inline-block;font-family:JetBrains Mono,monospace;font-size:.55rem;letter-spacing:.5px;padding:2px 8px;margin:2px;border:1px solid}
+.eksik-tag.missing{color:#e05252;border-color:#e0525233;background:#e0525211}
+.eksik-tag.has{color:#10b981;border-color:#10b98133;background:#10b98111}
 </style>
 <script>
 var _isGuest = {{ 'true' if _is_guest else 'false' }};
 function _guestGate(){if(_isGuest){alert('Bu özelliği kullanmak için kayıt olmanız gerekiyor. Ürün katkısı yaparak Pro üyelik kazanabilirsiniz!');window.location.href='/kayit';return true;}return false;}
 var _state = {barkod:'', nutrition:{}, icindekiler:'', allerjenler:'', katki_maddeleri:''};
+
+// Eksik Urun sistemi
+var _eksikPage=1, _eksikOpen=false, _eksikTimer=null;
+function eksikToggle(){
+  _eksikOpen=!_eksikOpen;
+  document.getElementById('eksik-panel').style.display=_eksikOpen?'block':'none';
+  if(_eksikOpen && !document.getElementById('eksik-liste').innerHTML) eksikYukle(false);
+}
+function eksikAraDebounce(){
+  clearTimeout(_eksikTimer);
+  _eksikTimer=setTimeout(function(){_eksikPage=1;eksikYukle(false);},400);
+}
+function eksikYukle(more){
+  if(more) _eksikPage++; else _eksikPage=1;
+  var q=document.getElementById('eksik-ara').value.trim();
+  document.getElementById('eksik-loading').style.display='block';
+  if(!more) document.getElementById('eksik-liste').innerHTML='';
+  fetch('/api/eksik-urunler?q='+encodeURIComponent(q)+'&page='+_eksikPage)
+  .then(function(r){return r.json();}).then(function(d){
+    document.getElementById('eksik-loading').style.display='none';
+    var list=d.urunler||[];
+    var html='';
+    var fields=['isim','kalori','protein','yag','karbonhidrat','icindekiler'];
+    var labels={isim:'Isim',kalori:'Kalori',protein:'Protein',yag:'Yag',karbonhidrat:'Karb.',icindekiler:'Icindekiler'};
+    list.forEach(function(u){
+      var tags='';
+      fields.forEach(function(f){
+        var missing=u.eksikler.indexOf(f)>=0;
+        tags+='<span class="eksik-tag '+(missing?'missing':'has')+'">'+labels[f]+(missing?' eksik':' var')+'</span>';
+      });
+      var foto=u.foto?'<img src="'+u.foto+'" style="width:48px;height:48px;object-fit:cover;border:1px solid #1a1a1a;flex-shrink:0" onerror="this.style.display=\'none\'">':'';
+      html+='<div class="eksik-card">'
+        +'<div style="display:flex;gap:12px;align-items:center">'
+        +foto
+        +'<div style="min-width:0;flex:1">'
+        +'<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">'
+        +'<strong style="font-size:.9rem">'+u.isim+'</strong>'
+        +'<span style="font-family:JetBrains Mono,monospace;font-size:.55rem;color:#525252">'+u.barkod+'</span>'
+        +(u.marka?'<span style="font-size:.7rem;color:#a3a3a3">'+u.marka+'</span>':'')
+        +'</div>'
+        +'<div style="margin-top:6px">'+tags+'</div>'
+        +'<div style="margin-top:6px;display:flex;align-items:center;gap:8px">'
+        +'<div style="flex:1;height:3px;background:#1a1a1a;border-radius:2px;overflow:hidden"><div style="width:'+u.tamamlanma+'%;height:100%;background:'+(u.tamamlanma>=70?'#10b981':u.tamamlanma>=40?'#f0b429':'#e05252')+'"></div></div>'
+        +'<span style="font-family:JetBrains Mono,monospace;font-size:.5rem;color:#525252">%'+u.tamamlanma+'</span>'
+        +'</div>'
+        +'</div>'
+        +'<button onclick="eksikTamamla(\''+u.barkod+'\',\''+u.isim.replace(/'/g,"\\'")+'\')" class="btn btn-muted" style="padding:8px 14px;font-size:.65rem;white-space:nowrap;border-color:#f0b42944;color:#f0b429;flex-shrink:0">TAMAMLA</button>'
+        +'</div>'
+        +'</div>';
+    });
+    if(!more) document.getElementById('eksik-liste').innerHTML=html;
+    else document.getElementById('eksik-liste').innerHTML+=html;
+    document.getElementById('eksik-more').style.display=list.length>=20?'block':'none';
+    if(!list.length && !more) document.getElementById('eksik-liste').innerHTML='<div style="text-align:center;padding:30px;color:#525252;font-size:.8rem">Sonuc bulunamadi</div>';
+  }).catch(function(e){
+    document.getElementById('eksik-loading').style.display='none';
+    document.getElementById('eksik-liste').innerHTML='<div style="color:#e05252;text-align:center;padding:20px">Hata: '+e.message+'</div>';
+  });
+}
+function eksikTamamla(barkod, isim){
+  if(_guestGate()) return;
+  // Barkod ve ismi doldur, step 1'e gec
+  document.getElementById('barkod-input').value=barkod;
+  document.getElementById('barkod-input').style.borderColor='var(--g)';
+  _eksikOpen=false;
+  document.getElementById('eksik-panel').style.display='none';
+  window.scrollTo({top:0,behavior:'smooth'});
+  // Direkt step 2'ye atla
+  _state.barkod=barkod;
+  showStep(2);
+}
 var NUT_KEYS = ['kalori','protein','yag','karbonhidrat','seker','tuz','lif'];
 var NUT_LABELS = {kalori:'Kalori (kcal)',protein:'Protein (g)',yag:'Yağ (g)',karbonhidrat:'Karbonhidrat (g)',seker:'Şeker (g)',tuz:'Tuz (g)',lif:'Lif (g)'};
 
@@ -5521,6 +5727,90 @@ function kaydet(){
 </script>
 """
     return render(content, page="ai-okuyucu", title="AI Okuyucu", _katki=_katki, _plan=_plan, _is_guest=_is_guest)
+
+# ═══════════════════════════════════════════════════
+#  EKSIK URUN SISTEMI — OFF'den eksik bilgili urunler
+# ═══════════════════════════════════════════════════
+@app.route("/api/eksik-urunler")
+@yetkili_giris
+def api_eksik_urunler():
+    """OFF veritabanindan eksik bilgili urunleri getir. Arama destekli."""
+    q = (request.args.get("q") or "").strip()
+    page = max(int(request.args.get("page", 1)), 1)
+    limit = 50
+    offset = (page - 1) * limit
+
+    try:
+        import requests as _rq
+        params = {
+            "action": "process",
+            "tagtype_0": "states",
+            "tag_contains_0": "contains",
+            "tag_0": "to-be-completed",
+            "sort_by": "last_modified_t",
+            "page_size": limit,
+            "page": page,
+            "json": 1,
+            "fields": "code,product_name,brands,categories,nutriments,ingredients_text,image_front_url,completeness"
+        }
+        if q:
+            params["search_terms"] = q
+            url = "https://world.openfoodfacts.org/cgi/search.pl"
+        else:
+            url = "https://world.openfoodfacts.org/cgi/search.pl"
+
+        resp = _rq.get(url, params=params, timeout=12)
+        data = resp.json()
+        products = data.get("products", [])
+
+        result = []
+        for p in products:
+            barkod = p.get("code", "")
+            isim = p.get("product_name", "") or ""
+            marka = p.get("brands", "") or ""
+            kategori = p.get("categories", "") or ""
+            foto = p.get("image_front_url", "") or ""
+            completeness = p.get("completeness", 0) or 0
+            nm = p.get("nutriments", {}) or {}
+            ingredients = p.get("ingredients_text", "") or ""
+
+            # Eksik alanlari tespit et
+            eksikler = []
+            if not isim:
+                eksikler.append("isim")
+            if not nm.get("energy-kcal_100g") and not nm.get("energy_100g"):
+                eksikler.append("kalori")
+            if not nm.get("proteins_100g"):
+                eksikler.append("protein")
+            if not nm.get("fat_100g"):
+                eksikler.append("yag")
+            if not nm.get("carbohydrates_100g"):
+                eksikler.append("karbonhidrat")
+            if not ingredients:
+                eksikler.append("icindekiler")
+
+            if not eksikler:
+                continue  # Hicbir eksigi yok, atla
+
+            result.append({
+                "barkod": barkod,
+                "isim": isim or "(Isimsiz)",
+                "marka": marka,
+                "kategori": kategori[:60],
+                "foto": foto,
+                "eksikler": eksikler,
+                "tamamlanma": round(completeness * 100),
+                "kalori": nm.get("energy-kcal_100g") or nm.get("energy_100g"),
+                "protein": nm.get("proteins_100g"),
+                "yag": nm.get("fat_100g"),
+                "karbonhidrat": nm.get("carbohydrates_100g"),
+                "icindekiler": ingredients[:200]
+            })
+
+        return jsonify({"urunler": result, "sayfa": page, "toplam": data.get("count", 0)})
+    except Exception as e:
+        return jsonify({"urunler": [], "hata": str(e)}), 200
+
 
 @app.route("/health")
 def health():
