@@ -1622,6 +1622,36 @@ function cbSend(){
     var bar = document.getElementById('nav-loadbar');
     if(bar){ bar.style.opacity = '0'; bar.style.width = '0'; }
   });
+
+  // ── 5) OFF lazy image loader — .off-lazy[data-barkod] elemanlarini bulur, OFF API'den image_small_url cekerr
+  (function(){
+    var imgs = document.querySelectorAll('img.off-lazy[data-barkod]');
+    if(!imgs.length) return;
+    var cache = {};
+    imgs.forEach(function(el){
+      var bk = el.getAttribute('data-barkod');
+      if(!bk) return;
+      if(cache[bk]){
+        if(cache[bk] !== 'none'){ el.src = cache[bk]; el.style.display = ''; }
+        return;
+      }
+      fetch('https://world.openfoodfacts.org/api/v2/product/'+bk+'?fields=image_small_url,image_front_small_url')
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          var p = d.product || {};
+          var url = p.image_front_small_url || p.image_small_url || '';
+          if(url){
+            cache[bk] = url;
+            document.querySelectorAll('img.off-lazy[data-barkod="'+bk+'"]').forEach(function(e){
+              e.src = url; e.style.display = '';
+            });
+          } else {
+            cache[bk] = 'none';
+          }
+        })
+        .catch(function(){ cache[bk] = 'none'; });
+    });
+  })();
 })();
 </script>
 
@@ -3185,7 +3215,7 @@ def tarama():
 <div id="alert-type" data-tip="success" style="display:none"></div>
 <div class="scan-result">
   <div class="scan-header" style="{hdr_bg}">
-    <img src="https://images.openfoodfacts.org/images/products/{str(barkod).zfill(13)[0:3]}/{str(barkod).zfill(13)[3:6]}/{str(barkod).zfill(13)[6:9]}/{str(barkod).zfill(13)[9:]}/1.200.jpg" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #ffffff15;flex-shrink:0;background:#0d0d0d" onerror="this.style.display='none'">
+    <img class="off-lazy" data-barkod="{barkod}" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #ffffff15;flex-shrink:0;background:#0d0d0d;display:none">
     <div>
       <div class="scan-urun-adi">{urun["urun_adi"]}{_onay_rozeti}</div>
       <div class="scan-meta">Barkod: {barkod}&nbsp;&nbsp;|&nbsp;&nbsp;Kategori: {urun.get("kategori","—")}</div>
@@ -3287,11 +3317,9 @@ function cikisPanelKapat(){{ document.getElementById('cikis-panel').style.displa
                 rc  = stt_renk(gun)
                 et  = stt_etiket(gun)
                 skt_badge = f'<span style="font-size:.62rem;padding:3px 8px;background:{rc}18;color:{rc};border:1px solid {rc}44;font-family:JetBrains Mono,monospace;letter-spacing:1px">{et}</span>'
-                _b = str(s["barkod"]).zfill(13)
-                _img = f"https://images.openfoodfacts.org/images/products/{_b[0:3]}/{_b[3:6]}/{_b[6:9]}/{_b[9:]}/1.100.jpg"
                 cards += f'''<a href="/tarama?barkod={s["barkod"]}" class="son-card" style="animation-delay:{i*0.08}s">
                   <div style="display:flex;gap:10px;align-items:center">
-                    <img src="{_img}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #1a1a1a;background:#0d0d0d;flex-shrink:0" onerror="this.style.display='none'">
+                    <img class="off-lazy" data-barkod="{s["barkod"]}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #1a1a1a;background:#0d0d0d;flex-shrink:0;display:none">
                     <div style="min-width:0;flex:1">
                       <div class="son-card-top">
                         <div class="son-card-name">{s["urun_adi"]}</div>
@@ -4027,11 +4055,6 @@ def urunler():
     finally:
         c.close()
 
-    def _off_img(barkod):
-        """OFF resim URL'i olustur — barkodu klasor yapisiyla formatla"""
-        b = str(barkod).zfill(13)
-        return f"https://images.openfoodfacts.org/images/products/{b[0:3]}/{b[3:6]}/{b[6:9]}/{b[9:]}/1.100.jpg"
-
     rows = ""
     for u in liste:
         gun = kalan_gun(u.get("stt"))
@@ -4040,8 +4063,7 @@ def urunler():
         sil_btn = (f'<form method="POST" action="/urun-sil" style="display:inline" onsubmit="return confirm(\'{u["urun_adi"]} silinsin mi? Tüm parti ve hareketler de silinir!\')">'
                    f'<input type="hidden" name="barkod" value="{u["barkod"]}">'
                    f'<button type="submit" class="btn btn-muted" style="padding:3px 10px;font-size:.7rem;border-color:#e05252;color:#e05252">SİL</button></form>')
-        img_url = _off_img(u["barkod"])
-        foto_td = f'<td style="width:44px;padding:4px"><img src="{img_url}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #1a1a1a;background:#0d0d0d" onerror="this.style.display=\'none\'"></td>'
+        foto_td = f'<td style="width:44px;padding:4px"><img class="off-lazy" data-barkod="{u["barkod"]}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #1a1a1a;background:#0d0d0d;display:none"></td>'
         rows += f'<tr>{foto_td}<td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#a3a3a3">{u.get("parti_sayisi",0)}</td><td style="color:#525252">{u.get("min_stok",5)}</td><td style="color:#ffffff">{float(u.get("fiyat") or 0):.2f} TL</td><td>{sil_btn}</td></tr>'
 
     content = f"""
