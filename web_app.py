@@ -5370,7 +5370,7 @@ def ai_okuyucu():
 
 <!-- EKSIK URUN BUTONU -->
 <div style="margin-top:32px;border-top:1px solid #1a1a1a;padding-top:24px">
-  <button onclick="eksikToggle()" id="eksik-btn" class="btn btn-muted" style="width:100%;padding:14px;font-size:.85rem;display:flex;align-items:center;justify-content:center;gap:10px;border-color:#f0b42944;color:#f0b429">
+  <button onclick="eksikToggle()" id="eksik-btn" class="btn btn-muted" style="width:100%;padding:14px;font-size:.85rem;display:flex;align-items:center;justify-content:center;gap:10px;border-color:#f0b42944;color:#f0b429;cursor:pointer;position:relative;z-index:2">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     Eksik Bilgili Urunler
   </button>
@@ -5742,11 +5742,10 @@ def api_eksik_urunler():
 
     try:
         import requests as _rq
+        # OFF v2 search API — daha guvenilir
+        url = "https://world.openfoodfacts.org/cgi/search.pl"
         params = {
             "action": "process",
-            "tagtype_0": "states",
-            "tag_contains_0": "contains",
-            "tag_0": "to-be-completed",
             "sort_by": "last_modified_t",
             "page_size": limit,
             "page": page,
@@ -5755,11 +5754,14 @@ def api_eksik_urunler():
         }
         if q:
             params["search_terms"] = q
-            url = "https://world.openfoodfacts.org/cgi/search.pl"
         else:
-            url = "https://world.openfoodfacts.org/cgi/search.pl"
+            # Varsayilan: dusuk tamamlanma oranli urunler
+            params["search_terms"] = ""
+            params["tagtype_0"] = "states"
+            params["tag_contains_0"] = "contains"
+            params["tag_0"] = "en:to-be-completed"
 
-        resp = _rq.get(url, params=params, timeout=12)
+        resp = _rq.get(url, params=params, timeout=15, headers={"User-Agent": "NexStock/1.0"})
         data = resp.json()
         products = data.get("products", [])
 
