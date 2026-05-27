@@ -2238,15 +2238,31 @@ def oneri():
         admin_panel = """
 <div style="margin-top:40px;border-top:1px solid #1a1a1a;padding-top:32px">
   <div style="font-family:JetBrains Mono,monospace;font-size:.6rem;color:#525252;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px">ADMIN · TOPLU MAIL ISLEMLERI</div>
-  <div class="panel" style="max-width:680px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+
+  <!-- Sadakat Tesekkur Maili -->
+  <div class="panel" style="max-width:680px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
       <div>
         <h3 style="margin:0;font-size:1rem">Sadakat Tesekkur Maili</h3>
-        <p style="color:#a3a3a3;margin:4px 0 0;font-size:.78rem">Tum kayitli kullanicilara tesekkur maili gonder</p>
+        <p style="color:#a3a3a3;margin:4px 0 0;font-size:.78rem">Tum kayitli kullanicilara hazir tesekkur maili gonder</p>
       </div>
       <button onclick="topluMail(this)" class="btn btn-green" style="padding:10px 24px;font-size:.75rem;white-space:nowrap">GONDER</button>
     </div>
     <div id="toplu-mail-sonuc" style="display:none;font-family:JetBrains Mono,monospace;font-size:.75rem;padding:10px;margin-top:8px;border:1px solid #1a1a1a"></div>
+  </div>
+
+  <!-- Manuel Mail Gonderimi -->
+  <div class="panel" style="max-width:680px">
+    <h3 style="margin:0 0 4px;font-size:1rem">Manuel Mail Gonder</h3>
+    <p style="color:#a3a3a3;margin:0 0 16px;font-size:.78rem">Tum kullanicilara ozel konu ve icerigi ile mail gonder</p>
+    <input type="text" id="manuel-konu" placeholder="Mail konusu..."
+      style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:10px 12px;font-family:JetBrains Mono,monospace;font-size:.8rem;margin-bottom:8px">
+    <textarea id="manuel-icerik" rows="6" placeholder="Mail icerigi... (HTML destekler: <b>kalin</b>, <br> satir sonu, <a href='...'>link</a>)"
+      style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:10px 12px;font-family:JetBrains Mono,monospace;font-size:.8rem;resize:vertical"></textarea>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:10px">
+      <button onclick="manuelMail(this)" class="btn btn-green" style="padding:10px 24px;font-size:.75rem;white-space:nowrap">HERKESE GONDER</button>
+      <span id="manuel-mail-sonuc" style="display:none;font-family:JetBrains Mono,monospace;font-size:.75rem"></span>
+    </div>
   </div>
 </div>
 <script>
@@ -2256,15 +2272,31 @@ function topluMail(btn){
   fetch('/admin/toplu-tesekkur',{method:'POST',headers:{'Content-Type':'application/json'}})
   .then(r=>r.json()).then(d=>{
     var el=document.getElementById('toplu-mail-sonuc');
-    el.style.display='block';
-    el.style.color='#10b981';
+    el.style.display='block';el.style.color=d.error?'#e05252':'#10b981';
     el.textContent=d.mesaj||d.error||'Tamamlandi';
-    if(d.error) el.style.color='#e05252';
     btn.textContent='GONDER';btn.disabled=false;
   }).catch(e=>{
     var el=document.getElementById('toplu-mail-sonuc');
     el.style.display='block';el.style.color='#e05252';el.textContent='Hata: '+e.message;
     btn.textContent='GONDER';btn.disabled=false;
+  });
+}
+function manuelMail(btn){
+  var konu=document.getElementById('manuel-konu').value.trim();
+  var icerik=document.getElementById('manuel-icerik').value.trim();
+  if(!konu||!icerik){alert('Konu ve icerik alanlari zorunlu');return;}
+  if(!confirm('Bu mail tum kullanicilara gonderilecek. Emin misin?')) return;
+  btn.disabled=true;btn.textContent='GONDERILIYOR...';
+  fetch('/admin/toplu-mail',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({konu:konu,icerik:icerik})})
+  .then(r=>r.json()).then(d=>{
+    var el=document.getElementById('manuel-mail-sonuc');
+    el.style.display='inline';el.style.color=d.error?'#e05252':'#10b981';
+    el.textContent=d.mesaj||d.error||'Tamamlandi';
+    btn.textContent='HERKESE GONDER';btn.disabled=false;
+  }).catch(e=>{
+    var el=document.getElementById('manuel-mail-sonuc');
+    el.style.display='inline';el.style.color='#e05252';el.textContent='Hata: '+e.message;
+    btn.textContent='HERKESE GONDER';btn.disabled=false;
   });
 }
 </script>"""
@@ -4935,6 +4967,44 @@ def admin_toplu_tesekkur():
         if tesekkur_maili(r["email"], isim):
             sent += 1
     return jsonify({"mesaj": f"{sent}/{len(rows)} kullaniciya tesekkur maili gonderildi"})
+
+
+@app.route("/admin/toplu-mail", methods=["POST"])
+@yetkili_giris
+def admin_toplu_mail():
+    if session.get("rol") != "admin":
+        return jsonify({"error": "Yetkisiz"}), 403
+    data = request.get_json(force=True) or {}
+    konu = (data.get("konu") or "").strip()
+    icerik = (data.get("icerik") or "").strip()
+    if not konu or not icerik:
+        return jsonify({"error": "Konu ve icerik zorunlu"}), 400
+
+    html_body = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0a0a;color:#f5f5f5;padding:32px;border:1px solid #1a1a1a">
+      <div style="text-align:center;margin-bottom:24px">
+        <h1 style="font-family:'Bebas Neue',Impact,sans-serif;font-size:2rem;margin:0;letter-spacing:4px">NEXSTOCK</h1>
+      </div>
+      <div style="font-size:15px;line-height:1.7;color:#d4d4d4">
+        {icerik}
+      </div>
+      <div style="margin-top:32px;padding-top:16px;border-top:1px solid #1a1a1a;text-align:center">
+        <p style="color:#525252;font-size:12px;margin:0">NexStock — nexstock.tech</p>
+      </div>
+    </div>
+    """
+
+    c = get_db()
+    try:
+        rows = c.execute("SELECT email FROM kullanicilar WHERE email IS NOT NULL AND email != ''").fetchall()
+    finally:
+        c.close()
+    sent = 0
+    for r in rows:
+        if send_mail(r["email"], konu, html_body):
+            sent += 1
+    return jsonify({"mesaj": f"{sent}/{len(rows)} kullaniciya mail gonderildi"})
+
 
 @app.route("/admin/onay-bekleyenler")
 @yetkili_giris
