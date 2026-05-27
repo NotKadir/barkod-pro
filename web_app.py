@@ -5456,7 +5456,7 @@ function eksikYukle(more){
     if(!more) document.getElementById('eksik-liste').innerHTML=html;
     else document.getElementById('eksik-liste').innerHTML+=html;
     document.getElementById('eksik-more').style.display=list.length>=20?'block':'none';
-    if(!list.length && !more) document.getElementById('eksik-liste').innerHTML='<div style="text-align:center;padding:30px;color:#525252;font-size:.8rem">Sonuc bulunamadi</div>';
+    if(!list.length && !more){var msg=d.hata||'Sonuc bulunamadi';document.getElementById('eksik-liste').innerHTML='<div style="text-align:center;padding:30px;color:#525252;font-size:.8rem">'+msg+'</div>';}
   }).catch(function(e){
     document.getElementById('eksik-loading').style.display='none';
     document.getElementById('eksik-liste').innerHTML='<div style="color:#e05252;text-align:center;padding:20px">Hata: '+e.message+'</div>';
