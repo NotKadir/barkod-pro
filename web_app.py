@@ -1141,7 +1141,7 @@ label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted)
   pointer-events:none;z-index:1;
 }
 @keyframes gradientSlide{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.scan-header{padding:20px 24px;display:flex;justify-content:space-between;align-items:flex-start;position:relative}
+.scan-header{padding:20px 24px;display:flex;justify-content:space-between;align-items:center;position:relative;gap:16px}
 .scan-header::after{content:'';position:absolute;bottom:0;left:24px;right:24px;height:1px;background:var(--border)}
 .scan-body{padding:16px 24px 20px;background:var(--card)}
 .scan-urun-adi{
@@ -3185,6 +3185,7 @@ def tarama():
 <div id="alert-type" data-tip="success" style="display:none"></div>
 <div class="scan-result">
   <div class="scan-header" style="{hdr_bg}">
+    <img src="https://images.openfoodfacts.org/images/products/{str(barkod).zfill(13)[0:3]}/{str(barkod).zfill(13)[3:6]}/{str(barkod).zfill(13)[6:9]}/{str(barkod).zfill(13)[9:]}/1.200.jpg" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #ffffff15;flex-shrink:0;background:#0d0d0d" onerror="this.style.display='none'">
     <div>
       <div class="scan-urun-adi">{urun["urun_adi"]}{_onay_rozeti}</div>
       <div class="scan-meta">Barkod: {barkod}&nbsp;&nbsp;|&nbsp;&nbsp;Kategori: {urun.get("kategori","—")}</div>
@@ -3286,14 +3287,21 @@ function cikisPanelKapat(){{ document.getElementById('cikis-panel').style.displa
                 rc  = stt_renk(gun)
                 et  = stt_etiket(gun)
                 skt_badge = f'<span style="font-size:.62rem;padding:3px 8px;background:{rc}18;color:{rc};border:1px solid {rc}44;font-family:JetBrains Mono,monospace;letter-spacing:1px">{et}</span>'
+                _b = str(s["barkod"]).zfill(13)
+                _img = f"https://images.openfoodfacts.org/images/products/{_b[0:3]}/{_b[3:6]}/{_b[6:9]}/{_b[9:]}/1.100.jpg"
                 cards += f'''<a href="/tarama?barkod={s["barkod"]}" class="son-card" style="animation-delay:{i*0.08}s">
-                  <div class="son-card-top">
-                    <div class="son-card-name">{s["urun_adi"]}</div>
-                    {skt_badge}
-                  </div>
-                  <div class="son-card-bottom">
-                    <span class="son-card-barkod">{s["barkod"]}</span>
-                    <span class="son-card-stok">{s.get("stok_adedi",0)} adet</span>
+                  <div style="display:flex;gap:10px;align-items:center">
+                    <img src="{_img}" style="width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #1a1a1a;background:#0d0d0d;flex-shrink:0" onerror="this.style.display='none'">
+                    <div style="min-width:0;flex:1">
+                      <div class="son-card-top">
+                        <div class="son-card-name">{s["urun_adi"]}</div>
+                        {skt_badge}
+                      </div>
+                      <div class="son-card-bottom">
+                        <span class="son-card-barkod">{s["barkod"]}</span>
+                        <span class="son-card-stok">{s.get("stok_adedi",0)} adet</span>
+                      </div>
+                    </div>
                   </div>
                 </a>'''
             son_tarananlar_html = f'''
@@ -4019,6 +4027,11 @@ def urunler():
     finally:
         c.close()
 
+    def _off_img(barkod):
+        """OFF resim URL'i olustur — barkodu klasor yapisiyla formatla"""
+        b = str(barkod).zfill(13)
+        return f"https://images.openfoodfacts.org/images/products/{b[0:3]}/{b[3:6]}/{b[6:9]}/{b[9:]}/1.100.jpg"
+
     rows = ""
     for u in liste:
         gun = kalan_gun(u.get("stt"))
@@ -4027,7 +4040,9 @@ def urunler():
         sil_btn = (f'<form method="POST" action="/urun-sil" style="display:inline" onsubmit="return confirm(\'{u["urun_adi"]} silinsin mi? Tüm parti ve hareketler de silinir!\')">'
                    f'<input type="hidden" name="barkod" value="{u["barkod"]}">'
                    f'<button type="submit" class="btn btn-muted" style="padding:3px 10px;font-size:.7rem;border-color:#e05252;color:#e05252">SİL</button></form>')
-        rows += f'<tr><td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#a3a3a3">{u.get("parti_sayisi",0)}</td><td style="color:#525252">{u.get("min_stok",5)}</td><td style="color:#ffffff">{float(u.get("fiyat") or 0):.2f} TL</td><td>{sil_btn}</td></tr>'
+        img_url = _off_img(u["barkod"])
+        foto_td = f'<td style="width:44px;padding:4px"><img src="{img_url}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #1a1a1a;background:#0d0d0d" onerror="this.style.display=\'none\'"></td>'
+        rows += f'<tr>{foto_td}<td style="font-family:monospace;font-size:.82rem;color:#a3a3a3">{u["barkod"]}</td><td><strong>{u["urun_adi"]}</strong></td><td style="color:#a3a3a3">{u.get("kategori","—")}</td><td>{u.get("stt","—")}</td><td style="color:{rc};font-weight:600;font-size:.82rem">{et}</td><td style="font-weight:700">{u["stok_adedi"]}</td><td style="color:#a3a3a3">{u.get("parti_sayisi",0)}</td><td style="color:#525252">{u.get("min_stok",5)}</td><td style="color:#ffffff">{float(u.get("fiyat") or 0):.2f} TL</td><td>{sil_btn}</td></tr>'
 
     content = f"""
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
@@ -4039,8 +4054,8 @@ def urunler():
   </form>
 </div>
 <div class="tbl-wrap"><table>
-  <tr><th>Barkod</th><th>Urun Adi</th><th>Kategori</th><th>SKT</th><th>Durum</th><th>Stok</th><th>Parti</th><th>Min</th><th>Fiyat</th></tr>
-  {rows or '<tr><td colspan=9 class="muted" style="text-align:center;padding:20px">Urun bulunamadi</td></tr>'}
+  <tr><th style="width:44px"></th><th>Barkod</th><th>Urun Adi</th><th>Kategori</th><th>SKT</th><th>Durum</th><th>Stok</th><th>Parti</th><th>Min</th><th>Fiyat</th></tr>
+  {rows or '<tr><td colspan=10 class="muted" style="text-align:center;padding:20px">Urun bulunamadi</td></tr>'}
 </table></div>"""
     return render(content, page="urunler", title="Urunler")
 
