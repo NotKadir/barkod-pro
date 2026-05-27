@@ -5925,6 +5925,12 @@ def api_eksik_urunler():
             if not eksikler:
                 continue  # Hicbir eksigi yok, atla
 
+            # Hayalet kayitlari filtrele: isimsiz veya her sey eksikse atla
+            if not isim:
+                continue
+            if len(eksikler) >= 5 and completeness < 0.15:
+                continue
+
             result.append({
                 "barkod": barkod,
                 "isim": isim or "(Isimsiz)",
