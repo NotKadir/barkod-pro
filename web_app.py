@@ -185,7 +185,7 @@ TRANSLATIONS = {
         "card.bugun_tarama": "Bugun Taradigim", "card.hafta_tarama": "Bu Hafta",
         "card.toplam_tarama": "Toplam Tarama", "card.farkli_urun": "Farkli Urun",
         # Common labels
-        "label.kullanici_adi": "Kullanici Adi", "label.sifre": "Sifre",
+        "label.kullanici_adi": "Kullanici Adi / E-Mail", "label.sifre": "Sifre",
         "label.ad_soyad": "Ad Soyad", "label.email": "E-Mail", "label.dil": "Dil",
         "label.rol": "Rol", "label.konu": "Konu", "label.mesaj": "Mesaj",
         "label.mevcut_sifre": "Mevcut Sifre", "label.yeni_sifre": "Yeni Sifre",
@@ -208,7 +208,7 @@ TRANSLATIONS = {
         "msg.guncellendi": "Guncellendi!", "msg.eklendi": "Eklendi!",
         "msg.silindi": "Silindi!", "msg.basarili": "Basarili!",
         # Login/Kayit
-        "giris.kullanici_adi_ph": "kullanici_adi",
+        "giris.kullanici_adi_ph": "kullanici_adi veya e-mail",
         "giris.veya": "VEYA",
         "giris.hesap_olustur": "Hesap Olustur",
         "kayit.ad_soyad_ph": "Adiniz Soyadiniz",
@@ -287,7 +287,7 @@ TRANSLATIONS = {
         "card.bugun_islem": "Today's Activity", "card.tedarikci": "Suppliers",
         "card.bugun_tarama": "Scanned Today", "card.hafta_tarama": "This Week",
         "card.toplam_tarama": "Total Scans", "card.farkli_urun": "Unique Products",
-        "label.kullanici_adi": "Username", "label.sifre": "Password",
+        "label.kullanici_adi": "Username / E-Mail", "label.sifre": "Password",
         "label.ad_soyad": "Full Name", "label.email": "E-Mail", "label.dil": "Language",
         "label.rol": "Role", "label.konu": "Subject", "label.mesaj": "Message",
         "label.mevcut_sifre": "Current Password", "label.yeni_sifre": "New Password",
@@ -305,7 +305,7 @@ TRANSLATIONS = {
         "oneri.gonder": "Send Feedback",
         "msg.guncellendi": "Updated!", "msg.eklendi": "Added!",
         "msg.silindi": "Deleted!", "msg.basarili": "Success!",
-        "giris.kullanici_adi_ph": "username",
+        "giris.kullanici_adi_ph": "username or e-mail",
         "giris.veya": "OR",
         "giris.hesap_olustur": "Create Account",
         "kayit.ad_soyad_ph": "Your Full Name",
@@ -1642,25 +1642,24 @@ def giris():
         s = request.form.get("s", "").strip()
         c = get_db()
         row = c.execute(
-            "SELECT * FROM kullanicilar WHERE kullanici_adi=%s AND sifre_hash=%s AND aktif=1",
-            (k, sh(s))
+            "SELECT * FROM kullanicilar WHERE (kullanici_adi=%s OR email=%s) AND sifre_hash=%s AND aktif=1",
+            (k, k, sh(s))
         ).fetchone()
         c.close()
         if row:
             session["user"]   = row["kullanici_adi"]
             session["rol"]    = row["rol"]
             session["tam_ad"] = row["tam_ad"] or ""
-            # PERF: Saglik profilini session'a cache'le (her sayfada DB hit'i ortadan kalkar)
             session["_hastaliklar"]     = row.get("hastaliklar") or ""
             session["_yeme_aliskanlik"] = row.get("yeme_aliskanlik") or ""
             session["plan"] = row.get("plan") or "free"
             session["katki_sayisi"] = row.get("katki_sayisi") or 0
             c2 = get_db()
-            c2.execute("UPDATE kullanicilar SET son_giris=NOW() WHERE kullanici_adi=%s", (k,))
+            c2.execute("UPDATE kullanicilar SET son_giris=NOW() WHERE id=%s", (row["id"],))
             c2.commit()
             c2.close()
             return redirect("/")
-        hata = "Hatali kullanici adi veya sifre!"
+        hata = "Hatali kullanici adi/email veya sifre!"
 
     content = f"""
 <div class="login-wrap">
@@ -5449,9 +5448,28 @@ def ai_okuyucu():
 
 <!-- EKSIK URUN PANELI -->
 <div id="eksik-panel" style="display:none;margin-top:16px">
-  <div style="margin-bottom:12px">
+  <div style="margin-bottom:12px;display:flex;gap:8px">
+    <select id="eksik-ulke" onchange="_eksikPage=1;eksikYukle(false)"
+            style="background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-family:JetBrains Mono,monospace;font-size:.8rem;min-width:140px;flex-shrink:0">
+      <option value="">Tum Ulkeler</option>
+      <option value="turkey" selected>Turkiye</option>
+      <option value="germany">Almanya</option>
+      <option value="france">Fransa</option>
+      <option value="united-states">ABD</option>
+      <option value="united-kingdom">Ingiltere</option>
+      <option value="italy">Italya</option>
+      <option value="spain">Ispanya</option>
+      <option value="netherlands">Hollanda</option>
+      <option value="belgium">Belcika</option>
+      <option value="switzerland">Isvicre</option>
+      <option value="austria">Avusturya</option>
+      <option value="poland">Polonya</option>
+      <option value="russia">Rusya</option>
+      <option value="japan">Japonya</option>
+      <option value="brazil">Brezilya</option>
+    </select>
     <input type="text" id="eksik-ara" placeholder="Urun ara (isim veya barkod)..." oninput="eksikAraDebounce()"
-           style="width:100%;box-sizing:border-box;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-family:JetBrains Mono,monospace;font-size:.85rem">
+           style="flex:1;min-width:0;background:#0d0d0d;border:1px solid #1a1a1a;color:#f5f5f5;padding:12px;font-family:JetBrains Mono,monospace;font-size:.85rem">
   </div>
   <div id="eksik-loading" style="display:none;text-align:center;padding:20px;font-family:JetBrains Mono,monospace;font-size:.65rem;color:#525252;letter-spacing:2px">YUKLENIYOR...</div>
   <div id="eksik-liste"></div>
@@ -5490,7 +5508,8 @@ function eksikYukle(more){
   var q=document.getElementById('eksik-ara').value.trim();
   document.getElementById('eksik-loading').style.display='block';
   if(!more) document.getElementById('eksik-liste').innerHTML='';
-  fetch('/api/eksik-urunler?q='+encodeURIComponent(q)+'&page='+_eksikPage)
+  var ulke=document.getElementById('eksik-ulke').value;
+  fetch('/api/eksik-urunler?q='+encodeURIComponent(q)+'&page='+_eksikPage+'&ulke='+encodeURIComponent(ulke))
   .then(function(r){return r.json();}).then(function(d){
     document.getElementById('eksik-loading').style.display='none';
     var list=d.urunler||[];
@@ -5806,9 +5825,9 @@ function kaydet(){
 def api_eksik_urunler():
     """OFF veritabanindan eksik bilgili urunleri getir. Arama destekli."""
     q = (request.args.get("q") or "").strip()
+    ulke = (request.args.get("ulke") or "").strip()
     page = max(int(request.args.get("page", 1)), 1)
     limit = 24
-    offset = (page - 1) * limit
 
     try:
         import requests as _rq
@@ -5816,13 +5835,13 @@ def api_eksik_urunler():
 
         _fields = "code,product_name,brands,categories,nutriments,ingredients_text,image_front_url,completeness"
         url = "https://world.openfoodfacts.org/api/v2/search"
-        # page_size fazla al cunku lokal filtre sonrasi azalir
         fetch_size = limit * 3
         if q:
             params = {"search_terms": q, "sort_by": "unique_scans_n", "page_size": fetch_size, "page": page, "fields": _fields}
         else:
-            # Son guncellenen urunleri al, lokal olarak eksik olanlari filtrele
             params = {"sort_by": "last_modified_t", "page_size": fetch_size, "page": page, "fields": _fields}
+        if ulke:
+            params["countries_tags_contains"] = f"en:{ulke}"
 
         # Retry mantigi — OFF API bazen bos yanit doner
         import json as _json, time as _time
