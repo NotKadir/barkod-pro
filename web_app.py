@@ -2839,13 +2839,20 @@ window.addEventListener('load',function(){
   setTimeout(function(){document.getElementById('ldScreen').classList.add('hide')},2000);
 });
 
-// ── Nav scroll effect
-var lastScroll=0;
+// ── Scroll handler (rAF throttled — nav + parallax)
+var _raf=false;
 window.addEventListener('scroll',function(){
-  var nav=document.getElementById('lnNav');
-  if(window.scrollY>80) nav.classList.add('scrolled');
-  else nav.classList.remove('scrolled');
-});
+  if(_raf) return;
+  _raf=true;
+  requestAnimationFrame(function(){
+    var sy=window.scrollY;
+    var nav=document.getElementById('lnNav');
+    if(nav){if(sy>80) nav.classList.add('scrolled'); else nav.classList.remove('scrolled');}
+    var t=document.querySelector('.ln-hero .ln-topo');
+    if(t) t.style.transform='translateY('+sy*0.15+'px)';
+    _raf=false;
+  });
+},{passive:true});
 
 // ── Scroll reveal
 var revealEls=document.querySelectorAll('.reveal');
@@ -2867,11 +2874,6 @@ function toggleFaq(el){
   }
 }
 
-// ── Parallax on hero topo
-window.addEventListener('scroll',function(){
-  var t=document.querySelector('.ln-hero .ln-topo');
-  if(t) t.style.transform='translateY('+window.scrollY*0.15+'px)';
-});
 </script>
 </body>
 </html>"""
